@@ -235,3 +235,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - QaTab and LiveView each open their own socket via useEventSocket; share one if this becomes a problem.
   - Question likes/ordering updates (later stories) should add events to QaTab's socket effect; list order is pinned first, then newest (`sortQuestions`).
 ---
+## 2026-10-16 - US-025
+- `question_votes` table (migration 0008, UNIQUE(question_id, participant_id), cascade FKs). `POST /api/questions/:id/upvote` toggles the caller's upvote (participant cookie, 401 otherwise; 404 for unknown, pending or rejected questions) and returns `{ok, upvoted, upvotes}`; rate limited 100/min IP + 30/min participant. Publishes `question:votes` `{questionId, upvotes}` to the event room. `PublicQuestion` gained `upvotes` and `upvoted` (viewer-specific; false for the host); `listApprovedQuestions(eventId, participantId?)` fills them.
+- QaTab: ▲ button per question (aria-pressed, 44px target), Popular/Recent sort toggle (pinned stay on top; Popular = upvotes desc then newest), live count updates from `question:votes`.
+- Files: db/schema.ts, db/migrations/0008_*, lib/{questions,question-types}.ts, app/api/questions/[id]/upvote/route.ts, app/api/events/[id]/questions/route.ts, app/e/[eventId]/page.tsx, components/qa-tab.tsx, tests/{questions.test.ts,qa-tab.test.tsx}
+- Verified: lint, typecheck, test pass (7 new tests); migration applied to dev and test DBs. No browser tool available (dev-browser skill not present), so real-browser verification (sort toggle, live counts across two tabs, 360px) still needs a manual check.
+- **Learnings for future iterations:**
+  - The `question:votes` broadcast carries only the count; `upvoted` is per-viewer and comes from the toggle response / GET, never from the broadcast.
+  - US-026 moderation that rejects/un-approves a question should keep rows in question_votes (harmless; they're only counted for approved questions in the list).
+  - Prettier isn't configured in the repo; if you format with it use `--print-width 120` to match existing style.
+---

@@ -157,3 +157,18 @@ export const questions = pgTable(
     index("questions_event_status_idx").on(t.eventId, t.status),
   ],
 );
+
+export const questionVotes = pgTable(
+  "question_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("question_votes_one_per_participant").on(t.questionId, t.participantId)],
+);

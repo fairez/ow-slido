@@ -10,4 +10,8 @@ export type PublicQuestion = {
   answered: boolean;
   pinned: boolean;
   createdAt: string;
+  /** Number of upvotes. */
+  upvotes: number;
+  /** Whether the requesting participant has upvoted; false for the host. */
+  upvoted: boolean;
 };

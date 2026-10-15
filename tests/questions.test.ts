@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { events, participants, questions } from "@/db/schema";
+import { events, participants, questionVotes, questions } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
 type Ctx = { params: Promise<{ id: string }> };
+let upvoteRoute: { POST: (r: Request, c: Ctx) => Promise<Response> };
 let route: { POST: (r: Request, c: Ctx) => Promise<Response>; GET: (r: Request, c: Ctx) => Promise<Response> };
 let eventsRoute: { POST: (req: Request) => Promise<Response> };
 let eventRoute: { PATCH: (r: Request, c: Ctx) => Promise<Response> };
@@ -24,6 +25,7 @@ beforeAll(async () => {
   process.env.SESSION_SECRET ||= "test-session-secret";
   process.env.PARTICIPANT_TOKEN_SECRET ||= "test-participant-secret";
   route = await import("@/app/api/events/[id]/questions/route");
+  upvoteRoute = await import("@/app/api/questions/[id]/upvote/route");
   eventsRoute = await import("@/app/api/events/route");
   eventRoute = await import("@/app/api/events/[id]/route");
   signup = (await import("@/app/api/auth/signup/route")).POST;
@@ -176,4 +178,64 @@ test("unknown or malformed event ids give 404", async () => {
   expect(bad.status).toBe(404);
   const missing = await route.GET(req("GET"), ctx("00000000-0000-4000-8000-000000000000"));
   expect(missing.status).toBe(401);
+});
+
+const upvote = (id: string, c: string | null = cookie) => upvoteRoute.POST(req("POST", undefined, c), ctx(id));
+const askId = async (body: unknown = { text: "Why?" }) => (await (await ask(body)).json()).question.id as string;
+
+test("upvote toggles on and off, counts are listed and published", async () => {
+  const id = await askId();
+  const on = await upvote(id);
+  expect(on.status).toBe(200);
+  expect(await on.json()).toEqual({ ok: true, upvoted: true, upvotes: 1 });
+  expect(published.at(-1)).toMatchObject({ name: "question:votes", payload: { questionId: id, upvotes: 1 } });
+
+  const other = await join();
+  expect((await (await upvote(id, other)).json()).upvotes).toBe(2);
+
+  const mine = (await list(cookie)).json.questions[0];
+  expect(mine).toMatchObject({ upvotes: 2, upvoted: true });
+  expect((await list(hostCookie)).json.questions[0]).toMatchObject({ upvotes: 2, upvoted: false });
+
+  const off = await upvote(id);
+  expect(await off.json()).toEqual({ ok: true, upvoted: false, upvotes: 1 });
+  expect((await list(cookie)).json.questions[0]).toMatchObject({ upvotes: 1, upvoted: false });
+});
+
+test("a participant has at most one upvote per question", async () => {
+  const id = await askId();
+  await Promise.all([upvote(id), upvote(id), upvote(id)]);
+  expect((await db.select().from(questionVotes)).length).toBeLessThanOrEqual(1);
+  await expect(
+    db.insert(questionVotes).values([
+      { questionId: id, participantId: (await db.select().from(participants))[0].id },
+      { questionId: id, participantId: (await db.select().from(participants))[0].id },
+    ]),
+  ).rejects.toThrow();
+});
+
+test("pending and rejected questions cannot be upvoted", async () => {
+  await setMode("moderated");
+  const pending = await askId();
+  expect((await upvote(pending)).status).toBe(404);
+  const id = await askId({ text: "second" });
+  await db.update(questions).set({ status: "rejected" }).where(eq(questions.id, id));
+  expect((await upvote(id)).status).toBe(404);
+  expect(await db.select().from(questionVotes)).toHaveLength(0);
+});
+
+test("upvoting needs a participant of the question's event, and a real question", async () => {
+  const id = await askId();
+  expect((await upvote(id, null)).status).toBe(401);
+  expect((await upvote(id, hostCookie)).status).toBe(401);
+  expect((await upvote("not-a-uuid")).status).toBe(404);
+  expect((await upvote("00000000-0000-4000-8000-000000000000")).status).toBe(404);
+});
+
+test("upvotes are rate limited per participant", async () => {
+  const id = await askId();
+  for (let i = 0; i < 30; i++) expect((await upvote(id)).status).toBe(200);
+  const limited = await upvote(id);
+  expect(limited.status).toBe(429);
+  expect(limited.headers.get("retry-after")).toBeTruthy();
 });

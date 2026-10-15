@@ -27,7 +27,7 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
       <ParticipantView
         eventId={event.id}
         initial={await getLiveInteraction(event.id, participantId)}
-        initialQuestions={await listApprovedQuestions(event.id)}
+        initialQuestions={await listApprovedQuestions(event.id, participantId)}
       />
     </main>
   );

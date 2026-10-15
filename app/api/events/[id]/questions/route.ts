@@ -54,10 +54,11 @@ export async function GET(request: Request, { params }: Context) {
   const { id } = await params;
   if (!isUuid(id)) return notFound();
 
-  if (!participantFor(request, id)) {
+  const participantId = participantFor(request, id);
+  if (!participantId) {
     const user = await getSessionUser(request);
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
     if (!(await findOwnedEvent(id, user.id))) return notFound();
   }
-  return Response.json({ questions: await listApprovedQuestions(id) });
+  return Response.json({ questions: await listApprovedQuestions(id, participantId ?? undefined) });
 }
