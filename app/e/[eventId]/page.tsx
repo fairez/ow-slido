@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { LiveView } from "@/components/live-view";
 import { isUuid } from "@/lib/events";
+import { getLiveInteraction } from "@/lib/live-view";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,7 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
   return (
     <main style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
       <h1>{event.name}</h1>
-      <p role="status">Waiting for the host to start something…</p>
+      <LiveView eventId={event.id} initial={await getLiveInteraction(event.id)} />
     </main>
   );
 }

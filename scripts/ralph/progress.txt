@@ -149,3 +149,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Lock the `events` row (`select ... for update`) at the start of any transaction that changes which interaction is live; locking only the target interaction row let concurrent starts of different interactions hit the one-live unique index (caught by the concurrent-start test).
   - Payload carries ids and state only; US-016 should fetch the interaction content itself on `state-changed` (and on reconnect).
 ---
+## 2026-10-16 - US-016
+- Participant live view: `GET /api/events/:id/live` (participant cookie required, 401 otherwise, 404 unknown event) returns `{interaction}` for the live poll (id, type, title, state, options, multiSelect; showResultsToParticipants is not exposed) or null. `LiveView` client component (components/live-view.tsx) is mounted on /e/[eventId] with the server-fetched initial state; it listens for `state-changed` (live -> refetch, closed for the shown poll -> "Voting closed"), and refetches on every socket `connect`. Options render as read-only 44px rows; voting is US-017/018.
+- Files: lib/live-view.ts, app/api/events/[id]/live/route.ts, components/live-view.tsx, app/e/[eventId]/page.tsx, tests/live.test.ts, tests/live-view.test.tsx
+- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification and the 360px layout still need a manual check.
+- **Learnings for future iterations:**
+  - "Voting closed" is client state only: after a reload with nothing live, the participant sees "Waiting for the host" (no closed_at column to recover it).
+  - Component tests mock `@/lib/realtime/use-event-socket` with an EventEmitter to drive `state-changed`/`connect`.
+  - `getLiveInteraction(eventId)` in lib/live-view.ts is the shared server helper; extend `LiveInteraction` for wordcloud (US-021/022).
+---
