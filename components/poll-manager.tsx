@@ -86,6 +86,18 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
     setItems((list) => [...list, interaction]);
   }
 
+  async function transition(item: InteractionItem, action: "start" | "close") {
+    const response = await call(`${base}/${item.id}/${action}`, { method: "POST" });
+    if (!response) return;
+    const { interaction } = (await response.json()) as { interaction: InteractionItem };
+    // Starting closes the previously live interaction on the server.
+    setItems((list) =>
+      list.map((i) =>
+        i.id === interaction.id ? interaction : action === "start" && i.state === "live" ? { ...i, state: "closed" } : i,
+      ),
+    );
+  }
+
   async function remove(item: InteractionItem) {
     if (!window.confirm(`Delete “${item.title}”?`)) return;
     const response = await call(`${base}/${item.id}`, { method: "DELETE" });
@@ -134,6 +146,15 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
               <div>
                 {item.type} · <span data-testid="state">{item.state}</span>
               </div>
+              {item.state !== "closed" && (
+                <div style={{ marginTop: 8 }}>
+                  {item.state === "draft" ? (
+                    <button type="button" onClick={() => transition(item, "start")} style={buttonStyle}>Start</button>
+                  ) : (
+                    <button type="button" onClick={() => transition(item, "close")} style={buttonStyle}>Close</button>
+                  )}
+                </div>
+              )}
               {item.state === "draft" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   <button type="button" onClick={() => edit(item)} style={buttonStyle}>Edit</button>

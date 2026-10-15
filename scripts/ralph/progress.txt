@@ -141,3 +141,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - eslint react-hooks forbids synchronous setState in effects; defer with queueMicrotask.
   - Next steps: US-015 should call `publish(eventId, "interaction:changed", ...)`; participants' live view (US-016) should refetch state on reconnect since missed messages are not replayed.
 ---
+## 2026-10-16 - US-015
+- `POST /api/events/:id/interactions/:interactionId/{start,close}` (owner-only; 404 unknown, 409 invalid transition). Logic in lib/interaction-state.ts: start is draft->live only (live/closed give 409; a closed one is re-run via the duplicate endpoint), closing the event's current live interaction in the same transaction; close is live->closed. Both publish `state-changed` `{interactionId, state}` to the event room (one message per changed interaction, closed one first). PollManager shows Start (draft) / Close (live) buttons.
+- Files: lib/interaction-state.ts, app/api/events/[id]/interactions/[interactionId]/{start,close}/route.ts, components/poll-manager.tsx, tests/interaction-state.test.ts, tests/poll-manager.test.tsx
+- Verified: lint, typecheck, test pass; socket test checks delivery < 1s using real socket.io-client. No browser tool available, so in-browser verification of the buttons still needs a manual check. The host page does not yet reflect state changes made elsewhere (it only updates from its own responses).
+- **Learnings for future iterations:**
+  - Lock the `events` row (`select ... for update`) at the start of any transaction that changes which interaction is live; locking only the target interaction row let concurrent starts of different interactions hit the one-live unique index (caught by the concurrent-start test).
+  - Payload carries ids and state only; US-016 should fetch the interaction content itself on `state-changed` (and on reconnect).
+---

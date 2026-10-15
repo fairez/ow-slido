@@ -72,4 +72,23 @@ describe("PollManager", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
     await waitFor(() => expect(screen.queryByText("Orig")).toBeNull());
   });
+
+  it("starts a draft (closing the live one) and closes a live interaction", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      Response.json({ interaction: poll("1", "Draft Q", url.endsWith("/start") ? "live" : "closed") }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[poll("1", "Draft Q"), poll("2", "Live Q", "live")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["live", "closed"]),
+    );
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/events/e/interactions/1/start");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["closed", "closed"]),
+    );
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+  });
 });
