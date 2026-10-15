@@ -111,3 +111,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Starting an interaction must close the current live one in the same transaction BEFORE setting the new one live, or the partial unique index raises 23505.
   - `config` is typed `Record<string, unknown>`; poll/wordcloud routes should validate and narrow it themselves.
 ---
+## 2026-10-16 - US-012
+- Poll draft API under /api/events/[id]/interactions: GET list (position order), POST create (type 'poll'), [interactionId] GET/PATCH/DELETE, [interactionId]/duplicate POST, reorder POST `{ids}` (must list every interaction of the event once). Validation + helpers in lib/polls.ts (`parsePollInput`, `pollConfig`, `findOwnedEvent`, `findInteraction`).
+- Files: lib/polls.ts, app/api/events/[id]/interactions/**, tests/polls.test.ts
+- Verified: lint, typecheck, test pass (10 new tests, written first and seen failing).
+- **Learnings for future iterations:**
+  - Request body uses `question`, `options` (strings or `{id?, label}`), `multiSelect`, `showResultsToParticipants`; stored as `title` + `config`. PATCH keeps ids of options sent back with their id, so existing ids stay stable.
+  - Non-draft edit/delete returns 409; wrong-event or other-owner access returns 404. New and duplicated interactions get `max(position)+1` via SQL subquery.
+  - US-021 (wordcloud) should extend `POST` type check in interactions/route.ts and PATCH parsing, which currently only accept 'poll'.
+---
