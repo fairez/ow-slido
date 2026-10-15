@@ -214,6 +214,7 @@ export function PresenterView({
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent}
+                aria-valuetext={`${count} ${count === 1 ? "vote" : "votes"}, ${percent}%`}
                 style={{ height: 28, background: "#333", border: "2px solid #fff" }}
               >
                 <div style={{ width: `${percent}%`, height: "100%", background: "#ffd400" }} />

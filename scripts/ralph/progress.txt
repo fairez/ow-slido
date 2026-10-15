@@ -292,3 +292,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Each dashboard event row opens its own host socket; tests rendering EventManager must mock `@/components/live-participant-count`.
   - `authorize()` in socket-server now returns `{role, participantId?}`.
 ---
+## 2026-10-16 - US-031
+- Accessibility + responsive pass. New `app/globals.css` (imported in layout, plus `viewport` export): border-box, `overflow-wrap: anywhere` (no horizontal scroll at 360px), 44px min height/width on buttons and text inputs, 24px checkboxes/radios, visible `:focus-visible` outline (yellow inside `.present`). Presenter progress bars gained `aria-valuetext` ("3 votes, 75%") so charts have text values; the word cloud already had per-word labels plus a text list.
+- `tests/a11y.test.tsx` runs axe-core (now an explicit devDependency) over participant (poll, word cloud, Q&A, waiting), presenter (poll, word cloud, idle), dashboard (EventManager, PollManager, ModerationPanel), auth and join forms: zero serious/critical violations. Includes a canary test proving the harness flags an unlabeled button.
+- Files: app/globals.css, app/layout.tsx, app/present/[eventId]/page.tsx, components/presenter-view.tsx, tests/a11y.test.tsx, package.json
+- Verified: lint, typecheck, test pass. No browser tool available, so real-browser checks at 360px width and keyboard-only walkthrough still need a manual check.
+- **Learnings for future iterations:**
+  - axe runs in jsdom, so `color-contrast` is disabled (no layout engine); contrast needs a real-browser check.
+  - Most existing components were already labeled; component-level axe tests are cheap — add new UI to tests/a11y.test.tsx.
+  - Global CSS sets min-height on every button/input, so inline `minHeight: 44` styles are now redundant but harmless.
+---
