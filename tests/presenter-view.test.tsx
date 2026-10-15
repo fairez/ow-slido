@@ -27,19 +27,19 @@ afterEach(() => {
 });
 
 it("shows 'No live interaction' when nothing is live", () => {
-  render(<PresenterView eventId="e1" initial={null} />);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} />);
   expect(screen.getByText("No live interaction")).toBeTruthy();
 });
 
 it("shows labels, counts, percents and total", () => {
-  render(<PresenterView eventId="e1" initial={state({ a: 3, b: 1 }, 4)} />);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={state({ a: 3, b: 1 }, 4)} />);
   expect(screen.getByText("3 (75%)")).toBeTruthy();
   expect(screen.getByText("1 (25%)")).toBeTruthy();
   expect(screen.getByText("Total votes: 4")).toBeTruthy();
 });
 
 it("updates live from poll:counts", () => {
-  render(<PresenterView eventId="e1" initial={state({ a: 0, b: 0 }, 0)} />);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={state({ a: 0, b: 0 }, 0)} />);
   expect(screen.getAllByText("0 (0%)").length).toBe(2);
   act(() => {
     fake.emit("poll:counts", { interactionId: "i1", counts: { a: 1, b: 1 }, total: 2 });
@@ -50,9 +50,31 @@ it("updates live from poll:counts", () => {
 
 it("resyncs on state-changed and shows the empty state when the poll closes", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ interaction: null }))));
-  render(<PresenterView eventId="e1" initial={state({ a: 1, b: 0 }, 1)} />);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={state({ a: 1, b: 0 }, 1)} />);
   act(() => {
     fake.emit("state-changed", { interactionId: "i1", state: "closed" });
   });
   await waitFor(() => expect(screen.getByText("No live interaction")).toBeTruthy());
+});
+
+it("shows the join code and a QR image", async () => {
+  render(<PresenterView eventId="e1" initial={null} joinCode="123456" items={[]} />);
+  expect(screen.getByText("Join code: 123456")).toBeTruthy();
+  await waitFor(() => expect(screen.getByAltText(/QR code to join/)).toBeTruthy());
+});
+
+it("ArrowRight starts the next draft interaction", async () => {
+  const fetchMock = vi.fn(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetchMock);
+  const items = [
+    { id: "i1", state: "live" as const },
+    { id: "i2", state: "draft" as const },
+  ];
+  render(<PresenterView eventId="e1" initial={state({}, 0)} joinCode="1234" items={items} />);
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+  });
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/interactions/i2/start", { method: "POST" }),
+  );
 });

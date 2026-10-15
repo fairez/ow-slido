@@ -1,15 +1,91 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import QRCode from "qrcode";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import type { PresenterState } from "@/lib/presenter";
+
+export type NavItem = { id: string; state: "draft" | "live" | "closed" };
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 
 /** Full-screen results for the live poll; stays current from `poll:counts` and `state-changed`. */
-export function PresenterView({ eventId, initial }: { eventId: string; initial: PresenterState | null }) {
+export function PresenterView({
+  eventId,
+  initial,
+  joinCode,
+  items,
+}: {
+  eventId: string;
+  initial: PresenterState | null;
+  joinCode: string;
+  items: NavItem[];
+}) {
   const { socket } = useEventSocket(eventId, "host");
   const [poll, setPoll] = useState<PresenterState | null>(initial);
+  const [list, setList] = useState<NavItem[]>(items);
+  const [notice, setNotice] = useState("");
+  const [qr, setQr] = useState("");
+  // Last interaction shown, so arrows still work from the "nothing live" screen.
+  const cursor = useRef<string | null>(initial?.id ?? null);
+  const busy = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(`${window.location.origin}/join/${joinCode}`, { margin: 1, width: 200 })
+      .then((url) => !cancelled && setQr(url))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [joinCode]);
+
+  const refetchList = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/interactions`);
+      if (!res.ok) return;
+      const body = (await res.json()) as { interactions: NavItem[] };
+      setList(body.interactions.map((i) => ({ id: i.id, state: i.state })));
+    } catch {
+      // Keep the last known list.
+    }
+  }, [eventId]);
+
+  const go = useCallback(
+    async (step: 1 | -1) => {
+      if (busy.current || list.length === 0) return;
+      const liveIdx = list.findIndex((i) => i.state === "live");
+      const curIdx = liveIdx >= 0 ? liveIdx : list.findIndex((i) => i.id === cursor.current);
+      const next = curIdx < 0 ? (step === 1 ? 0 : list.length - 1) : curIdx + step;
+      const target = list[next];
+      if (!target) return;
+      if (target.state === "live") return;
+      if (target.state === "closed") {
+        setNotice("That interaction already ran; duplicate it to run it again.");
+        return;
+      }
+      busy.current = true;
+      setNotice("");
+      try {
+        const res = await fetch(`/api/events/${eventId}/interactions/${target.id}/start`, { method: "POST" });
+        if (res.ok) cursor.current = target.id;
+        else setNotice(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Could not start");
+      } finally {
+        busy.current = false;
+      }
+    },
+    [eventId, list],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") void go(1);
+      else if (e.key === "ArrowLeft") void go(-1);
+      else if (e.key === "Escape" && document.fullscreenElement) void document.exitFullscreen();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go]);
 
   const refetch = useCallback(async () => {
     try {
@@ -26,9 +102,15 @@ export function PresenterView({ eventId, initial }: { eventId: string; initial: 
     const onCounts = (msg: Counts) =>
       setPoll((cur) => (cur && cur.id === msg.interactionId ? { ...cur, counts: msg.counts, total: msg.total } : cur));
     // Start or close changes which poll is live; the payload has no content, so resync.
-    const onChange = () => void refetch();
+    const onChange = () => {
+      void refetch();
+      void refetchList();
+    };
     // Messages missed while disconnected are not replayed.
-    const onConnect = () => void refetch();
+    const onConnect = () => {
+      void refetch();
+      void refetchList();
+    };
     socket.on("poll:counts", onCounts);
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
@@ -37,19 +119,57 @@ export function PresenterView({ eventId, initial }: { eventId: string; initial: 
       socket.off("state-changed", onChange);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch]);
+  }, [socket, refetch, refetchList]);
+
+  const corner = (
+    <aside
+      aria-label="How to join"
+      style={{ position: "fixed", top: 16, right: 16, background: "#fff", color: "#000", padding: 12, textAlign: "center" }}
+    >
+      {qr && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={qr} alt={`QR code to join with code ${joinCode}`} width={140} height={140} />
+      )}
+      <p style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Join code: {joinCode}</p>
+    </aside>
+  );
+  const fullscreenBtn = (
+    <button
+      type="button"
+      onClick={() => void document.documentElement.requestFullscreen?.()}
+      style={{ position: "fixed", bottom: 16, right: 16, minHeight: 44, padding: "0 16px", fontSize: "1rem" }}
+    >
+      Fullscreen (Esc to exit)
+    </button>
+  );
+  const noticeEl = notice && (
+    <p role="status" style={{ position: "fixed", bottom: 16, left: 16, fontSize: "1.25rem" }}>
+      {notice}
+    </p>
+  );
+  const extras = (
+    <>
+      {corner}
+      {fullscreenBtn}
+      {noticeEl}
+    </>
+  );
 
   if (!poll) {
     return (
-      <p role="status" style={{ fontSize: "3rem", fontWeight: 700 }}>
-        No live interaction
-      </p>
+      <>
+        {extras}
+        <p role="status" style={{ fontSize: "3rem", fontWeight: 700 }}>
+          No live interaction
+        </p>
+      </>
     );
   }
 
   return (
     <section aria-labelledby="present-title">
-      <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 0 24px" }}>
+      {extras}
+      <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
         {poll.title}
       </h1>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 20 }}>

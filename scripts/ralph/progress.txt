@@ -186,3 +186,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Inserting interactions directly in tests requires `position` (not null, no default).
   - US-020 can add join code/QR/navigation to PresenterView/page; the page is a dark full-screen `<main>`.
 ---
+## 2026-10-16 - US-020
+- Presenter view now shows a fixed top-right corner with the join code and a QR code (client-side `qrcode` data URL of `<origin>/join/<code>`), a Fullscreen button (Esc exits via document.exitFullscreen), and ArrowLeft/ArrowRight navigation: moves to the neighbouring interaction in position order and starts it (the start transaction closes the current live one). Page passes `joinCode` and the interaction list (`items`); the list refreshes on `state-changed`/`connect` via the interactions API.
+- Files: components/presenter-view.tsx, app/present/[eventId]/page.tsx, tests/presenter-view.test.tsx, package.json, package-lock.json
+- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification (QR scan, fullscreen, arrow keys) still needs a manual check.
+- **Learnings for future iterations:**
+  - Only draft interactions can be started, so arrowing onto an already-closed interaction shows a notice instead of restarting it; with nothing live, the cursor is the last interaction started from this screen.
+  - Added deps: `qrcode` and `@types/qrcode`.
+---
