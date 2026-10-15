@@ -302,3 +302,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Most existing components were already labeled; component-level axe tests are cheap — add new UI to tests/a11y.test.tsx.
   - Global CSS sets min-height on every button/input, so inline `minHeight: 44` styles are now redundant but harmless.
 ---
+## 2026-10-16 - US-032
+- Playwright smoke test (`npm run test:e2e`): host signs up, creates an event and a poll, starts it; a participant in a separate browser context joins by code and votes; the presenter page shows "1 vote, 100%". Added README.md (env vars, db:migrate, commands, architecture, Redis not used yet).
+- Files: e2e/smoke.spec.ts, playwright.config.ts, README.md, next.config.ts (`NEXT_DIST_DIR`), eslint.config.mjs, .gitignore, package.json
+- Verified: lint, typecheck, test (182), build, test:e2e all pass.
+- **Learnings for future iterations:**
+  - The e2e server runs on port 3100 with DATABASE_URL=TEST_DATABASE_URL and `NEXT_DIST_DIR=.next-e2e`, because Next refuses a second dev server on the same `.next` dir.
+  - Installed Playwright (1.64) expects a newer Chromium than the one cached in ~/.cache/ms-playwright (1208); set `PW_CHROMIUM_PATH` to the cached chrome-headless-shell instead of downloading a browser.
+  - `next dev`/`next build` rewrite `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
+  - Labels like "Question" and "Option 1" match several controls; use `getByRole("textbox", { name })` in e2e.
+---

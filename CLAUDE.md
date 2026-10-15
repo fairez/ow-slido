@@ -13,3 +13,6 @@
 - `npm run db:migrate` — apply migrations to `DATABASE_URL`; `npm run db:migrate:test` — to `TEST_DATABASE_URL`.
 - `npm run db:reset:test` — drop and recreate the test DB's schemas, then migrate (refuses to run on the dev DB).
 - Tests that hit the DB: start the file with `// @vitest-environment node`, use `createTestDb()` and `truncateAll(db)` in `beforeEach` from `tests/helpers/db.ts`. Run `db:migrate:test` first after adding migrations.
+
+## E2E
+- `npm run test:e2e` (Playwright, `e2e/`) boots its own server on :3100 against the test DB with `NEXT_DIST_DIR=.next-e2e`. If Playwright's expected Chromium isn't installed, set `PW_CHROMIUM_PATH` to an existing chrome-headless-shell binary (no browser downloads here).

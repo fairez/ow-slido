@@ -6,3 +6,6 @@ coverage
 dist
 scripts/ralph/.last-branch
 *.tsbuildinfo
+.next-e2e
+test-results
+playwright-report
