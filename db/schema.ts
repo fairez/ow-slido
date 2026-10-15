@@ -1,5 +1,16 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const appMeta = pgTable("app_meta", {
   key: text("key").primaryKey(),
@@ -57,3 +68,29 @@ export const participants = pgTable("participants", {
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
 });
+
+export const interactions = pgTable(
+  "interactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    type: text("type", { enum: ["poll", "wordcloud"] }).notNull(),
+    title: text("title").notNull(),
+    state: text("state", { enum: ["draft", "live", "closed"] })
+      .notNull()
+      .default("draft"),
+    position: integer("position").notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud')`),
+    check("interactions_state", sql`${t.state} in ('draft', 'live', 'closed')`),
+    index("interactions_event_position_idx").on(t.eventId, t.position),
+    uniqueIndex("interactions_one_live_per_event")
+      .on(t.eventId)
+      .where(sql`${t.state} = 'live'`),
+  ],
+);

@@ -103,3 +103,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - The participant page (/e/[eventId]) is the place to mount the live view in US-016; it already verifies the participant cookie.
   - Killing the dev server with `kill $(lsof -ti:PORT)` in the same command chain can end the shell with exit 144; do it last.
 ---
+## 2026-10-16 - US-011
+- `interactions` table (migration 0004): event_id FK cascade, type/state CHECKs, position, jsonb config (default {}), partial unique index `interactions_one_live_per_event` on (event_id) WHERE state='live'. Q&A intentionally not an interaction.
+- Files: db/schema.ts, db/migrations/0004_*, tests/interactions.test.ts
+- Verified: migrations applied to dev and test DBs; lint, typecheck, test pass.
+- **Learnings for future iterations:**
+  - Starting an interaction must close the current live one in the same transaction BEFORE setting the new one live, or the partial unique index raises 23505.
+  - `config` is typed `Record<string, unknown>`; poll/wordcloud routes should validate and narrow it themselves.
+---
