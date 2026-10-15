@@ -15,6 +15,7 @@
     "db:reset:test": "tsx scripts/db.ts reset test"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.8",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.1",

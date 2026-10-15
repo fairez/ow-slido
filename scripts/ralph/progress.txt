@@ -3,6 +3,8 @@
 - server.ts loads .env.local via dotenv; Next also loads it itself.
 - Vitest tests live in tests/**/*.test.{ts,tsx}; config is vitest.config.mts (.mts avoids a CJS/ESM warning); `@` alias = repo root.
 - DB: Drizzle + pg. `createDb(url)` in db/client.ts; migrations via `npm run db:migrate[:test]`; DB tests use `// @vitest-environment node` + tests/helpers/db.ts (`createTestDb`, `truncateAll`).
+- Route handlers are plain `(request: Request)` functions; tests import and call them directly. App DB comes from `getDb()` in lib/db.ts (reads DATABASE_URL lazily) — DB tests set `process.env.DATABASE_URL = process.env.TEST_DATABASE_URL` in beforeAll before dynamically importing routes.
+- Admin-only endpoints: `const auth = await requireAdmin(request); if (!auth.ok) return auth.response;` (lib/auth/require-admin.ts), then use `auth.user`.
 
 # Ralph Progress Log
 Started: Fri Oct 16 12:14:30 AM CST 2026
@@ -32,4 +34,14 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
 - **Learnings for future iterations:**
   - Lowercase/enum rules are DB CHECK constraints, so app code must still lowercase email before insert.
   - Primary keys are uuid `defaultRandom()`.
+---
+## 2026-10-16 - US-004
+- Auth API: POST /api/auth/{signup,login,logout}, GET /api/auth/me; bcryptjs hashing; stateless HMAC-signed session cookie (httpOnly, Secure, SameSite=Lax, 7 days); `requireAdmin` helper.
+- Files: app/api/auth/*, lib/db.ts, lib/auth/{password,session,credentials,require-admin}.ts, tests/auth.test.ts, package.json
+- Verified: lint, typecheck, test pass (9 new tests, written first and seen failing).
+- **Learnings for future iterations:**
+  - Sessions are not stored in the DB; `getSessionUser` re-checks the user row each request, so deactivating a user ends their session immediately.
+  - Login uses a dummy bcrypt compare for unknown emails (timing) and returns one generic 401 for all failures.
+  - US-005 should add the rate limit inside the login route (per IP and per email) and return 429.
+  - Signup uses `onConflictDoNothing` on email for the 409 case; emails are trimmed and lowercased in `readCredentials`.
 ---
