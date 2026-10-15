@@ -25,3 +25,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - truncateAll truncates every public table incl. new ones automatically; drizzle's bookkeeping lives in the `drizzle` schema so it is untouched.
   - `npm i` took ~5 min here.
 ---
+## 2026-10-16 - US-003
+- Added `users` table (uuid id, unique email with lowercase CHECK, password_hash, role CHECK 'admin', active, created_at) and migration 0001; tests/users.test.ts.
+- Files: db/schema.ts, db/migrations/0001_*, tests/users.test.ts
+- Verified: migration applied to dev and test DBs; lint, typecheck, test pass.
+- **Learnings for future iterations:**
+  - Lowercase/enum rules are DB CHECK constraints, so app code must still lowercase email before insert.
+  - Primary keys are uuid `defaultRandom()`.
+---
