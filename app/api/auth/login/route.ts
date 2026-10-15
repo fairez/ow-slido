@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { readCredentials } from "@/lib/auth/credentials";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
@@ -35,6 +35,11 @@ export async function POST(request: Request) {
   const [user] = await getDb().select().from(users).where(eq(users.email, creds.email));
   const passwordOk = await verifyPassword(creds.password, user?.passwordHash ?? (await dummyHash));
   if (!user || !user.active || !passwordOk) return invalid();
+
+  await getDb()
+    .update(users)
+    .set({ firstLoginAt: sql`coalesce(${users.firstLoginAt}, now())` })
+    .where(eq(users.id, user.id));
 
   return Response.json(
     { user: { id: user.id, email: user.email } },

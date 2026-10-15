@@ -283,3 +283,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - `csvField` prefixes `'` to values starting with `= + - @` (formula injection), so exported question text can differ by that one character.
   - In Drizzle `sql` subqueries, `${table.col}` renders unqualified (`"id"`) and can bind to the inner table; use a leftJoin + groupBy for per-row counts instead.
 ---
+## 2026-10-16 - US-030
+- Presence + engagement metrics. `lib/realtime/presence.ts` keeps an in-memory map eventId -> participantId -> connection count (several tabs of one participant count once); socket-server calls it on participant connect/disconnect, publishes host-only `presence {count}` and sends the current count to a host/moderator socket on connect. Peak is persisted with `greatest(peak_participants, n)`. Migration 0010 adds `events.peak_participants`, `users.first_login_at` (set via coalesce on login) and `users.first_interaction_live_at` (set via coalesce inside startInteraction for the event owner). participants.joined_at/first_response_at already existed from earlier stories. Dashboard event list shows `LiveParticipantCount` per event.
+- Files: db/schema.ts, db/migrations/0010_*, lib/realtime/{presence,socket-server}.ts, lib/interaction-state.ts, app/api/auth/login/route.ts, components/{live-participant-count,event-manager}.tsx, tests/{realtime,auth,interaction-state,event-manager}.test.*
+- Verified: lint, typecheck, test pass; migration applied to dev and test DBs. No browser tool available, so real-browser verification of the live count on /dashboard still needs a manual check.
+- **Learnings for future iterations:**
+  - Presence is per process (in-memory); a multi-process deploy needs a shared store or Socket.IO adapter aggregation.
+  - Each dashboard event row opens its own host socket; tests rendering EventManager must mock `@/components/live-participant-count`.
+  - `authorize()` in socket-server now returns `{role, participantId?}`.
+---

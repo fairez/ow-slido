@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { events, interactions } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { publish } from "@/lib/realtime/publisher";
 
@@ -33,6 +33,10 @@ export async function startInteraction(eventId: string, id: string): Promise<Res
       .set({ state: "live" })
       .where(eq(interactions.id, id))
       .returning();
+    await tx
+      .update(users)
+      .set({ firstInteractionLiveAt: sql`coalesce(${users.firstInteractionLiveAt}, now())` })
+      .where(eq(users.id, sql`(select ${events.ownerId} from ${events} where ${events.id} = ${eventId})`));
     return { started, closed };
   });
 

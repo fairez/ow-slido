@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventManager, type EventSummary } from "@/components/event-manager";
 
+vi.mock("@/components/live-participant-count", () => ({ LiveParticipantCount: () => null }));
+
 const ev = (id: string, name: string, startsAt: string, joinCode = "123456"): EventSummary => ({
   id,
   name,

@@ -28,6 +28,8 @@ export const users = pgTable(
       .notNull()
       .default("admin"),
     active: boolean("active").notNull().default(true),
+    firstLoginAt: timestamp("first_login_at", { withTimezone: true }),
+    firstInteractionLiveAt: timestamp("first_interaction_live_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -51,6 +53,7 @@ export const events = pgTable(
       .notNull()
       .default("open"),
     moderatorNonce: text("moderator_nonce"),
+    peakParticipants: integer("peak_participants").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

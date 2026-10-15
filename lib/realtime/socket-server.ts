@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { verifyModeratorToken } from "@/lib/moderator-token";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
+import { participantConnected, participantDisconnected, presenceCount } from "./presence";
 import { eventRoom, hostRoom, setPublisher, type Publisher } from "./publisher";
 
 export type SocketRole = "participant" | "host" | "moderator";
@@ -22,14 +23,14 @@ function parseCookies(header: string | undefined) {
 }
 
 /** Returns the role granted to the socket for the event, or null if it is not allowed in. */
-async function authorize(socket: Socket): Promise<SocketRole | null> {
+async function authorize(socket: Socket): Promise<{ role: SocketRole; participantId?: string } | null> {
   const { eventId, role, token: moderatorToken } = socket.handshake.auth as { eventId?: unknown; role?: unknown; token?: unknown };
   if (typeof eventId !== "string" || !isUuid(eventId)) return null;
   const cookies = parseCookies(socket.handshake.headers.cookie);
   const db = getDb();
 
   if (role === "moderator") {
-    return typeof moderatorToken === "string" && (await verifyModeratorToken(eventId, moderatorToken)) ? "moderator" : null;
+    return typeof moderatorToken === "string" && (await verifyModeratorToken(eventId, moderatorToken)) ? { role: "moderator" } : null;
   }
 
   if (role === "host") {
@@ -39,7 +40,7 @@ async function authorize(socket: Socket): Promise<SocketRole | null> {
       .select({ id: events.id })
       .from(events)
       .where(and(eq(events.id, eventId), eq(events.ownerId, user.id)));
-    return event ? "host" : null;
+    return event ? { role: "host" } : null;
   }
 
   const token = cookies.get(participantCookieName(eventId));
@@ -49,7 +50,7 @@ async function authorize(socket: Socket): Promise<SocketRole | null> {
     .select({ id: participants.id })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.eventId, eventId)));
-  return participant ? "participant" : null;
+  return participant ? { role: "participant", participantId: participant.id } : null;
 }
 
 /** Socket.IO-backed publisher; a Redis adapter can be added to the Server for multi-process fan-out. */
@@ -71,10 +72,11 @@ export function attachSocketServer(httpServer: HttpServer) {
 
   io.use(async (socket, next) => {
     try {
-      const role = await authorize(socket);
-      if (!role) return next(new Error("unauthorized"));
+      const granted = await authorize(socket);
+      if (!granted) return next(new Error("unauthorized"));
       const { eventId } = socket.handshake.auth as { eventId: string };
-      socket.data.role = role;
+      socket.data.role = granted.role;
+      socket.data.participantId = granted.participantId;
       socket.data.eventId = eventId;
       next();
     } catch {
@@ -83,9 +85,16 @@ export function attachSocketServer(httpServer: HttpServer) {
   });
 
   io.on("connection", (socket) => {
-    const { eventId, role } = socket.data as { eventId: string; role: SocketRole };
+    const { eventId, role, participantId } = socket.data as { eventId: string; role: SocketRole; participantId?: string };
     socket.join(eventRoom(eventId));
-    if (role === "host" || role === "moderator") socket.join(hostRoom(eventId));
+    if (role === "host" || role === "moderator") {
+      socket.join(hostRoom(eventId));
+      socket.emit("presence", { count: presenceCount(eventId) });
+    }
+    if (role === "participant" && participantId) {
+      void participantConnected(eventId, participantId).catch(() => {});
+      socket.on("disconnect", () => participantDisconnected(eventId, participantId));
+    }
   });
 
   setPublisher(createSocketPublisher(io));

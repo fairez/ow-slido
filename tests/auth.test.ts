@@ -162,3 +162,15 @@ test("login returns 429 after 10 attempts for one email across IPs", async () =>
   for (let i = 0; i < 10; i++) expect((await attempt(`10.0.0.${i}`)).status).toBe(401);
   expect((await attempt("10.0.0.99")).status).toBe(429);
 }, 30_000);
+
+test("login records first_login_at once", async () => {
+  await signup(post("/api/auth/signup", creds));
+  const read = async () =>
+    (await db.select({ at: users.firstLoginAt }).from(users).where(eq(users.email, "host@example.com")))[0].at;
+  expect(await read()).toBeNull();
+  await login(post("/api/auth/login", creds));
+  const first = await read();
+  expect(first).toBeInstanceOf(Date);
+  await login(post("/api/auth/login", creds));
+  expect(await read()).toEqual(first);
+});

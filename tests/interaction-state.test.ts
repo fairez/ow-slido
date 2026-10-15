@@ -3,7 +3,8 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { io as connect, type Socket } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { participants } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { participants, users } from "@/db/schema";
 import { createParticipantToken, participantCookieName } from "@/lib/participant-token";
 import { setPublisher } from "@/lib/realtime/publisher";
 import { attachSocketServer } from "@/lib/realtime/socket-server";
@@ -99,6 +100,17 @@ test("start sets live; close sets closed", async () => {
   const closed = await run(close, eventId, id);
   expect(closed.status).toBe(200);
   expect((await closed.json()).interaction.state).toBe("closed");
+});
+
+test("first start records the host's first_interaction_live_at once", async () => {
+  const read = async () =>
+    (await db.select({ at: users.firstInteractionLiveAt }).from(users).where(eq(users.email, "host@example.com")))[0].at;
+  expect(await read()).toBeNull();
+  await run(start, eventId, await newPoll());
+  const first = await read();
+  expect(first).toBeInstanceOf(Date);
+  await run(start, eventId, await newPoll());
+  expect(await read()).toEqual(first);
 });
 
 test("only one interaction is live at a time", async () => {

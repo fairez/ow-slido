@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { LiveParticipantCount } from "@/components/live-participant-count";
 
 export type EventSummary = {
   id: string;
@@ -180,6 +181,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
               <div>
                 Join code: <strong>{e.joinCode}</strong>
               </div>
+              <LiveParticipantCount eventId={e.id} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <Link href={`/dashboard/events/${e.id}`} style={{ ...buttonStyle, display: "inline-flex", alignItems: "center", border: "1px solid #888" }}>
                   Manage

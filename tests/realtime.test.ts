@@ -3,6 +3,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { io as connect, type Socket } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
+import { eq } from "drizzle-orm";
 import { events, participants, users } from "@/db/schema";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 import { createParticipantToken, participantCookieName } from "@/lib/participant-token";
@@ -148,4 +149,54 @@ test("moderator token joins the host room for its event only, and not once revok
   await expect(open({ eventId: eventA, role: "moderator" })).rejects.toThrow("unauthorized");
   await revokeModeratorToken(eventA);
   await expect(open({ eventId: eventA, role: "moderator", token })).rejects.toThrow("unauthorized");
+});
+
+const presenceOf = (host: Socket) => nextMessage(host, "presence") as Promise<{ count: number }>;
+
+async function hostFor(eventId: string) {
+  const host = await open({ eventId, role: "host" }, `${SESSION_COOKIE}=${createSessionToken(ownerId)}`);
+  return host;
+}
+
+test("presence counts connected participants, decrements on disconnect and tracks the peak", async () => {
+  const host = await hostFor(eventA);
+  const counts: number[] = [];
+  host.on("presence", (p: { count: number }) => counts.push(p.count));
+
+  const p1 = await open({ eventId: eventA, role: "participant" }, await participantCookie(eventA));
+  const p2 = await open({ eventId: eventA, role: "participant" }, await participantCookie(eventA));
+  await sleep(200);
+  expect(counts.at(-1)).toBe(2);
+
+  p1.disconnect();
+  await sleep(200);
+  expect(counts.at(-1)).toBe(1);
+
+  const p3 = await open({ eventId: eventA, role: "participant" }, await participantCookie(eventA));
+  await sleep(200);
+  expect(counts.at(-1)).toBe(2);
+  p2.disconnect();
+  p3.disconnect();
+  await sleep(200);
+  expect(counts.at(-1)).toBe(0);
+
+  const [row] = await db.select({ peak: events.peakParticipants }).from(events).where(eq(events.id, eventA));
+  expect(row.peak).toBe(2);
+  const [other] = await db.select({ peak: events.peakParticipants }).from(events).where(eq(events.id, eventB));
+  expect(other.peak).toBe(0);
+});
+
+test("a late-connecting host gets the current count, and one participant in two tabs counts once", async () => {
+  const cookie = await participantCookie(eventA);
+  await open({ eventId: eventA, role: "participant" }, cookie);
+  await open({ eventId: eventA, role: "participant" }, cookie);
+  await sleep(200);
+  const host = connect(url, {
+    auth: { eventId: eventA, role: "host" },
+    transports: ["websocket"],
+    reconnection: false,
+    extraHeaders: { cookie: `${SESSION_COOKIE}=${createSessionToken(ownerId)}` },
+  });
+  clients.push(host);
+  expect(await presenceOf(host)).toEqual({ count: 1 });
 });
