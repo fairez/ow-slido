@@ -55,3 +55,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - The login limit counts every attempt (including successes) and runs before the DB lookup; x-forwarded-for is trusted as-is, so a real proxy must overwrite it in deployment.
   - Next rate-limited endpoints (join, vote, submit, per PRD FR-14) should reuse `rateLimit` with keys like `join:ip:<ip>` / `vote:token:<token>`.
 ---
+## 2026-10-16 - US-006
+- /login and /signup pages (shared client `AuthForm`, inline `role="alert"` errors, redirect to /dashboard on success); /dashboard server component shows the host email + `LogoutButton`, redirects to /login when there is no valid session.
+- Files: components/{auth-form,logout-button}.tsx, app/{login,signup,dashboard}/page.tsx, lib/auth/require-admin.ts (new `getUserFromToken`), tests/auth-pages.test.tsx
+- Verified: lint, typecheck, test pass; dev server: /login and /signup 200, /dashboard 307 -> /login, viewport meta present. No browser tool available, so the 360px layout and form flow still need manual browser verification (layout is a single-column, max-width container with fluid inputs).
+- **Learnings for future iterations:**
+  - Server components read the session via `(await cookies()).get(SESSION_COOKIE)?.value` + `getUserFromToken(token)`; `getSessionUser(request)` is the route-handler variant. Use `redirect()` from next/navigation for guards.
+  - Page tests mock `next/headers` and `next/navigation` and call the async page function directly (DB env set in beforeAll before dynamic import).
+  - Session cookie is `Secure`; browsers accept it on http://localhost, but curl won't resend it.
+---

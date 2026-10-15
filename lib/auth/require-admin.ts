@@ -5,8 +5,7 @@ import { readSessionToken, verifySessionToken } from "./session";
 
 export type AuthUser = { id: string; email: string; role: "admin" };
 
-export async function getSessionUser(request: Request): Promise<AuthUser | null> {
-  const token = readSessionToken(request);
+export async function getUserFromToken(token: string | null | undefined): Promise<AuthUser | null> {
   const userId = token && verifySessionToken(token);
   if (!userId) return null;
   const [user] = await getDb()
@@ -14,6 +13,10 @@ export async function getSessionUser(request: Request): Promise<AuthUser | null>
     .from(users)
     .where(and(eq(users.id, userId), eq(users.active, true)));
   return user ?? null;
+}
+
+export function getSessionUser(request: Request) {
+  return getUserFromToken(readSessionToken(request));
 }
 
 export async function requireAdmin(
