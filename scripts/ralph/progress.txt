@@ -245,3 +245,14 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - US-026 moderation that rejects/un-approves a question should keep rows in question_votes (harmless; they're only counted for approved questions in the list).
   - Prettier isn't configured in the repo; if you format with it use `--print-width 120` to match existing style.
 ---
+## 2026-10-16 - US-026
+- Moderation queue. lib/moderation.ts: `listHostQuestions` (pending + approved, with `status`), `moderateQuestion` (PATCH body `{status: approved|rejected}` for pending only, `{pinned}`/`{answered}` for approved only; 409 otherwise; rejected questions 404 afterwards), `deleteQuestion`. Endpoints (owner-only via requireAdmin + findOwnedEvent, 404 for other owners): `GET /api/events/:id/moderation`, `PATCH|DELETE /api/events/:id/questions/:questionId`. The Open/Moderated switch reuses the existing `PATCH /api/events/:id`.
+- Realtime: approve publishes `question:added` (public shape) to the room; pin/answer publish `question:updated` `{questionId, pinned, answered}`; deleting an approved question publishes `question:removed`; reject and deleting non-approved publish nothing. QaTab handles updated/removed.
+- Host UI: components/moderation-panel.tsx (mode checkbox, Pending list with Approve/Reject, Approved list with Mark answered / Pin / Delete, live via `question:pending`/`question:added`/`question:votes`) rendered on the event dashboard page.
+- Files: lib/{moderation,question-types}.ts, app/api/events/[id]/{moderation,questions/[questionId]}/route.ts, components/{moderation-panel,qa-tab}.tsx, app/dashboard/events/[id]/page.tsx, tests/{questions.test.ts,moderation-panel.test.tsx,qa-tab.test.tsx}
+- Verified: lint, typecheck, test pass (no migration needed). No browser tool available (dev-browser skill not present), so real-browser verification (queue, live approval <1s, 360px) still needs a manual check.
+- **Learnings for future iterations:**
+  - A route helper returning `{response} as const | {...}` made TS infer `Response | undefined`; return `Response | data` and narrow with `instanceof Response`.
+  - Rejected questions stay in the table but are invisible everywhere (host list excludes them too).
+  - Switching to 'open' does not auto-approve already pending questions; the host still approves/rejects them.
+---

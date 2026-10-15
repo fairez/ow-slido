@@ -15,3 +15,6 @@ export type PublicQuestion = {
   /** Whether the requesting participant has upvoted; false for the host. */
   upvoted: boolean;
 };
+
+/** Host-side view: adds the moderation status; rejected questions are not listed. */
+export type HostQuestion = PublicQuestion & { status: "pending" | "approved" };

@@ -95,3 +95,13 @@ it("updates counts live and sorts by Popular or Recent", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Recent" }));
   expect(order()).toEqual(["Newer", "Older"]);
 });
+
+it("applies host pin/answered updates and removals live", () => {
+  render(<QaTab eventId="e1" initial={[q("1", "Older", { createdAt: "2026-01-01T00:00:00.000Z" }), q("2", "Newer", { createdAt: "2026-02-01T00:00:00.000Z" })]} />);
+  act(() => void fake.emit("question:updated", { questionId: "1", pinned: true, answered: true }));
+  const items = screen.getAllByRole("listitem");
+  expect(items[0].textContent).toContain("Older");
+  expect(items[0].textContent).toContain("Answered");
+  act(() => void fake.emit("question:removed", { questionId: "1" }));
+  expect(screen.queryByText("Older")).toBeNull();
+});

@@ -239,3 +239,94 @@ test("upvotes are rate limited per participant", async () => {
   expect(limited.status).toBe(429);
   expect(limited.headers.get("retry-after")).toBeTruthy();
 });
+
+// ---- Moderation (US-026) ----
+type QCtx = { params: Promise<{ id: string; questionId: string }> };
+const qctx = (questionId: string): QCtx => ({ params: Promise.resolve({ id: eventId, questionId }) });
+
+async function moderationSetup() {
+  await setMode("moderated");
+  const res = await ask({ text: "Pending one" });
+  return (await res.json()).question.id as string;
+}
+
+test("host approves a pending question: participants get it live, and it then lists", async () => {
+  const modRoute = await import("@/app/api/events/[id]/questions/[questionId]/route");
+  const id = await moderationSetup();
+  expect((await list()).json.questions).toEqual([]);
+  published = [];
+  const res = await modRoute.PATCH(req("PATCH", { status: "approved" }, hostCookie), qctx(id));
+  expect(res.status).toBe(200);
+  expect(published).toMatchObject([{ name: "question:added", hostOnly: undefined }]);
+  expect((await list()).json.questions.map((q: { id: string }) => q.id)).toEqual([id]);
+});
+
+test("rejected questions never reach participants", async () => {
+  const modRoute = await import("@/app/api/events/[id]/questions/[questionId]/route");
+  const id = await moderationSetup();
+  published = [];
+  const res = await modRoute.PATCH(req("PATCH", { status: "rejected" }, hostCookie), qctx(id));
+  expect(res.status).toBe(200);
+  expect(published).toEqual([]);
+  expect((await list()).json.questions).toEqual([]);
+  const again = await modRoute.PATCH(req("PATCH", { status: "approved" }, hostCookie), qctx(id));
+  expect(again.status).toBe(404);
+  expect((await list()).json.questions).toEqual([]);
+});
+
+test("host can pin, mark answered and delete approved questions; pinned list first", async () => {
+  const modRoute = await import("@/app/api/events/[id]/questions/[questionId]/route");
+  const first = (await (await ask({ text: "first" })).json()).question.id as string;
+  const second = (await (await ask({ text: "second" })).json()).question.id as string;
+  published = [];
+  expect((await modRoute.PATCH(req("PATCH", { pinned: true }, hostCookie), qctx(first))).status).toBe(200);
+  expect((await modRoute.PATCH(req("PATCH", { answered: true }, hostCookie), qctx(first))).status).toBe(200);
+  expect(published.map((p) => p.name)).toEqual(["question:updated", "question:updated"]);
+  const listed = (await list()).json.questions;
+  expect(listed.map((q: { id: string }) => q.id)).toEqual([first, second]);
+  expect(listed[0]).toMatchObject({ pinned: true, answered: true });
+
+  published = [];
+  expect((await modRoute.DELETE(req("DELETE", undefined, hostCookie), qctx(first))).status).toBe(204);
+  expect(published).toMatchObject([{ name: "question:removed", payload: { questionId: first } }]);
+  expect((await list()).json.questions.map((q: { id: string }) => q.id)).toEqual([second]);
+});
+
+test("pinning a pending question is refused", async () => {
+  const modRoute = await import("@/app/api/events/[id]/questions/[questionId]/route");
+  const id = await moderationSetup();
+  expect((await modRoute.PATCH(req("PATCH", { pinned: true }, hostCookie), qctx(id))).status).toBe(409);
+});
+
+test("moderation endpoints are host-only and owner-only", async () => {
+  const modRoute = await import("@/app/api/events/[id]/questions/[questionId]/route");
+  const queue = await import("@/app/api/events/[id]/moderation/route");
+  const id = await moderationSetup();
+  // Participant and anonymous callers
+  expect((await modRoute.PATCH(req("PATCH", { status: "approved" }), qctx(id))).status).toBe(401);
+  expect((await modRoute.DELETE(req("DELETE", undefined, null), qctx(id))).status).toBe(401);
+  expect((await queue.GET(req("GET"), ctx())).status).toBe(401);
+  // Another admin
+  const other = await signup(
+    new Request("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "other@example.com", password: "password123" }),
+    }),
+  );
+  const otherCookie = (other.headers.get("set-cookie") ?? "").split(";")[0];
+  expect((await modRoute.PATCH(req("PATCH", { status: "approved" }, otherCookie), qctx(id))).status).toBe(404);
+  expect((await modRoute.DELETE(req("DELETE", undefined, otherCookie), qctx(id))).status).toBe(404);
+  expect((await queue.GET(req("GET", undefined, otherCookie), ctx())).status).toBe(404);
+  const [row] = await db.select().from(questions).where(eq(questions.id, id));
+  expect(row.status).toBe("pending");
+});
+
+test("pending questions never leak to participants; the host queue lists them", async () => {
+  const queue = await import("@/app/api/events/[id]/moderation/route");
+  const id = await moderationSetup();
+  expect(published).toMatchObject([{ name: "question:pending", hostOnly: true }]);
+  expect(JSON.stringify((await list()).json)).not.toContain("Pending one");
+  const res = await queue.GET(req("GET", undefined, hostCookie), ctx());
+  expect((await res.json()).questions).toMatchObject([{ id, status: "pending", text: "Pending one" }]);
+});

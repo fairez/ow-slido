@@ -43,14 +43,26 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
       setQuestions((cur) => (cur.some((q) => q.id === msg.question.id) ? cur : sortQuestions([msg.question, ...cur])));
     const onVotes = (msg: { questionId: string; upvotes: number }) =>
       setQuestions((cur) => cur.map((q) => (q.id === msg.questionId ? { ...q, upvotes: msg.upvotes } : q)));
+    const onUpdated = (msg: { questionId: string; pinned: boolean; answered: boolean }) =>
+      setQuestions((cur) =>
+        sortQuestions(
+          cur.map((q) => (q.id === msg.questionId ? { ...q, pinned: msg.pinned, answered: msg.answered } : q)),
+        ),
+      );
+    const onRemoved = (msg: { questionId: string }) =>
+      setQuestions((cur) => cur.filter((q) => q.id !== msg.questionId));
     // Messages missed while disconnected are not replayed, so resync on every (re)connect.
     const onConnect = () => void refetch();
     socket.on("question:added", onAdded);
     socket.on("question:votes", onVotes);
+    socket.on("question:updated", onUpdated);
+    socket.on("question:removed", onRemoved);
     socket.on("connect", onConnect);
     return () => {
       socket.off("question:added", onAdded);
       socket.off("question:votes", onVotes);
+      socket.off("question:updated", onUpdated);
+      socket.off("question:removed", onRemoved);
       socket.off("connect", onConnect);
     };
   }, [socket, refetch]);
