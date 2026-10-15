@@ -2,6 +2,7 @@
 - Dev server is `tsx server.ts` (custom Node server: Next.js + Socket.IO at /socket.io); PORT env overrides 3000.
 - server.ts loads .env.local via dotenv; Next also loads it itself.
 - Vitest tests live in tests/**/*.test.{ts,tsx}; config is vitest.config.mts (.mts avoids a CJS/ESM warning); `@` alias = repo root.
+- DB: Drizzle + pg. `createDb(url)` in db/client.ts; migrations via `npm run db:migrate[:test]`; DB tests use `// @vitest-environment node` + tests/helpers/db.ts (`createTestDb`, `truncateAll`).
 
 # Ralph Progress Log
 Started: Fri Oct 16 12:14:30 AM CST 2026
@@ -14,4 +15,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - `npm i` can take >2 min here; run it in the background.
   - Never `pkill -f "tsx server.ts"` in the same shell chain you need afterwards; it killed the shell (exit 144).
   - Don't print .env.local; `sed 's/=.*/=/'` shows keys only.
+---
+## 2026-10-16 - US-002
+- Added Drizzle ORM + drizzle-kit + pg, db/schema.ts (trivial app_meta table), db/client.ts, scripts/db.ts (migrate/reset), migration 0000_init, test helper with truncateAll, db test, db:* npm scripts, CLAUDE.md docs.
+- Files: db/, drizzle.config.ts, scripts/db.ts, tests/helpers/db.ts, tests/db.test.ts, package.json, CLAUDE.md
+- Verified: migration applied to dev and test DBs; lint, typecheck, test pass.
+- **Learnings for future iterations:**
+  - DB tests need the test DB migrated first (`npm run db:migrate:test`) after adding migrations.
+  - truncateAll truncates every public table incl. new ones automatically; drizzle's bookkeeping lives in the `drizzle` schema so it is untouched.
+  - `npm i` took ~5 min here.
 ---
