@@ -6,10 +6,11 @@ import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
+import { verifyModeratorToken } from "@/lib/moderator-token";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 import { eventRoom, hostRoom, setPublisher, type Publisher } from "./publisher";
 
-export type SocketRole = "participant" | "host";
+export type SocketRole = "participant" | "host" | "moderator";
 
 function parseCookies(header: string | undefined) {
   const out = new Map<string, string>();
@@ -22,10 +23,14 @@ function parseCookies(header: string | undefined) {
 
 /** Returns the role granted to the socket for the event, or null if it is not allowed in. */
 async function authorize(socket: Socket): Promise<SocketRole | null> {
-  const { eventId, role } = socket.handshake.auth as { eventId?: unknown; role?: unknown };
+  const { eventId, role, token: moderatorToken } = socket.handshake.auth as { eventId?: unknown; role?: unknown; token?: unknown };
   if (typeof eventId !== "string" || !isUuid(eventId)) return null;
   const cookies = parseCookies(socket.handshake.headers.cookie);
   const db = getDb();
+
+  if (role === "moderator") {
+    return typeof moderatorToken === "string" && (await verifyModeratorToken(eventId, moderatorToken)) ? "moderator" : null;
+  }
 
   if (role === "host") {
     const user = await getUserFromToken(cookies.get(SESSION_COOKIE));
@@ -58,7 +63,7 @@ export function createSocketPublisher(io: Server): Publisher {
 
 /**
  * Attaches Socket.IO to the HTTP server. Clients connect with
- * `auth: { eventId, role: "participant" | "host" }` and are placed in the event's room
+ * `auth: { eventId, role: "participant" | "host" | "moderator", token? }` and are placed in the event's room
  * (hosts also in the host-only room) only if their cookie proves access.
  */
 export function attachSocketServer(httpServer: HttpServer) {
@@ -80,7 +85,7 @@ export function attachSocketServer(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     const { eventId, role } = socket.data as { eventId: string; role: SocketRole };
     socket.join(eventRoom(eventId));
-    if (role === "host") socket.join(hostRoom(eventId));
+    if (role === "host" || role === "moderator") socket.join(hostRoom(eventId));
   });
 
   setPublisher(createSocketPublisher(io));

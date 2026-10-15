@@ -256,3 +256,14 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Rejected questions stay in the table but are invisible everywhere (host list excludes them too).
   - Switching to 'open' does not auto-approve already pending questions; the host still approves/rejects them.
 ---
+## 2026-10-16 - US-027
+- Moderator link. `events.moderator_nonce` (migration 0009) holds the current nonce; token = `<nonce>.<HMAC(eventId.nonce)>` (lib/moderator-token.ts), valid only while the nonce matches the row, so revoke (nonce=null) and regenerate (new nonce) take effect immediately. Host-only `GET|POST|DELETE /api/events/:id/moderator-link` return/rotate/revoke the link path `/moderate/:eventId?t=<token>`.
+- `authorizeModeration(request, eventId)` (lib/auth/require-moderation.ts) accepts the owner session or an `x-moderator-token` header; used ONLY by `GET /api/events/:id/moderation` and `PATCH|DELETE /api/events/:id/questions/:questionId`. All other routes still use requireAdmin, so the token gets 401 elsewhere. Socket.IO has a `moderator` role (auth `{eventId, role, token}`) that joins the host room.
+- UI: `/moderate/[eventId]` page renders `ModerationPanel` with `moderatorToken` (no mode switch); `ModeratorLinkManager` on the host event page (generate/regenerate, copy, revoke).
+- Files: db/schema.ts, db/migrations/0009_*, lib/{moderator-token,auth/require-moderation,realtime/*}.ts, app/api/events/[id]/{moderator-link,moderation,questions/[questionId]}/route.ts, app/moderate/[eventId]/page.tsx, components/{moderation-panel,moderator-link-manager}.tsx, app/dashboard/events/[id]/page.tsx, tests/{moderator-link.test.ts,realtime.test.ts,moderation-panel.test.tsx}
+- Verified: lint, typecheck, test pass; migration applied to dev and test DBs. No browser tool available, so real-browser verification of /moderate and the link manager still needs a manual check.
+- **Learnings for future iterations:**
+  - A moderator socket already connected when the link is revoked stays connected (HTTP calls fail immediately, but it keeps receiving broadcasts until it disconnects).
+  - Token is in the URL query; the moderator page does not strip it, since the client needs it for API headers.
+  - Moderators cannot change Open/Moderated mode (that is PATCH /api/events/:id, host-only).
+---

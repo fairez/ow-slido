@@ -50,6 +50,7 @@ export const events = pgTable(
     moderationMode: text("moderation_mode", { enum: ["open", "moderated"] })
       .notNull()
       .default("open"),
+    moderatorNonce: text("moderator_nonce"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

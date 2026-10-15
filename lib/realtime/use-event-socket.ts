@@ -9,14 +9,14 @@ export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "un
  * Connects to the event's realtime room. Reconnects automatically and starts on long-polling,
  * upgrading to WebSocket when available, so it still works behind proxies that block WebSockets.
  */
-export function useEventSocket(eventId: string, role: "participant" | "host" = "participant") {
+export function useEventSocket(eventId: string, role: "participant" | "host" | "moderator" = "participant", token?: string) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
 
   useEffect(() => {
     const s = io({
       path: "/socket.io",
-      auth: { eventId, role },
+      auth: { eventId, role, token },
       transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionDelayMax: 5000,
@@ -31,7 +31,7 @@ export function useEventSocket(eventId: string, role: "participant" | "host" = "
       s.disconnect();
       setSocket((cur) => (cur === s ? null : cur));
     };
-  }, [eventId, role]);
+  }, [eventId, role, token]);
 
   return { socket, status };
 }

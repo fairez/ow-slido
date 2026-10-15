@@ -135,3 +135,17 @@ test("unauthorized sockets are rejected", async () => {
   // The owner's host session works.
   await expect(open({ eventId: eventA, role: "host" }, hostCookie)).resolves.toBeDefined();
 });
+
+test("moderator token joins the host room for its event only, and not once revoked", async () => {
+  const { regenerateModeratorToken, revokeModeratorToken } = await import("@/lib/moderator-token");
+  const token = await regenerateModeratorToken(eventA);
+  const mod = await open({ eventId: eventA, role: "moderator", token });
+  const got = nextMessage(mod, "secret");
+  publish(eventA, "secret", { q: 2 }, { hostOnly: true });
+  expect(await got).toEqual({ q: 2 });
+
+  await expect(open({ eventId: eventB, role: "moderator", token })).rejects.toThrow("unauthorized");
+  await expect(open({ eventId: eventA, role: "moderator" })).rejects.toThrow("unauthorized");
+  await revokeModeratorToken(eventA);
+  await expect(open({ eventId: eventA, role: "moderator", token })).rejects.toThrow("unauthorized");
+});

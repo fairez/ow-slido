@@ -85,3 +85,25 @@ it("pin, answered and delete actions on approved questions", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   await waitFor(() => expect(screen.queryByText("Hello")).toBeNull());
 });
+
+it("moderator mode sends the token, hides the mode switch and still moderates", async () => {
+  const fetchMock = vi.fn(
+    async () => new Response(JSON.stringify({ ok: true, question: q("1", "Why?") }), { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <ModerationPanel
+      eventId="e1"
+      initialMode="moderated"
+      initialQuestions={[q("1", "Why?", { status: "pending" })]}
+      moderatorToken="tok"
+    />,
+  );
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/events/e1/questions/1",
+    expect.objectContaining({ headers: expect.objectContaining({ "x-moderator-token": "tok" }) }),
+  );
+});

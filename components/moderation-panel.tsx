@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import type { HostQuestion } from "@/lib/question-types";
 
@@ -14,25 +14,32 @@ export function ModerationPanel({
   eventId,
   initialMode,
   initialQuestions,
+  moderatorToken,
 }: {
   eventId: string;
   initialMode: Mode;
   initialQuestions: HostQuestion[];
+  /** Set when a moderator (not the host) uses the panel: authenticates calls and hides the mode switch. */
+  moderatorToken?: string;
 }) {
-  const { socket } = useEventSocket(eventId, "host");
+  const { socket } = useEventSocket(eventId, moderatorToken ? "moderator" : "host", moderatorToken);
+  const authHeaders = useMemo<Record<string, string>>(
+    () => (moderatorToken ? { "x-moderator-token": moderatorToken } : ({} as Record<string, string>)),
+    [moderatorToken],
+  );
   const [mode, setMode] = useState<Mode>(initialMode);
   const [questions, setQuestions] = useState<HostQuestion[]>(initialQuestions);
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/moderation`);
+      const res = await fetch(`/api/events/${eventId}/moderation`, { headers: authHeaders });
       if (!res.ok) return;
       setQuestions(((await res.json()) as { questions: HostQuestion[] }).questions);
     } catch {
       // Offline: the next reconnect refetches.
     }
-  }, [eventId]);
+  }, [eventId, authHeaders]);
 
   useEffect(() => {
     if (!socket) return;
@@ -79,7 +86,7 @@ export function ModerationPanel({
   const change = async (id: string, body: Record<string, unknown>) => {
     const res = await request(
       `/api/events/${eventId}/questions/${id}`,
-      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+      { method: "PATCH", headers: { "content-type": "application/json", ...authHeaders }, body: JSON.stringify(body) },
       "Could not update the question.",
     );
     if (!res) return;
@@ -92,7 +99,7 @@ export function ModerationPanel({
   };
 
   const remove = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE" }, "Could not delete the question.");
+    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE", headers: authHeaders }, "Could not delete the question.");
     if (res) setQuestions((cur) => cur.filter((q) => q.id !== id));
   };
 
@@ -103,14 +110,16 @@ export function ModerationPanel({
   return (
     <section aria-labelledby="moderation-title">
       <h2 id="moderation-title">Q&amp;A moderation</h2>
-      <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
-        <input
-          type="checkbox"
-          checked={mode === "moderated"}
-          onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")}
-        />
-        Moderated Q&amp;A (questions need approval)
-      </label>
+      {!moderatorToken && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+          <input
+            type="checkbox"
+            checked={mode === "moderated"}
+            onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")}
+          />
+          Moderated Q&amp;A (questions need approval)
+        </label>
+      )}
       <p>
         Mode: <strong>{mode === "moderated" ? "Moderated" : "Open"}</strong>
       </p>
