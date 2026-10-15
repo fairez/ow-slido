@@ -3,9 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import { LiveView } from "@/components/live-view";
+import { ParticipantView } from "@/components/participant-view";
 import { isUuid } from "@/lib/events";
 import { getLiveInteraction } from "@/lib/live-view";
+import { listApprovedQuestions } from "@/lib/questions";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,11 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
   return (
     <main style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
       <h1>{event.name}</h1>
-      <LiveView eventId={event.id} initial={await getLiveInteraction(event.id, participantId)} />
+      <ParticipantView
+        eventId={event.id}
+        initial={await getLiveInteraction(event.id, participantId)}
+        initialQuestions={await listApprovedQuestions(event.id)}
+      />
     </main>
   );
 }

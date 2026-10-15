@@ -3,19 +3,9 @@ import { events, participants, questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isProfane } from "@/lib/profanity";
 import { publish } from "@/lib/realtime/publisher";
+import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
 
-export const QUESTION_MAX_LENGTH = 300;
-export const AUTHOR_NAME_MAX_LENGTH = 40;
-
-/** The shape participants may see; never includes participant ids or status. */
-export type PublicQuestion = {
-  id: string;
-  text: string;
-  authorName: string | null;
-  answered: boolean;
-  pinned: boolean;
-  createdAt: string;
-};
+export { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion };
 
 type Row = typeof questions.$inferSelect;
 export const toPublicQuestion = (row: Row): PublicQuestion => ({

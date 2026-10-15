@@ -225,3 +225,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Moderation mode is read at submit time, so switching an event to 'moderated' doesn't hide already approved questions.
   - Tests making more than 5 question POSTs must reset the rate-limit store.
 ---
+## 2026-10-16 - US-024
+- Q&A participant UI. `/e/[eventId]` now renders `ParticipantView` (components/participant-view.tsx): "Live" and "Q&A" tabs (role=tablist), both panels stay mounted (`hidden`) so the live view keeps its socket listeners. `QaTab` (components/qa-tab.tsx): textarea (max 300, `n/300` counter), optional name (max 40), "Your question is waiting for approval" when the POST returns status 'pending', own approved questions appended immediately, approved list updates from `question:added` (deduped by id) and resyncs via GET on socket connect. Shows pinned/answered markers and "Anonymous" for no name.
+- Moved question limits and `PublicQuestion` into db-free lib/question-types.ts (re-exported from lib/questions.ts) for client import.
+- Files: components/{qa-tab,participant-view}.tsx, lib/{question-types,questions}.ts, app/e/[eventId]/page.tsx, tests/qa-tab.test.tsx
+- Verified: lint, typecheck, test pass (4 new tests). No browser tool available (dev-browser skill not present), so real-browser verification (tab switching, 360px layout, live updates) still needs a manual check.
+- **Learnings for future iterations:**
+  - Keep the char counter outside the `<label>`, or `getByLabelText("Your question")` also matches the counter text.
+  - QaTab and LiveView each open their own socket via useEventSocket; share one if this becomes a problem.
+  - Question likes/ordering updates (later stories) should add events to QaTab's socket effect; list order is pinned first, then newest (`sortQuestions`).
+---
