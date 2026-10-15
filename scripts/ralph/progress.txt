@@ -275,3 +275,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - `poll_votes` column is `optionIds` (string[]), not `optionId`; `questions` text column is `text`.
   - Poll option ids are copied unchanged; they only need to be unique within an interaction, so reuse across events is fine.
 ---
+## 2026-10-16 - US-029
+- `GET /api/events/:id/export.csv` (owner-only: 401 anonymous, 404 other owner/unknown) returns one flat CSV (`section,title,item,count,author`) as an attachment: poll rows per option with vote counts (zero-vote options included), wordcloud rows with merged counts (hidden/profane excluded), and approved questions with upvote counts (most upvoted first) plus `author` only when the participant gave a name. Pending/rejected questions, participant ids, nicknames and IPs are never selected. Dashboard event page has an "Export CSV" download link.
+- Files: lib/export.ts, app/api/events/[id]/export.csv/route.ts, app/dashboard/events/[id]/page.tsx, tests/export.test.ts
+- Verified: lint, typecheck, test pass (3 new tests parse the CSV). No browser tool available, so real-browser verification of the download link still needs a manual check.
+- **Learnings for future iterations:**
+  - `csvField` prefixes `'` to values starting with `= + - @` (formula injection), so exported question text can differ by that one character.
+  - In Drizzle `sql` subqueries, `${table.col}` renders unqualified (`"id"`) and can bind to the inner table; use a leftJoin + groupBy for per-row counts instead.
+---

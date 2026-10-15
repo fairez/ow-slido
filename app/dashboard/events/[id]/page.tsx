@@ -45,6 +45,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <p>
         <Link href={`/present/${event.id}`}>Open presenter view</Link>
       </p>
+      <p>
+        <a href={`/api/events/${event.id}/export.csv`} download>
+          Export CSV
+        </a>
+      </p>
       <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} />
       <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} />
       <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />
