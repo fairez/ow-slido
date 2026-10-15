@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -93,4 +94,20 @@ export const interactions = pgTable(
       .on(t.eventId)
       .where(sql`${t.state} = 'live'`),
   ],
+);
+
+export const pollVotes = pgTable(
+  "poll_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    optionIds: jsonb("option_ids").$type<string[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("poll_votes_one_per_participant").on(t.interactionId, t.participantId)],
 );

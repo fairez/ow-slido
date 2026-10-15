@@ -158,3 +158,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Component tests mock `@/lib/realtime/use-event-socket` with an EventEmitter to drive `state-changed`/`connect`.
   - `getLiveInteraction(eventId)` in lib/live-view.ts is the shared server helper; extend `LiveInteraction` for wordcloud (US-021/022).
 ---
+## 2026-10-16 - US-017
+- `poll_votes` table (migration 0005, UNIQUE(interaction_id, participant_id), cascade FKs) and `POST /api/interactions/:id/vote` body `{optionIds: string[]}`. Returns 201 `{ok, counts, total}`; 400 invalid/duplicate-in-list options or several options on single-select; 401 no valid participant cookie; 404 unknown interaction; 409 not live or already voted. Sets `participants.first_response_at` (coalesce, first response only) and publishes `poll:counts` `{interactionId, counts: {optionId: n}, total}` to the event room. Logic in lib/votes.ts (`castVote`, `getPollCounts`). Rate limits: 100/min per IP, 20/min per participant.
+- Files: db/schema.ts, db/migrations/0005_*, lib/votes.ts, app/api/interactions/[id]/vote/route.ts, tests/votes.test.ts
+- Verified: lint, typecheck, test pass (9 new tests); migrations applied to dev and test DBs.
+- **Learnings for future iterations:**
+  - The participant cookie is per event, so routes keyed only by interaction id read `eventId` from the interaction row first, then verify the cookie for that event.
+  - Vote tx takes `FOR SHARE` on the interaction row so a concurrent close (UPDATE) waits; duplicates are caught with `onConflictDoNothing` on the unique constraint (no 23505 handling needed).
+  - `poll:counts` goes to the whole event room, including participants, even when `showResultsToParticipants` is false; US-018 must not display it unless that flag is set (the live endpoint intentionally hides the flag today, so expose it there if needed). US-019 presenter can subscribe to it, and should seed from `getPollCounts`.
+  - The rate limit counts every attempt (including rejected ones).
+---
