@@ -7,6 +7,8 @@
 - Admin-only endpoints: `const auth = await requireAdmin(request); if (!auth.ok) return auth.response;` (lib/auth/require-admin.ts), then use `auth.user`.
 - Rate limiting: `await rateLimit(key, limit, windowSeconds)` from lib/rate-limit.ts returns `{allowed, remaining, retryAfterSeconds}`; use `clientIp(request)` for IP keys; store is swappable via `setRateLimitStore`. Tests that hit limited routes should `await getRateLimitStore().reset()` in beforeEach.
 
+- Realtime: server code calls `publish(eventId, name, payload, {hostOnly?})` from lib/realtime/publisher.ts (no-op until server.ts attaches Socket.IO; tests can `setPublisher`). Clients use `useEventSocket(eventId, role)` from lib/realtime/use-event-socket.ts.
+
 # Ralph Progress Log
 Started: Fri Oct 16 12:14:30 AM CST 2026
 ---
@@ -128,4 +130,14 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Client components must not import lib/polls.ts (pulls in the DB); put shared constants in a db-free module like lib/poll-limits.ts.
   - bcrypt is slow on this machine: the two login rate-limit tests (10 compares each) exceeded vitest's 5s default, so they now have a 30s timeout.
   - Reorder sends the full id list of the event, so any new list UI must pass every interaction id, not just drafts.
+---
+## 2026-10-16 - US-014
+- Realtime infra: `Publisher` interface + global `publish()` (lib/realtime/publisher.ts, held on globalThis so Next route bundles and server.ts share it); `attachSocketServer(httpServer)` (lib/realtime/socket-server.ts) authenticates in a Socket.IO middleware and puts sockets in room `event:<id>` (hosts also in `event:<id>:host`); server.ts now uses it. Client hook `useEventSocket(eventId, role)` starts on polling, upgrades to websocket, auto-reconnects, exposes `{socket, status}`.
+- Files: lib/realtime/*, server.ts, tests/realtime.test.ts, package.json (socket.io-client)
+- Verified: lint, typecheck, test pass (3 new integration tests with real socket.io-client: same-event delivery, other event isolation, hostOnly, unauthorized rejection); dev server serves the polling handshake. Hook has no browser/jsdom test; needs manual browser verification.
+- **Learnings for future iterations:**
+  - Clients connect with `auth: {eventId, role}`; identity comes from the httpOnly cookies on the handshake (participant_<eventId> or session), never from the payload. Rejections surface as connect_error "unauthorized".
+  - In socket tests use `transports: ["websocket"]` with `extraHeaders: {cookie}`; browsers send cookies automatically.
+  - eslint react-hooks forbids synchronous setState in effects; defer with queueMicrotask.
+  - Next steps: US-015 should call `publish(eventId, "interaction:changed", ...)`; participants' live view (US-016) should refetch state on reconnect since missed messages are not replayed.
 ---

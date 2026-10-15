@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { config } from "dotenv";
 import next from "next";
-import { Server } from "socket.io";
+import { attachSocketServer } from "./lib/realtime/socket-server";
 
 config({ path: ".env.local" });
 
@@ -15,7 +15,7 @@ app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     handle(req, res);
   });
-  new Server(httpServer, { path: "/socket.io" });
+  attachSocketServer(httpServer);
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });
