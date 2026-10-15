@@ -214,3 +214,14 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Participants don't see the cloud itself, only the input; "Submissions closed" is client state like "Voting closed".
   - The remaining count can drift if the same participant submits from two tabs; the server 409 resets it to 0.
 ---
+## 2026-10-16 - US-023
+- `questions` table (migration 0007: text CHECK 1-300, status CHECK, pinned/answered defaults, cascade FKs, index on (event_id, status)). `POST /api/events/:id/questions` `{text, authorName?}`: participant cookie required (401), anonymous unless a non-empty name (max 40) is given, profanity in text or name gives 400, status is 'pending' in moderated events and 'approved' in open ones; returns 201 `{ok, status, question}`. Limits: 100/min per IP, 5/min per participant. `GET` returns `{questions}` approved only (pinned first, then newest) for event participants or the owner. Logic in lib/questions.ts.
+- Realtime: approved questions publish `question:added` `{question}` to the event room; pending ones publish `question:pending` `{question}` with `hostOnly: true`.
+- Files: db/schema.ts, db/migrations/0007_*, lib/questions.ts, app/api/events/[id]/questions/route.ts, tests/questions.test.ts
+- Verified: lint, typecheck, test pass (10 new tests); migration applied to dev and test DBs.
+- **Learnings for future iterations:**
+  - `PublicQuestion` (lib/questions.ts) is the only shape to send to participants: it omits participant id and status. Moderation endpoints (US-026) need their own host-side shape and should publish `question:added` when approving.
+  - Unlike word clouds, profane questions are rejected with 400 rather than stored hidden.
+  - Moderation mode is read at submit time, so switching an event to 'moderated' doesn't hide already approved questions.
+  - Tests making more than 5 question POSTs must reset the rate-limit store.
+---

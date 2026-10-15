@@ -132,3 +132,28 @@ export const wordcloudEntries = pgTable(
     index("wordcloud_entries_participant_idx").on(t.interactionId, t.participantId),
   ],
 );
+
+export const questions = pgTable(
+  "questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Null for anonymous questions. */
+    authorName: text("author_name"),
+    status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull(),
+    answered: boolean("answered").notNull().default(false),
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("questions_text_length", sql`char_length(${t.text}) between 1 and 300`),
+    check("questions_status", sql`${t.status} in ('pending', 'approved', 'rejected')`),
+    index("questions_event_status_idx").on(t.eventId, t.status),
+  ],
+);
