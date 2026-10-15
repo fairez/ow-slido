@@ -64,3 +64,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Page tests mock `next/headers` and `next/navigation` and call the async page function directly (DB env set in beforeAll before dynamic import).
   - Session cookie is `Secure`; browsers accept it on http://localhost, but curl won't resend it.
 ---
+## 2026-10-16 - US-007
+- `events` table (migration 0002) with CHECKs for name length, 4-6 digit join code, moderation mode and ends_at >= starts_at; owner_id FK ON DELETE CASCADE. API: POST/GET /api/events, GET/PATCH/DELETE /api/events/[id], all admin-only and scoped to the owner (other owners get 404). Validation and join-code generation in lib/events.ts.
+- Files: db/schema.ts, db/migrations/0002_*, lib/events.ts, app/api/events/route.ts, app/api/events/[id]/route.ts, tests/events.test.ts
+- Verified: lint, typecheck, test pass (9 new tests, migrations applied to dev and test DBs).
+- **Learnings for future iterations:**
+  - Dynamic route handlers take `(request, { params }: { params: Promise<{ id: string }> })`; tests call them with `{ params: Promise.resolve({ id }) }`. Validate ids with `isUuid` (lib/events.ts) before querying, otherwise Postgres throws on malformed uuids.
+  - Join codes are 6 digits stored as text (leading zeros safe); create checks availability then retries on unique-violation (23505).
+  - Event-owned tables (participants, interactions, questions, ...) must reference `events.id` with `onDelete: "cascade"`.
+  - Dates are `startsAt`/`endsAt` ISO strings in the API, both required; ownership checks use `findOwned` in app/api/events/[id]/route.ts (reuse the pattern for nested routes).
+---

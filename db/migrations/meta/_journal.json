@@ -15,6 +15,13 @@
       "when": 1792082428694,
       "tag": "0001_typical_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792082732537,
+      "tag": "0002_grey_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

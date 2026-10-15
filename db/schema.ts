@@ -23,3 +23,27 @@ export const users = pgTable(
     check("users_role_admin", sql`${t.role} = 'admin'`),
   ],
 );
+
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    joinCode: text("join_code").notNull().unique(),
+    moderationMode: text("moderation_mode", { enum: ["open", "moderated"] })
+      .notNull()
+      .default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("events_name_length", sql`char_length(${t.name}) between 1 and 80`),
+    check("events_join_code_format", sql`${t.joinCode} ~ '^[0-9]{4,6}$'`),
+    check("events_moderation_mode", sql`${t.moderationMode} in ('open', 'moderated')`),
+    check("events_dates_order", sql`${t.endsAt} >= ${t.startsAt}`),
+  ],
+);
