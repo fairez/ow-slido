@@ -32,6 +32,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <p>
         Join code: <strong>{event.joinCode}</strong>
       </p>
+      <p>
+        <Link href={`/present/${event.id}`}>Open presenter view</Link>
+      </p>
       <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} />
     </main>
   );
