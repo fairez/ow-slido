@@ -134,7 +134,7 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
 ## 2026-10-16 - US-014
 - Realtime infra: `Publisher` interface + global `publish()` (lib/realtime/publisher.ts, held on globalThis so Next route bundles and server.ts share it); `attachSocketServer(httpServer)` (lib/realtime/socket-server.ts) authenticates in a Socket.IO middleware and puts sockets in room `event:<id>` (hosts also in `event:<id>:host`); server.ts now uses it. Client hook `useEventSocket(eventId, role)` starts on polling, upgrades to websocket, auto-reconnects, exposes `{socket, status}`.
 - Files: lib/realtime/*, server.ts, tests/realtime.test.ts, package.json (socket.io-client)
-- Verified: lint, typecheck, test pass (3 new integration tests with real socket.io-client: same-event delivery, other event isolation, hostOnly, unauthorized rejection); dev server serves the polling handshake. Hook has no browser/jsdom test; needs manual browser verification.
+- Verified: lint, typecheck, test pass (3 new integration tests with real socket.io-client: same-event delivery, other event isolation, hostOnly, unauthorized rejection). The custom server.ts could not be smoke-started because another Next dev instance already holds the .next lock (port 3111); attachSocketServer is only covered by the integration test. Hook has no browser/jsdom test; needs manual browser verification.
 - **Learnings for future iterations:**
   - Clients connect with `auth: {eventId, role}`; identity comes from the httpOnly cookies on the handshake (participant_<eventId> or session), never from the payload. Rejections surface as connect_error "unauthorized".
   - In socket tests use `transports: ["websocket"]` with `extraHeaders: {cookie}`; browsers send cookies automatically.
