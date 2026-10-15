@@ -1,0 +1,17 @@
+## Codebase Patterns
+- Dev server is `tsx server.ts` (custom Node server: Next.js + Socket.IO at /socket.io); PORT env overrides 3000.
+- server.ts loads .env.local via dotenv; Next also loads it itself.
+- Vitest tests live in tests/**/*.test.{ts,tsx}; config is vitest.config.mts (.mts avoids a CJS/ESM warning); `@` alias = repo root.
+
+# Ralph Progress Log
+Started: Fri Oct 16 12:14:30 AM CST 2026
+---
+## 2026-10-16 - US-001
+- Scaffolded Next.js 16 (App Router) + TS, ESLint flat config, Vitest + Testing Library, custom server with Socket.IO, .env.example, home placeholder + smoke test.
+- Files: package.json, tsconfig.json, next.config.ts, eslint.config.mjs, vitest.config.mts, server.ts, app/, tests/home.test.tsx, .env.example
+- Verified: lint, typecheck, test, build pass; dev server serves / and the Socket.IO polling handshake on /socket.io.
+- **Learnings for future iterations:**
+  - `npm i` can take >2 min here; run it in the background.
+  - Never `pkill -f "tsx server.ts"` in the same shell chain you need afterwards; it killed the shell (exit 144).
+  - Don't print .env.local; `sed 's/=.*/=/'` shows keys only.
+---
