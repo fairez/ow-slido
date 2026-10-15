@@ -3,6 +3,7 @@ import { interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { eventNotFound, findOwnedEvent, parsePollInput, pollConfig } from "@/lib/polls";
+import { parseWordcloudInput, wordcloudConfig } from "@/lib/wordclouds";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -26,20 +27,32 @@ export async function POST(request: Request, { params }: Context) {
   if (!event) return eventNotFound();
 
   const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object" || (body as { type?: unknown }).type !== "poll") {
-    return Response.json({ error: "Interaction type must be 'poll'" }, { status: 400 });
+  const type = body && typeof body === "object" ? (body as { type?: unknown }).type : undefined;
+  if (type !== "poll" && type !== "wordcloud") {
+    return Response.json({ error: "Interaction type must be 'poll' or 'wordcloud'" }, { status: 400 });
   }
-  const parsed = parsePollInput(body, false);
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  let title: string;
+  let config: Record<string, unknown>;
+  if (type === "poll") {
+    const parsed = parsePollInput(body, false);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title!;
+    config = pollConfig(parsed.value.config);
+  } else {
+    const parsed = parseWordcloudInput(body, false);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title!;
+    config = wordcloudConfig(parsed.value.config);
+  }
 
   const [interaction] = await getDb()
     .insert(interactions)
     .values({
       eventId: event.id,
-      type: "poll",
-      title: parsed.value.title!,
+      type,
+      title,
       position: sql`(select coalesce(max(position) + 1, 0) from interactions where event_id = ${event.id})`,
-      config: pollConfig(parsed.value.config),
+      config,
     })
     .returning();
   return Response.json({ interaction }, { status: 201 });

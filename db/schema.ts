@@ -111,3 +111,24 @@ export const pollVotes = pgTable(
   },
   (t) => [unique("poll_votes_one_per_participant").on(t.interactionId, t.participantId)],
 );
+
+export const wordcloudEntries = pgTable(
+  "wordcloud_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    normalizedWord: text("normalized_word").notNull(),
+    /** Blocked by the profanity filter: stored, but never returned in results. */
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("wordcloud_entries_interaction_idx").on(t.interactionId),
+    index("wordcloud_entries_participant_idx").on(t.interactionId, t.participantId),
+  ],
+);

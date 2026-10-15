@@ -194,3 +194,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Only draft interactions can be started, so arrowing onto an already-closed interaction shows a notice instead of restarting it; with nothing live, the cursor is the last interaction started from this screen.
   - Added deps: `qrcode` and `@types/qrcode`.
 ---
+## 2026-10-16 - US-021
+- Word cloud API: `wordcloud_entries` table (migration 0006, with `hidden` flag for profanity). Interaction endpoints (POST/PATCH/duplicate) now handle type 'wordcloud' with body `{prompt, maxEntriesPerParticipant (1-5)}` (stored as title + config). `POST /api/interactions/:id/words` `{word}` (trim, lowercase, collapse spaces, max 25 chars, per-participant limit 409, not-live 409, rate limit 100/min IP + 20/min participant) returns 201 `{ok, remaining}`; `GET` returns merged `{words:[{word,count}], total}` for event participants or the owner. Visible changes publish `wordcloud:words` `{interactionId, words, total}`; profane words are stored hidden, return 201, publish nothing and never appear in results.
+- Files: db/schema.ts, db/migrations/0006_*, lib/{wordclouds,wordcloud-limits,profanity}.ts, app/api/interactions/[id]/words/route.ts, app/api/events/[id]/interactions/**, tests/wordclouds.test.ts
+- Verified: lint, typecheck, test pass (11 new tests); migration applied to dev and test DBs.
+- **Learnings for future iterations:**
+  - Lock the participant row `FOR UPDATE` inside the submit transaction so the per-participant limit can't be raced; interaction row is locked `FOR SHARE` like votes.
+  - Client code should import limits from lib/wordcloud-limits.ts (db-free), not lib/wordclouds.ts.
+  - `getLiveInteraction` (lib/live-view.ts) and `getPresenterState` still return null for non-poll types; US-022 must extend them and PollManager (which only builds polls) for wordcloud.
+  - Profanity list in lib/profanity.ts is a small built-in blocklist; extend there.
+---

@@ -11,6 +11,7 @@ import {
   pollConfig,
   type PollConfig,
 } from "@/lib/polls";
+import { parseWordcloudInput, wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
 type Context = { params: Promise<{ id: string; interactionId: string }> };
 
@@ -39,15 +40,23 @@ export async function PATCH(request: Request, context: Context) {
   const current = loaded.interaction;
   if (current.state !== "draft") return notDraft();
 
-  const parsed = parsePollInput(await request.json().catch(() => null), true);
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  let title: string | undefined;
+  let config: Record<string, unknown>;
+  if (current.type === "wordcloud") {
+    const parsed = parseWordcloudInput(await request.json().catch(() => null), true);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title;
+    config = wordcloudConfig({ ...(current.config as Partial<WordcloudConfig>), ...parsed.value.config }, current.title);
+  } else {
+    const parsed = parsePollInput(await request.json().catch(() => null), true);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title;
+    config = pollConfig({ ...(current.config as Partial<PollConfig>), ...parsed.value.config });
+  }
 
   const [interaction] = await getDb()
     .update(interactions)
-    .set({
-      ...(parsed.value.title !== undefined && { title: parsed.value.title }),
-      config: pollConfig({ ...(current.config as Partial<PollConfig>), ...parsed.value.config }),
-    })
+    .set({ ...(title !== undefined && { title }), config })
     .where(and(eq(interactions.id, current.id), eq(interactions.state, "draft")))
     .returning();
   return interaction ? Response.json({ interaction }) : notDraft();
