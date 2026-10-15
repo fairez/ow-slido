@@ -5,6 +5,7 @@
 - DB: Drizzle + pg. `createDb(url)` in db/client.ts; migrations via `npm run db:migrate[:test]`; DB tests use `// @vitest-environment node` + tests/helpers/db.ts (`createTestDb`, `truncateAll`).
 - Route handlers are plain `(request: Request)` functions; tests import and call them directly. App DB comes from `getDb()` in lib/db.ts (reads DATABASE_URL lazily) — DB tests set `process.env.DATABASE_URL = process.env.TEST_DATABASE_URL` in beforeAll before dynamically importing routes.
 - Admin-only endpoints: `const auth = await requireAdmin(request); if (!auth.ok) return auth.response;` (lib/auth/require-admin.ts), then use `auth.user`.
+- Rate limiting: `await rateLimit(key, limit, windowSeconds)` from lib/rate-limit.ts returns `{allowed, remaining, retryAfterSeconds}`; use `clientIp(request)` for IP keys; store is swappable via `setRateLimitStore`. Tests that hit limited routes should `await getRateLimitStore().reset()` in beforeEach.
 
 # Ralph Progress Log
 Started: Fri Oct 16 12:14:30 AM CST 2026
@@ -44,4 +45,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Login uses a dummy bcrypt compare for unknown emails (timing) and returns one generic 401 for all failures.
   - US-005 should add the rate limit inside the login route (per IP and per email) and return 429.
   - Signup uses `onConflictDoNothing` on email for the 409 case; emails are trimmed and lowercased in `readCredentials`.
+---
+## 2026-10-16 - US-005
+- lib/rate-limit.ts: `rateLimit(key, limit, windowSeconds)` fixed-window limiter over an async `RateLimitStore` interface with `MemoryRateLimitStore` default (Redis adapter can implement the same interface); `clientIp` helper. Login limited to 10 / 15 min per IP and per email, returning 429 + Retry-After.
+- Files: lib/rate-limit.ts, app/api/auth/login/route.ts, tests/rate-limit.test.ts, tests/auth.test.ts
+- Verified: lint, typecheck, test pass.
+- **Learnings for future iterations:**
+  - Limiter state is module-global in-process; tests must reset the store between cases (done in auth.test.ts).
+  - The login limit counts every attempt (including successes) and runs before the DB lookup; x-forwarded-for is trusted as-is, so a real proxy must overwrite it in deployment.
+  - Next rate-limited endpoints (join, vote, submit, per PRD FR-14) should reuse `rateLimit` with keys like `join:ip:<ip>` / `vote:token:<token>`.
 ---

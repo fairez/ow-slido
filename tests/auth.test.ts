@@ -12,6 +12,7 @@ let login: Handler;
 let logout: Handler;
 let me: Handler;
 let requireAdmin: typeof import("@/lib/auth/require-admin").requireAdmin;
+let getRateLimitStore: typeof import("@/lib/rate-limit").getRateLimitStore;
 
 beforeAll(async () => {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -21,9 +22,13 @@ beforeAll(async () => {
   logout = (await import("@/app/api/auth/logout/route")).POST;
   me = (await import("@/app/api/auth/me/route")).GET;
   requireAdmin = (await import("@/lib/auth/require-admin")).requireAdmin;
+  getRateLimitStore = (await import("@/lib/rate-limit")).getRateLimitStore;
 });
 
-beforeEach(() => truncateAll(db));
+beforeEach(async () => {
+  await truncateAll(db);
+  await getRateLimitStore().reset();
+});
 afterAll(() => pool.end());
 
 function post(path: string, body: unknown, cookie?: string) {
@@ -127,4 +132,33 @@ test("requireAdmin rejects without a session and returns the user with one", asy
   const allowed = await requireAdmin(get("/api/anything", sessionCookie(signedUp)));
   expect(allowed.ok).toBe(true);
   if (allowed.ok) expect(allowed.user.email).toBe("host@example.com");
+});
+
+test("login returns 429 after 10 attempts from one IP, even for different emails", async () => {
+  const attempt = (email: string, ip: string) =>
+    login(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": ip },
+        body: JSON.stringify({ email, password: "wrong password!" }),
+      }),
+    );
+  for (let i = 0; i < 10; i++) expect((await attempt(`u${i}@example.com`, "1.1.1.1")).status).toBe(401);
+  const blocked = await attempt("another@example.com", "1.1.1.1");
+  expect(blocked.status).toBe(429);
+  expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+  expect((await attempt("another@example.com", "2.2.2.2")).status).toBe(401);
+});
+
+test("login returns 429 after 10 attempts for one email across IPs", async () => {
+  const attempt = (ip: string) =>
+    login(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": ip },
+        body: JSON.stringify({ email: "Victim@Example.com", password: "wrong password!" }),
+      }),
+    );
+  for (let i = 0; i < 10; i++) expect((await attempt(`10.0.0.${i}`)).status).toBe(401);
+  expect((await attempt("10.0.0.99")).status).toBe(429);
 });
