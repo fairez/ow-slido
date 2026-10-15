@@ -91,4 +91,22 @@ describe("PollManager", () => {
     );
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });
+
+  it("creates a word cloud with the entries limit", async () => {
+    const created: InteractionItem = { id: "w", type: "wordcloud", title: "Mood?", state: "draft", position: 0, config: { prompt: "Mood?", maxEntriesPerParticipant: 5 } };
+    const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "New word cloud" }));
+    const entries = screen.getByLabelText("Entries per participant") as HTMLInputElement;
+    expect([entries.min, entries.max]).toEqual(["1", "5"]);
+    expect(screen.queryByLabelText("Option 1")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Mood?" } });
+    fireEvent.change(entries, { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save word cloud" }));
+    await waitFor(() => expect(screen.getByText("Mood?")).toBeTruthy());
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/events/e/interactions");
+    expect(JSON.parse(init.body as string)).toEqual({ type: "wordcloud", prompt: "Mood?", maxEntriesPerParticipant: 5 });
+  });
 });

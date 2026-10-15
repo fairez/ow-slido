@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
-import type { LiveInteraction } from "@/lib/live-view";
+import { WORDCLOUD_WORD_MAX } from "@/lib/wordcloud-limits";
+import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
 
 type StateChanged = { interactionId: string; state: "draft" | "live" | "closed" };
 
@@ -54,14 +55,20 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
   return (
     <section aria-labelledby="live-title">
       <h2 id="live-title">{current.title}</h2>
-      {current.state === "closed" ? <p role="status">Voting closed</p> : <PollForm key={current.id} poll={current} socket={socket} />}
+      {current.state === "closed" ? (
+        <p role="status">{current.type === "wordcloud" ? "Submissions closed" : "Voting closed"}</p>
+      ) : current.type === "wordcloud" ? (
+        <WordForm key={current.id} cloud={current} />
+      ) : (
+        <PollForm key={current.id} poll={current} socket={socket} />
+      )}
     </section>
   );
 }
 
 type Counts = { counts: Record<string, number>; total: number };
 
-function PollForm({ poll, socket }: { poll: LiveInteraction; socket: ReturnType<typeof useEventSocket>["socket"] }) {
+function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof useEventSocket>["socket"] }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [voted, setVoted] = useState(false);
@@ -146,6 +153,68 @@ function PollForm({ poll, socket }: { poll: LiveInteraction; socket: ReturnType<
       {error && <p role="alert">{error}</p>}
       {voted && !error && <p role="status">Thanks, your vote was recorded.</p>}
       {results && poll.showResultsToParticipants && <p>{results.total} {results.total === 1 ? "vote" : "votes"} so far</p>}
+    </form>
+  );
+}
+
+function WordForm({ cloud }: { cloud: LiveWordcloud }) {
+  const [word, setWord] = useState("");
+  const [remaining, setRemaining] = useState(cloud.remaining);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting || remaining <= 0 || !word.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    setSent(false);
+    try {
+      const res = await fetch(`/api/interactions/${cloud.id}/words`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ word }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; remaining?: number };
+      if (res.ok) {
+        setRemaining(body.remaining ?? Math.max(0, remaining - 1));
+        setWord("");
+        setSent(true);
+      } else {
+        if (res.status === 409 && body.error === "You have used all your entries") setRemaining(0);
+        setError(body.error ?? "Something went wrong. Please try again.");
+      }
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+      <label style={{ display: "grid", gap: 4 }}>
+        Your word
+        <input
+          value={word}
+          onChange={(e) => setWord(e.target.value)}
+          maxLength={WORDCLOUD_WORD_MAX}
+          disabled={remaining <= 0 || submitting}
+          autoComplete="off"
+          style={{ minHeight: 44, padding: "0 8px", font: "inherit" }}
+        />
+      </label>
+      <button type="submit" disabled={remaining <= 0 || submitting || !word.trim()} style={{ minHeight: 44, padding: "0 16px" }}>
+        {submitting ? "Submitting…" : "Submit"}
+      </button>
+      <p role="status">
+        {remaining > 0
+          ? `${remaining} ${remaining === 1 ? "entry" : "entries"} remaining`
+          : "You have used all your entries."}
+      </p>
+      {sent && !error && <p role="status">Thanks, your word was added.</p>}
+      {error && <p role="alert">{error}</p>}
     </form>
   );
 }

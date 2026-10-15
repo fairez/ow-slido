@@ -139,3 +139,39 @@ it("keeps the form open after a 'not open' error", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
   expect((await screen.findByRole("alert")).textContent).toBe("Voting is not open");
 });
+
+const cloud = (remaining: number) => ({
+  id: "w1",
+  type: "wordcloud" as const,
+  title: "One word?",
+  state: "live" as const,
+  maxEntries: 3,
+  remaining,
+});
+
+it("submits a word and counts down the remaining entries", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, remaining: 1 }), { status: 201 }));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<LiveView eventId="e1" initial={cloud(2)} />);
+  expect(screen.getByText("2 entries remaining")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Your word"), { target: { value: "Hello" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  await waitFor(() => expect(screen.getByText("1 entry remaining")).toBeTruthy());
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/interactions/w1/words",
+    expect.objectContaining({ body: JSON.stringify({ word: "Hello" }) }),
+  );
+  expect((screen.getByLabelText("Your word") as HTMLInputElement).value).toBe("");
+});
+
+it("shows the server error and locks the input when entries are used up", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ error: "You have used all your entries" }), { status: 409 })),
+  );
+  render(<LiveView eventId="e1" initial={cloud(1)} />);
+  fireEvent.change(screen.getByLabelText("Your word"), { target: { value: "again" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("used all your entries"));
+  expect((screen.getByLabelText("Your word") as HTMLInputElement).disabled).toBe(true);
+});

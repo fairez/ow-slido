@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 
 export type InteractionItem = {
@@ -13,12 +14,14 @@ export type InteractionItem = {
     options?: { id: string; label: string }[];
     multiSelect?: boolean;
     showResultsToParticipants?: boolean;
+    prompt?: string;
+    maxEntriesPerParticipant?: number;
   };
 };
 
-type Draft = { id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+type Draft = { kind: "poll" | "wordcloud"; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
 
-const blank = (): Draft => ({ id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
+const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
@@ -59,13 +62,16 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
-    const body = {
-      type: "poll",
-      question: draft.question,
-      options: draft.options,
-      multiSelect: draft.multiSelect,
-      showResultsToParticipants: draft.showResults,
-    };
+    const body =
+      draft.kind === "wordcloud"
+        ? { type: "wordcloud", prompt: draft.question, maxEntriesPerParticipant: draft.maxEntries }
+        : {
+            type: "poll",
+            question: draft.question,
+            options: draft.options,
+            multiSelect: draft.multiSelect,
+            showResultsToParticipants: draft.showResults,
+          };
     setPending(true);
     const response = draft.id
       ? await call(`${base}/${draft.id}`, { ...json(body), method: "PATCH" })
@@ -116,6 +122,8 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
   function edit(item: InteractionItem) {
     setError(null);
     setDraft({
+      kind: item.type,
+      maxEntries: item.config.maxEntriesPerParticipant ?? 3,
       id: item.id,
       question: item.title,
       options: (item.config.options ?? []).map((o) => ({ id: o.id, label: o.label })),
@@ -171,18 +179,33 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
 
       {draft ? (
         <form onSubmit={save} style={{ display: "grid", gap: 12, maxWidth: 480, marginTop: 16 }}>
-          <h3>{draft.id ? "Edit poll" : "New poll"}</h3>
+          <h3>{draft.id ? "Edit" : "New"} {draft.kind === "wordcloud" ? "word cloud" : "poll"}</h3>
           <label style={{ display: "grid", gap: 4 }}>
-            Question
+            {draft.kind === "wordcloud" ? "Prompt" : "Question"}
             <input
               value={draft.question}
               onChange={(e) => setDraft({ ...draft, question: e.target.value })}
               required
-              maxLength={POLL_QUESTION_MAX}
+              maxLength={draft.kind === "wordcloud" ? WORDCLOUD_PROMPT_MAX : POLL_QUESTION_MAX}
               style={inputStyle}
             />
           </label>
-          {draft.options.map((option, index) => (
+          {draft.kind === "wordcloud" && (
+            <label style={{ display: "grid", gap: 4 }}>
+              Entries per participant
+              <input
+                type="number"
+                min={WORDCLOUD_MIN_ENTRIES}
+                max={WORDCLOUD_MAX_ENTRIES}
+                step={1}
+                value={draft.maxEntries}
+                onChange={(e) => setDraft({ ...draft, maxEntries: e.target.valueAsNumber })}
+                required
+                style={inputStyle}
+              />
+            </label>
+          )}
+          {draft.kind === "poll" && draft.options.map((option, index) => (
             <div key={option.id ?? index} style={{ display: "flex", gap: 8 }}>
               <input
                 value={option.label}
@@ -203,6 +226,8 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
               </button>
             </div>
           ))}
+          {draft.kind === "poll" && (
+            <>
           <button
             type="button"
             disabled={draft.options.length >= POLL_MAX_OPTIONS}
@@ -217,15 +242,22 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
           <label>
             <input type="checkbox" checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} /> Show results to participants
           </label>
+            </>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" disabled={pending} style={buttonStyle}>{pending ? "Saving…" : "Save poll"}</button>
+            <button type="submit" disabled={pending} style={buttonStyle}>{pending ? "Saving…" : draft.kind === "wordcloud" ? "Save word cloud" : "Save poll"}</button>
             <button type="button" onClick={() => setDraft(null)} style={buttonStyle}>Cancel</button>
           </div>
         </form>
       ) : (
-        <button type="button" onClick={() => setDraft(blank())} style={{ ...buttonStyle, marginTop: 16 }}>
-          New poll
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button type="button" onClick={() => setDraft(blank())} style={buttonStyle}>
+            New poll
+          </button>
+          <button type="button" onClick={() => setDraft(blank("wordcloud"))} style={buttonStyle}>
+            New word cloud
+          </button>
+        </div>
       )}
     </section>
   );

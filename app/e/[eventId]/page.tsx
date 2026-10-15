@@ -17,12 +17,13 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
   if (!event) notFound();
 
   const token = (await cookies()).get(participantCookieName(event.id))?.value;
-  if (!token || !verifyParticipantToken(token, event.id)) redirect(`/join/${event.joinCode}`);
+  const participantId = token ? verifyParticipantToken(token, event.id) : null;
+  if (!participantId) redirect(`/join/${event.joinCode}`);
 
   return (
     <main style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
       <h1>{event.name}</h1>
-      <LiveView eventId={event.id} initial={await getLiveInteraction(event.id)} />
+      <LiveView eventId={event.id} initial={await getLiveInteraction(event.id, participantId)} />
     </main>
   );
 }

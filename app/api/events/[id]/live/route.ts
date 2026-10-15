@@ -22,5 +22,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .where(and(eq(participants.id, participantId), eq(participants.eventId, id)));
   if (!participant) return Response.json({ error: "Not joined" }, { status: 401 });
 
-  return Response.json({ interaction: await getLiveInteraction(id) });
+  return Response.json({ interaction: await getLiveInteraction(id, participant.id) });
 }

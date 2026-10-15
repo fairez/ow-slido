@@ -204,3 +204,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - `getLiveInteraction` (lib/live-view.ts) and `getPresenterState` still return null for non-poll types; US-022 must extend them and PollManager (which only builds polls) for wordcloud.
   - Profanity list in lib/profanity.ts is a small built-in blocklist; extend there.
 ---
+## 2026-10-16 - US-022
+- Word cloud UI. Host: PollManager has a "New word cloud" form (prompt + entries per participant 1-5) and edits existing word clouds. Participant: `WordForm` in components/live-view.tsx (input, "N entries remaining", errors in `role="alert"`, locks at 0). Presenter: components/word-cloud.tsx renders words sized by frequency (linear 1.25-5rem), count shown on hover/focus, plus a visually hidden text list; PresenterView updates from `wordcloud:words`.
+- `LiveInteraction` and `PresenterState` are now discriminated unions on `type` ("poll" | "wordcloud"). `getLiveInteraction(eventId, participantId?)` returns the participant's `remaining` entries for word clouds (live route and /e page pass the participant id).
+- Files: components/{word-cloud,live-view,presenter-view,poll-manager}.tsx, lib/{live-view,presenter}.ts, app/api/events/[id]/live/route.ts, app/e/[eventId]/page.tsx, tests/{live-view,presenter-view,poll-manager}.test.tsx
+- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification (cloud layout, hover/focus count, 360px) still needs a manual check.
+- **Learnings for future iterations:**
+  - Narrow on `.type` before touching poll-only fields (`options`, `counts`) on LiveInteraction/PresenterState.
+  - Participants don't see the cloud itself, only the input; "Submissions closed" is client state like "Voting closed".
+  - The remaining count can drift if the same participant submits from two tabs; the server 409 resets it to 0.
+---

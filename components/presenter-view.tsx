@@ -3,11 +3,14 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import type { WordCount } from "@/lib/wordclouds";
 
 export type NavItem = { id: string; state: "draft" | "live" | "closed" };
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
+type Words = { interactionId: string; words: WordCount[]; total: number };
 
 /** Full-screen results for the live poll; stays current from `poll:counts` and `state-changed`. */
 export function PresenterView({
@@ -100,7 +103,13 @@ export function PresenterView({
   useEffect(() => {
     if (!socket) return;
     const onCounts = (msg: Counts) =>
-      setPoll((cur) => (cur && cur.id === msg.interactionId ? { ...cur, counts: msg.counts, total: msg.total } : cur));
+      setPoll((cur) =>
+        cur && cur.type === "poll" && cur.id === msg.interactionId ? { ...cur, counts: msg.counts, total: msg.total } : cur,
+      );
+    const onWords = (msg: Words) =>
+      setPoll((cur) =>
+        cur && cur.type === "wordcloud" && cur.id === msg.interactionId ? { ...cur, words: msg.words, total: msg.total } : cur,
+      );
     // Start or close changes which poll is live; the payload has no content, so resync.
     const onChange = () => {
       void refetch();
@@ -112,10 +121,12 @@ export function PresenterView({
       void refetchList();
     };
     socket.on("poll:counts", onCounts);
+    socket.on("wordcloud:words", onWords);
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
       socket.off("poll:counts", onCounts);
+      socket.off("wordcloud:words", onWords);
       socket.off("state-changed", onChange);
       socket.off("connect", onConnect);
     };
@@ -163,6 +174,19 @@ export function PresenterView({
           No live interaction
         </p>
       </>
+    );
+  }
+
+  if (poll.type === "wordcloud") {
+    return (
+      <section aria-labelledby="present-title">
+        {extras}
+        <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
+          {poll.title}
+        </h1>
+        <WordCloud words={poll.words} />
+        <p style={{ fontSize: "2rem", marginTop: 24 }}>Total words: {poll.total}</p>
+      </section>
     );
   }
 

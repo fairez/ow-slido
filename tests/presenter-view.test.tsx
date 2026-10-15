@@ -10,6 +10,7 @@ vi.mock("@/lib/realtime/use-event-socket", () => ({
 import { PresenterView } from "@/components/presenter-view";
 
 const state = (counts: Record<string, number>, total: number) => ({
+  type: "poll" as const,
   id: "i1",
   title: "Lunch?",
   options: [
@@ -77,4 +78,43 @@ it("ArrowRight starts the next draft interaction", async () => {
   await waitFor(() =>
     expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/interactions/i2/start", { method: "POST" }),
   );
+});
+
+const cloud = (words: { word: string; count: number }[]) => ({
+  type: "wordcloud" as const,
+  id: "w1",
+  title: "One word for today",
+  words,
+  total: words.reduce((n, w) => n + w.count, 0),
+});
+
+it("renders a word cloud with sizes by frequency, a text list and a count on focus", () => {
+  render(
+    <PresenterView
+      eventId="e1"
+      joinCode="1234"
+      items={[]}
+      initial={cloud([
+        { word: "great", count: 5 },
+        { word: "ok", count: 1 },
+      ])}
+    />,
+  );
+  const big = screen.getByRole("listitem", { name: "great, 5 entries" });
+  const small = screen.getByRole("listitem", { name: "ok, 1 entry" });
+  expect(parseFloat(big.style.fontSize)).toBeGreaterThan(parseFloat(small.style.fontSize));
+  expect(screen.getByText("great: 5")).toBeTruthy();
+  expect(screen.queryByText("×5")).toBeNull();
+  act(() => big.focus());
+  expect(screen.getByText("×5")).toBeTruthy();
+  expect(screen.getByText("Total words: 6")).toBeTruthy();
+});
+
+it("updates the word cloud live from wordcloud:words", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={cloud([])} />);
+  expect(screen.getByText("No words yet")).toBeTruthy();
+  act(() => {
+    fake.emit("wordcloud:words", { interactionId: "w1", words: [{ word: "hello", count: 2 }], total: 2 });
+  });
+  expect(screen.getByText("hello: 2")).toBeTruthy();
 });
