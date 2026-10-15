@@ -47,3 +47,13 @@ export const events = pgTable(
     check("events_dates_order", sql`${t.endsAt} >= ${t.startsAt}`),
   ],
 );
+
+export const participants = pgTable("participants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  nickname: text("nickname"),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
+});

@@ -83,3 +83,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Client components send dates as ISO strings converted from `datetime-local` values; the API requires both dates.
   - Component tests stub `fetch` with `vi.stubGlobal`; give inline-edit inputs a distinct aria-label so `getByLabelText` stays unambiguous.
 ---
+## 2026-10-16 - US-009
+- `participants` table (migration 0003: id, event_id FK cascade, nickname, joined_at, first_response_at) and POST /api/join {code}. Returns `{event, participant}` and sets an HttpOnly signed cookie; unknown/malformed code gives 404 "Event not found"; rejoining with a valid cookie reuses the row; limited to 30/min per IP (429 + Retry-After).
+- Files: db/schema.ts, db/migrations/0003_*, lib/participant-token.ts, app/api/join/route.ts, tests/join.test.ts
+- Verified: lint, typecheck, test pass (migrations applied to dev and test DBs).
+- **Learnings for future iterations:**
+  - The participant token is `<participantId>.<hmac(eventId.participantId)>` using PARTICIPANT_TOKEN_SECRET, in a per-event cookie `participant_<eventId>`. Use `readParticipantToken(request, eventId)` + `verifyParticipantToken(token, eventId)` to identify a participant in vote/submit routes, then confirm the row exists. No token hash is stored: the participant id is the token id.
+  - Tests set `process.env.PARTICIPANT_TOKEN_SECRET ||= ...` in beforeAll.
+  - The cookie is Secure, same as the session cookie (fine on localhost in browsers).
+  - US-010 join pages should POST to /api/join and route to the participant view; /join/<code> is the URL the dashboard already shows.
+---
