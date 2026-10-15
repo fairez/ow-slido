@@ -1,0 +1,525 @@
+{
+  "project": "OW Slido",
+  "branchName": "ralph/slido-clone-mvp",
+  "description": "Slido Clone MVP - live polls, word clouds and moderated Q&A for audiences joining by code",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Scaffold Next.js app with tooling",
+      "description": "As a developer, I need a working app skeleton so that all later stories have a base.",
+      "acceptanceCriteria": [
+        "Next.js (App Router) + TypeScript project in the repo root, with ESLint and Vitest configured; scripts: dev, build, lint, typecheck, test",
+        "Custom Node server (server.ts) hosts Next.js and attaches Socket.IO at /socket.io; `npm run dev` starts both on port 3000",
+        "Reads DATABASE_URL, TEST_DATABASE_URL, SESSION_SECRET, PARTICIPANT_TOKEN_SECRET from .env.local; commit a .env.example with the same keys and no values",
+        "Home page at / renders a placeholder; a smoke test passes",
+        "`npm run lint` and `npm run build` succeed",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Database layer and migrations",
+      "description": "As a developer, I need a migration tool and DB client so that schema changes are repeatable.",
+      "acceptanceCriteria": [
+        "Use Drizzle ORM + drizzle-kit (or an equivalent SQL migration tool) with the `pg` driver against DATABASE_URL",
+        "Scripts: db:migrate, db:migrate:test (runs against TEST_DATABASE_URL), db:reset:test",
+        "A test helper truncates tables between tests using TEST_DATABASE_URL",
+        "A trivial migration runs successfully on both databases",
+        "Document the commands in the root CLAUDE.md",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Users table",
+      "description": "As a developer, I need host accounts stored so that hosts can log in.",
+      "acceptanceCriteria": [
+        "`users` table: id, email (unique, lowercase), password_hash, role (only value 'admin'), active (default true), created_at",
+        "Migration runs successfully on both databases",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Auth API: sign up, log in, log out",
+      "description": "As a host, I want to sign up and log in with email and password.",
+      "acceptanceCriteria": [
+        "POST /api/auth/signup, /api/auth/login, /api/auth/logout; passwords hashed with argon2 or bcrypt",
+        "Sessions use a secure, httpOnly, sameSite cookie; GET /api/auth/me returns the current user or 401",
+        "Invalid credentials return 401 with a generic error message; duplicate email returns 409; inactive users cannot log in",
+        "A shared `requireAdmin` helper rejects requests without an active session with 401",
+        "Tests cover signup, login, logout, bad password, duplicate email, requireAdmin",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Shared rate limiter",
+      "description": "As a developer, I need a reusable rate limiter so that endpoints can be protected.",
+      "acceptanceCriteria": [
+        "`rateLimit(key, limit, windowSeconds)` utility with an in-memory store behind an interface (Redis is NOT installed in this environment; a Redis adapter can be added later)",
+        "Login is limited per IP and per email (e.g. 10 attempts / 15 minutes) and returns 429 when exceeded",
+        "Unit tests cover under-limit, over-limit and window reset",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Login and signup pages with dashboard guard",
+      "description": "As a host, I want sign-up and login pages so that I can reach my dashboard.",
+      "acceptanceCriteria": [
+        "/signup and /login pages with email/password forms and visible error messages",
+        "/dashboard shows the user's email and a Log out button",
+        "Unauthenticated visits to /dashboard redirect to /login",
+        "Layout works at 360px width",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Events table and event API",
+      "description": "As a host, I want to create and manage events through an API.",
+      "acceptanceCriteria": [
+        "`events` table: id, owner_id (FK users, ON DELETE CASCADE), name (max 80), starts_at, ends_at, join_code (unique, 4-6 digits), moderation_mode ('open'|'moderated', default 'open'), created_at",
+        "POST/GET/PATCH/DELETE /api/events (admin only); join code generated unique on create; GET lists events sorted by start date",
+        "Name is required and max 80 chars; ends_at cannot be before starts_at",
+        "Deleting an event cascades to every table that references it (add ON DELETE CASCADE to future event-owned tables)",
+        "Tests cover create, list order, rename, delete, validation, 401",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Event dashboard UI",
+      "description": "As a host, I want to create, rename and delete events from the dashboard.",
+      "acceptanceCriteria": [
+        "'New event' form with name, start and end date; on save the event shows its join code and join URL",
+        "Dashboard lists events sorted by start date",
+        "Host can rename an event and delete one after a confirmation dialog",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Participants table and join API",
+      "description": "As a participant, I want to join an event by code without an account.",
+      "acceptanceCriteria": [
+        "`participants` table: id, event_id (FK cascade), token_hash or token id, joined_at, nickname (nullable), first_response_at (nullable)",
+        "POST /api/join {code} returns the event and sets a signed anonymous participant token cookie; invalid code returns 404 'Event not found'",
+        "Re-joining with an existing valid token for the same event reuses the participant record",
+        "Join endpoint is rate limited per IP; no personal data is stored",
+        "Tests cover valid code, invalid code, token reuse, rate limit",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Join pages",
+      "description": "As a participant, I want to enter a code on the home page or open a join link.",
+      "acceptanceCriteria": [
+        "Home page has one code input and a Join button; invalid code shows 'Event not found'",
+        "/join/[code] joins directly and skips the code step",
+        "Participant view page /e/[eventId] shows the event name and a waiting state",
+        "Layout works at 360px width with tap targets of at least 44px",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Interaction base model",
+      "description": "As a developer, I need one shared model for live interactions.",
+      "acceptanceCriteria": [
+        "`interactions` table: id, event_id (FK cascade), type ('poll'|'wordcloud'), title, state ('draft'|'live'|'closed', default draft), position, config (jsonb), created_at",
+        "Partial unique index allows at most one 'live' interaction per event",
+        "Q&A is NOT an interaction (separate per-event stream)",
+        "Migration runs on both databases",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Poll API: create and manage drafts",
+      "description": "As a host, I want to create and edit polls through an API.",
+      "acceptanceCriteria": [
+        "POST/GET/PATCH/DELETE /api/events/:id/interactions for type 'poll'; config holds options (2-10, each with id and label), multiSelect, showResultsToParticipants (default false)",
+        "Validation: question required, 2-10 options",
+        "Endpoints to reorder (update position), duplicate (copy in draft) and delete; only drafts can be edited or deleted",
+        "Only the event owner can use these endpoints (403/404 otherwise)",
+        "Tests cover validation, duplicate, reorder, edit-only-in-draft, ownership",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Poll builder UI",
+      "description": "As a host, I want a form to build polls.",
+      "acceptanceCriteria": [
+        "Event page lists the event's interactions with their state",
+        "Poll form: question, 2-10 options (add/remove), single/multi-select toggle, show-results-to-participants toggle",
+        "Host can edit, reorder, duplicate and delete draft polls from the list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Realtime infrastructure",
+      "description": "As a developer, I need realtime rooms so that state changes reach participants quickly.",
+      "acceptanceCriteria": [
+        "Socket.IO rooms per event: participants join with their token, the host with their session; `publish(eventId, name, payload)` server helper behind an interface (in-memory now; Redis adapter later)",
+        "Client hook `useEventSocket(eventId)` with automatic reconnect and polling fallback",
+        "Unauthorized sockets cannot join host-only rooms",
+        "Integration test: two clients in one event receive a published message; a client in another event does not",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Start and close interactions",
+      "description": "As a host, I want to start and close an interaction.",
+      "acceptanceCriteria": [
+        "POST /api/interactions/:id/start sets state 'live' and closes any other live interaction in that event atomically; POST .../close sets 'closed'",
+        "Participants in the room receive a 'state-changed' event within 1 second",
+        "Starting a closed interaction is rejected unless explicitly reopened via a new draft copy",
+        "Host event page has Start and Close buttons showing the current state",
+        "Tests cover one-live-at-a-time and the socket broadcast",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Participant live view",
+      "description": "As a participant, I want to see the live poll appear without refreshing.",
+      "acceptanceCriteria": [
+        "Participant page shows the live interaction (poll options) in real time, 'Waiting for the host' when none is live, and 'Voting closed' when it closes",
+        "Loading the page mid-event shows the current live interaction",
+        "Single column layout, 360px width, 44px tap targets",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Vote API",
+      "description": "As a participant, I want my vote recorded exactly once.",
+      "acceptanceCriteria": [
+        "`poll_votes` table: id, interaction_id (FK cascade), participant_id (FK cascade), option_ids (jsonb), created_at, with UNIQUE(interaction_id, participant_id)",
+        "POST /api/interactions/:id/vote validates options belong to the poll, respects single/multi-select, rejects votes when the poll is not live (409) and second votes (409)",
+        "Sets participants.first_response_at on the first response",
+        "Vote endpoint is rate limited per participant token and per IP",
+        "Successful votes publish updated counts to the event room",
+        "Tests cover valid, duplicate, closed poll, invalid option, single-select with multiple options, rate limit",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Vote UI and confirmation",
+      "description": "As a participant, I want to submit my vote and see confirmation.",
+      "acceptanceCriteria": [
+        "Participant selects option(s) and taps Submit; a confirmation is shown afterwards and the form is locked",
+        "Results are shown to the participant only if the poll's showResultsToParticipants is true",
+        "Server errors (already voted, closed) show a clear message",
+        "Radio/checkbox controls have accessible labels and visible focus",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Presenter view with live results",
+      "description": "As a host, I want a full-screen results view.",
+      "acceptanceCriteria": [
+        "/present/[eventId] (admin only) shows the live question, a bar chart with count, percent and total votes, updating live without refresh",
+        "Bars use labels and values, not colour alone; large high-contrast type",
+        "Shows 'No live interaction' when none is live",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Presenter join code, QR and navigation",
+      "description": "As a host, I want the room to join easily and to move between polls.",
+      "acceptanceCriteria": [
+        "Join code and a QR code of the join URL are shown in a corner of the presenter view",
+        "Left/right arrow keys move to the previous/next interaction of the event (starting it and closing the current one)",
+        "Escape exits fullscreen; the page works in fullscreen",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Word cloud API",
+      "description": "As a host, I want to create word cloud prompts and collect words.",
+      "acceptanceCriteria": [
+        "Interaction type 'wordcloud' with config maxEntriesPerParticipant (1-5) and prompt; create/edit via the interaction endpoints",
+        "`wordcloud_entries` table (interaction_id, participant_id FK cascade, normalized_word, created_at)",
+        "POST /api/interactions/:id/words: trims, lowercases, max 25 chars, enforces per-participant limit, rejects when not live, rate limited",
+        "Profanity filter: blocked words are stored but flagged hidden and never returned in results",
+        "GET results returns merged counts of identical words; changes publish to the event room",
+        "Tests cover normalization, merge, limit, profanity, closed state",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Word cloud UI",
+      "description": "As a host and participant, I want to build, answer and display word clouds.",
+      "acceptanceCriteria": [
+        "Host form for word cloud prompts with max entries 1-5 in the interaction builder",
+        "Participant view: input to submit words with remaining-entries count and errors",
+        "Presenter view renders words sized by frequency, updating live (include a non-colour cue such as the count on hover/focus and an accessible text list)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Questions API (Q&A)",
+      "description": "As a participant, I want to ask questions.",
+      "acceptanceCriteria": [
+        "`questions` table: id, event_id (FK cascade), participant_id, text (max 300), author_name (nullable), status ('pending'|'approved'|'rejected'), answered (bool), pinned (bool), created_at",
+        "POST /api/events/:id/questions: anonymous by default, name only if provided, profanity filter, rate limit 5 per participant per minute",
+        "In 'moderated' mode new questions are 'pending'; in 'open' mode they are 'approved'",
+        "GET for participants returns only approved questions (never pending or rejected)",
+        "Tests cover moderated/open modes, rate limit, never exposing pending questions",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Q&A participant UI",
+      "description": "As a participant, I want a Q&A tab to ask questions.",
+      "acceptanceCriteria": [
+        "Q&A tab with a text box (max 300 chars with counter) and optional name field",
+        "In moderated mode shows 'Your question is waiting for approval' after submit",
+        "Approved questions list appears and updates live",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Upvote questions",
+      "description": "As a participant, I want to upvote questions.",
+      "acceptanceCriteria": [
+        "`question_votes` table with UNIQUE(question_id, participant_id); POST toggles the upvote (tap again removes it)",
+        "Question list returns vote counts; sortable by Popular and Recent in the UI; counts update live",
+        "Participants cannot vote on pending/rejected questions; endpoint rate limited",
+        "Tests cover toggle, uniqueness, hidden-question rejection",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Moderation queue",
+      "description": "As a host, I want to moderate questions.",
+      "acceptanceCriteria": [
+        "Event setting toggles Open/Moderated Q&A (events.moderation_mode)",
+        "Host page lists pending questions with Approve and Reject; approved questions reach participants within 1 second, rejected never do",
+        "Host can mark answered, pin and delete questions (pinned first, answered visually marked)",
+        "Host-only endpoints enforce ownership; tests cover approve, reject, pin, answer, delete and that pending questions never leak",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Moderator link",
+      "description": "As a host, I want to invite a moderator by link without an account.",
+      "acceptanceCriteria": [
+        "Host can generate a moderator link per event containing a signed token scoped to that event and to the moderation queue only",
+        "Opening it shows the moderation queue (approve/reject/answer/pin/delete) and nothing else; every other admin page and endpoint still returns 401/403",
+        "Host can revoke and regenerate the link; a revoked link stops working immediately",
+        "Tests cover valid, revoked, wrong-event token, and access to non-queue endpoints being denied",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Duplicate event",
+      "description": "As a host, I want to duplicate an event.",
+      "acceptanceCriteria": [
+        "POST /api/events/:id/duplicate creates a new event with a new unique join code and copies interactions as drafts; results, participants and Q&A are not copied",
+        "Dashboard has a Duplicate action",
+        "Tests verify copied interactions are draft and no responses are copied",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Export results as CSV",
+      "description": "As a host, I want to export results.",
+      "acceptanceCriteria": [
+        "GET /api/events/:id/export.csv (owner only) returns polls with votes per option, word counts, and questions with upvotes",
+        "No participant identifiers (tokens, ids, IPs) appear in the file; author names appear only if the participant provided one",
+        "'Export CSV' button on the event page downloads the file",
+        "Tests parse the CSV and assert contents and absence of identifiers",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Presence and engagement metrics",
+      "description": "As a host, I want to see live participants, and the product needs engagement data.",
+      "acceptanceCriteria": [
+        "Socket presence tracks connected participants per event; dashboard shows the live participant count per event, updating live",
+        "Peak concurrent participants stored per event (events.peak_participants)",
+        "Store users.first_login_at and the host's first_interaction_live_at; participants have joined_at and first_response_at (set in US-017)",
+        "No new personal data is stored",
+        "Tests cover count increment/decrement on connect/disconnect and peak tracking",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Accessibility and responsive pass",
+      "description": "As a user, I want the app to be usable on phones and with a keyboard.",
+      "acceptanceCriteria": [
+        "Participant pages work at 360px with no horizontal scroll; tap targets >= 44px",
+        "All voting, word and Q&A controls reachable and operable by keyboard with visible focus and accessible labels",
+        "Charts expose text alternatives (values and labels)",
+        "Run axe or an equivalent automated check on participant, presenter and dashboard pages with no serious violations",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "End-to-end smoke test and README",
+      "description": "As a maintainer, I need proof the MVP works end to end.",
+      "acceptanceCriteria": [
+        "Playwright (or equivalent) test: host signs up, creates event and poll, starts it; a participant joins by code and votes; results appear on the presenter page; passes via `npm run test:e2e`",
+        "README documents setup (env vars, db:migrate), commands, and architecture; notes that Redis is optional/not used yet",
+        "`npm run lint`, `typecheck`, `test`, `build` and `test:e2e` all pass",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
