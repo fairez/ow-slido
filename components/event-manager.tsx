@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 export type EventSummary = {
@@ -164,6 +165,9 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                 Join code: <strong>{e.joinCode}</strong>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Link href={`/dashboard/events/${e.id}`} style={{ ...buttonStyle, display: "inline-flex", alignItems: "center", border: "1px solid #888" }}>
+                  Manage
+                </Link>
                 <button type="button" onClick={() => setRenaming(e.id)} style={buttonStyle}>
                   Rename
                 </button>

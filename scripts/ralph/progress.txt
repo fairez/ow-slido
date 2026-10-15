@@ -120,3 +120,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Non-draft edit/delete returns 409; wrong-event or other-owner access returns 404. New and duplicated interactions get `max(position)+1` via SQL subquery.
   - US-021 (wordcloud) should extend `POST` type check in interactions/route.ts and PATCH parsing, which currently only accept 'poll'.
 ---
+## 2026-10-16 - US-013
+- Poll builder UI: `/dashboard/events/[id]` (server component, owner-checked, 404 otherwise) renders `PollManager`, which lists interactions with state and offers new/edit poll form (question, 2-10 options add/remove, multi-select and show-results checkboxes), plus duplicate, delete (window.confirm) and up/down reorder for drafts. Event list has a "Manage" link. Option limits moved to lib/poll-limits.ts (client-safe), re-exported from lib/polls.ts.
+- Files: app/dashboard/events/[id]/page.tsx, components/poll-manager.tsx, components/event-manager.tsx, lib/poll-limits.ts, lib/polls.ts, tests/poll-manager.test.tsx, tests/auth.test.ts
+- Verified: lint, typecheck, test pass. No browser tool available, so in-browser verification (and 360px layout) still needs a manual check.
+- **Learnings for future iterations:**
+  - Client components must not import lib/polls.ts (pulls in the DB); put shared constants in a db-free module like lib/poll-limits.ts.
+  - bcrypt is slow on this machine: the two login rate-limit tests (10 compares each) exceeded vitest's 5s default, so they now have a 30s timeout.
+  - Reorder sends the full id list of the event, so any new list UI must pass every interaction id, not just drafts.
+---

@@ -148,7 +148,7 @@ test("login returns 429 after 10 attempts from one IP, even for different emails
   expect(blocked.status).toBe(429);
   expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
   expect((await attempt("another@example.com", "2.2.2.2")).status).toBe(401);
-});
+}, 30_000);
 
 test("login returns 429 after 10 attempts for one email across IPs", async () => {
   const attempt = (ip: string) =>
@@ -161,4 +161,4 @@ test("login returns 429 after 10 attempts for one email across IPs", async () =>
     );
   for (let i = 0; i < 10; i++) expect((await attempt(`10.0.0.${i}`)).status).toBe(401);
   expect((await attempt("10.0.0.99")).status).toBe(429);
-});
+}, 30_000);
