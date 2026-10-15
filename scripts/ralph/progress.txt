@@ -93,3 +93,13 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - The cookie is Secure, same as the session cookie (fine on localhost in browsers).
   - US-010 join pages should POST to /api/join and route to the participant view; /join/<code> is the URL the dashboard already shows.
 ---
+## 2026-10-16 - US-010
+- Home page now has `JoinForm` (one code input + Join button, inline "Event not found" alert, routes to /e/<eventId>). `/join/[code]` renders `JoinRedirect`, which POSTs /api/join on mount and replaces to the participant view. `/e/[eventId]` is a server component showing the event name and a waiting state; it redirects to `/join/<joinCode>` when the participant cookie is missing/invalid and 404s for unknown or malformed ids.
+- Files: app/page.tsx, app/join/[code]/page.tsx, app/e/[eventId]/page.tsx, components/{join-form,join-redirect}.tsx, lib/join-client.ts, tests/{home,join-pages}.test.tsx
+- Verified: lint, typecheck, test pass; dev server: /, /join/<code> 200, /e/<bad id> 404, POST /api/join unknown code gives "Event not found". No browser tool available, so the 360px layout and the join flow still need manual browser verification (inputs/buttons use min-height 44px).
+- **Learnings for future iterations:**
+  - Component tests that render more than once per file need an explicit `cleanup()` in afterEach (vitest globals are off, so RTL does not auto-clean).
+  - `joinEvent(code)` in lib/join-client.ts is the shared client helper for /api/join.
+  - The participant page (/e/[eventId]) is the place to mount the live view in US-016; it already verifies the participant cookie.
+  - Killing the dev server with `kill $(lsof -ti:PORT)` in the same command chain can end the shell with exit 144; do it last.
+---
