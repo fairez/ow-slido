@@ -11,6 +11,8 @@ export type LiveInteraction = {
   state: "live" | "closed";
   options: PollOption[];
   multiSelect: boolean;
+  /** Whether the participant may see vote counts; the client must not show them otherwise. */
+  showResultsToParticipants: boolean;
 };
 
 export async function getLiveInteraction(eventId: string): Promise<LiveInteraction | null> {
@@ -27,5 +29,6 @@ export async function getLiveInteraction(eventId: string): Promise<LiveInteracti
     state: "live",
     options: config.options,
     multiSelect: config.multiSelect,
+    showResultsToParticipants: config.showResultsToParticipants,
   };
 }

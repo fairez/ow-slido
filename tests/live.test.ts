@@ -96,5 +96,6 @@ test("returns the live poll with options but no private fields", async () => {
       { id: "b", label: "Tacos" },
     ],
     multiSelect: false,
+    showResultsToParticipants: true,
   });
 });

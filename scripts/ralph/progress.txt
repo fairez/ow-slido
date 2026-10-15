@@ -168,3 +168,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - `poll:counts` goes to the whole event room, including participants, even when `showResultsToParticipants` is false; US-018 must not display it unless that flag is set (the live endpoint intentionally hides the flag today, so expose it there if needed). US-019 presenter can subscribe to it, and should seed from `getPollCounts`.
   - The rate limit counts every attempt (including rejected ones).
 ---
+## 2026-10-16 - US-018
+- Vote UI in components/live-view.tsx (`PollForm`, keyed by interaction id): radio (single) / checkbox (multi) options with real `<label>`s, 44px rows, Submit disabled until a selection; on success shows "Thanks, your vote was recorded." and locks all inputs. Server errors render in `role="alert"`; "You have already voted" also locks the form, other 4xx (e.g. "Voting is not open") leave it open. Counts (from the vote response, then live `poll:counts`) are rendered only when `showResultsToParticipants` is true; `LiveInteraction` and the live endpoint now expose that flag.
+- Files: components/live-view.tsx, lib/live-view.ts, tests/live-view.test.tsx, tests/live.test.ts
+- Verified: lint, typecheck, test pass (5 new component tests). No browser tool available (dev-browser skill not present), so real-browser verification, focus ring appearance and 360px layout still need a manual check.
+- **Learnings for future iterations:**
+  - jsdom does not propagate `<fieldset disabled>` to `input.disabled`; set `disabled` on each input too so tests (and clarity) hold.
+  - Voted state is client-only: after a reload the form reappears and the server's 409 "already voted" locks it. No endpoint reports a participant's own vote yet.
+  - The live endpoint now leaks nothing host-only except the intentional results flag; the client must still gate counts on it (the `poll:counts` broadcast reaches everyone).
+---
