@@ -74,3 +74,12 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Event-owned tables (participants, interactions, questions, ...) must reference `events.id` with `onDelete: "cascade"`.
   - Dates are `startsAt`/`endsAt` ISO strings in the API, both required; ownership checks use `findOwned` in app/api/events/[id]/route.ts (reuse the pattern for nested routes).
 ---
+## 2026-10-16 - US-008
+- Event dashboard UI: `EventManager` client component (new-event form, list sorted by start, inline rename, delete behind an alertdialog confirmation). /dashboard loads the host's events server-side and passes them in. After create, a status box shows the join code and join URL (`<origin>/join/<code>`).
+- Files: components/event-manager.tsx, app/dashboard/page.tsx, tests/event-manager.test.tsx
+- Verified: lint, typecheck, test pass. No browser tool available, so the in-browser flow and 360px layout still need manual verification.
+- **Learnings for future iterations:**
+  - The join URL path `/join/<code>` is assumed here; US-010 must create that route (or update `joinUrl` in event-manager.tsx).
+  - Client components send dates as ISO strings converted from `datetime-local` values; the API requires both dates.
+  - Component tests stub `fetch` with `vi.stubGlobal`; give inline-edit inputs a distinct aria-label so `getByLabelText` stays unambiguous.
+---
