@@ -87,6 +87,22 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
     }
   }
 
+  async function duplicate(target: EventSummary) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/events/${target.id}/duplicate`, { method: "POST" });
+      if (!response.ok) {
+        setError(await errorFrom(response));
+        return;
+      }
+      const { event: saved } = (await response.json()) as { event: EventSummary };
+      setEvents((list) => [...list, saved].sort(byStart));
+      setCreated(saved);
+    } catch {
+      setError("Network error. Please try again.");
+    }
+  }
+
   async function confirmDelete(target: EventSummary) {
     setError(null);
     try {
@@ -170,6 +186,9 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                 </Link>
                 <button type="button" onClick={() => setRenaming(e.id)} style={buttonStyle}>
                   Rename
+                </button>
+                <button type="button" onClick={() => duplicate(e)} style={buttonStyle}>
+                  Duplicate
                 </button>
                 <button type="button" onClick={() => setDeleting(e)} style={buttonStyle}>
                   Delete

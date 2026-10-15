@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, users } from "@/db/schema";
+import { events, interactions, users } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -166,4 +166,48 @@ test("every endpoint returns 401 without a session", async () => {
     item.DELETE(req("DELETE", `/api/events/${id}`, undefined, null), ctx(id)),
   ]);
   expect(results.map((r) => r.status)).toEqual([401, 401, 401, 401, 401]);
+});
+
+test("duplicate copies interactions as drafts with a new join code and no responses", async () => {
+  const { pollVotes, participants, questions } = await import("@/db/schema");
+  const duplicate = (await import("@/app/api/events/[id]/duplicate/route")).POST;
+  const { json } = await create({ ...valid, moderationMode: "moderated" });
+  const src = json.event;
+  const [live] = await db
+    .insert(interactions)
+    .values({ eventId: src.id, type: "poll", title: "Q?", position: 0, state: "live", config: { options: [{ id: "a", label: "A" }] } })
+    .returning();
+  await db.insert(interactions).values({ eventId: src.id, type: "wordcloud", title: "Cloud", position: 1, state: "closed" });
+  const [p] = await db.insert(participants).values({ eventId: src.id }).returning();
+  await db.insert(pollVotes).values({ interactionId: live.id, participantId: p.id, optionIds: ["a"] });
+  await db.insert(questions).values({ eventId: src.id, participantId: p.id, text: "Why?", status: "approved" });
+
+  const res = await duplicate(req("POST", `/api/events/${src.id}/duplicate`), ctx(src.id));
+  expect(res.status).toBe(201);
+  const copy = (await res.json()).event;
+  expect(copy.id).not.toBe(src.id);
+  expect(copy.joinCode).not.toBe(src.joinCode);
+  expect(copy.moderationMode).toBe("moderated");
+
+  const copied = await db.select().from(interactions).where(eq(interactions.eventId, copy.id)).orderBy(interactions.position);
+  expect(copied.map((i) => [i.title, i.state, i.position])).toEqual([["Q?", "draft", 0], ["Cloud", "draft", 1]]);
+  expect(copied[0].config).toEqual({ options: [{ id: "a", label: "A" }] });
+  expect(await db.select().from(participants).where(eq(participants.eventId, copy.id))).toHaveLength(0);
+  expect(await db.select().from(questions).where(eq(questions.eventId, copy.id))).toHaveLength(0);
+  const votes = await db.select().from(pollVotes);
+  expect(votes).toHaveLength(1);
+  expect(votes[0].interactionId).toBe(live.id);
+  // source untouched
+  const [orig] = await db.select().from(interactions).where(eq(interactions.id, live.id));
+  expect(orig.state).toBe("live");
+});
+
+test("duplicate is owner-only", async () => {
+  const duplicate = (await import("@/app/api/events/[id]/duplicate/route")).POST;
+  const { json } = await create();
+  const other = await newHost("other@example.com");
+  const res = await duplicate(req("POST", "/x", undefined, other), ctx(json.event.id));
+  expect(res.status).toBe(404);
+  const anon = await duplicate(req("POST", "/x", undefined, null), ctx(json.event.id));
+  expect(anon.status).toBe(401);
 });

@@ -49,6 +49,17 @@ describe("EventManager", () => {
     expect(await screen.findByText("Renamed")).toBeTruthy();
   });
 
+  it("duplicates an event and lists the copy", async () => {
+    const original = ev("a", "Town hall", "2030-01-01T00:00:00.000Z");
+    const copy = ev("b", "Town hall (copy)", "2030-01-01T00:00:00.000Z", "654321");
+    const fetchMock = vi.fn(async () => Response.json({ event: copy }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<EventManager initialEvents={[original]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    expect((await screen.findAllByText("Town hall (copy)")).length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/a/duplicate", { method: "POST" });
+  });
+
   it("deletes only after confirmation", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);

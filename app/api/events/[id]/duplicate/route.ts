@@ -1,0 +1,72 @@
+import { and, asc, eq } from "drizzle-orm";
+import { events, interactions } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { getDb } from "@/lib/db";
+import { EVENT_NAME_MAX, generateUniqueJoinCode, isUuid } from "@/lib/events";
+
+type Context = { params: Promise<{ id: string }> };
+
+const UNIQUE_VIOLATION = "23505";
+
+async function isCodeFree(code: string) {
+  const rows = await getDb().select({ id: events.id }).from(events).where(eq(events.joinCode, code));
+  return rows.length === 0;
+}
+
+/** Copies the event settings and its interactions (as drafts); responses, participants and Q&A stay behind. */
+export async function POST(request: Request, { params }: Context) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
+  const id = (await params).id;
+  const [source] = isUuid(id)
+    ? await getDb()
+        .select()
+        .from(events)
+        .where(and(eq(events.id, id), eq(events.ownerId, auth.user.id)))
+    : [];
+  if (!source) return Response.json({ error: "Event not found" }, { status: 404 });
+
+  const copies = await getDb()
+    .select()
+    .from(interactions)
+    .where(eq(interactions.eventId, source.id))
+    .orderBy(asc(interactions.position), asc(interactions.createdAt));
+  const name = `${source.name} (copy)`.slice(0, EVENT_NAME_MAX);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const joinCode = await generateUniqueJoinCode(isCodeFree);
+    try {
+      const event = await getDb().transaction(async (tx) => {
+        const [created] = await tx
+          .insert(events)
+          .values({
+            ownerId: auth.user.id,
+            name,
+            startsAt: source.startsAt,
+            endsAt: source.endsAt,
+            moderationMode: source.moderationMode,
+            joinCode,
+          })
+          .returning();
+        if (copies.length > 0) {
+          await tx.insert(interactions).values(
+            copies.map((i, index) => ({
+              eventId: created.id,
+              type: i.type,
+              title: i.title,
+              state: "draft" as const,
+              position: index,
+              config: i.config,
+            })),
+          );
+        }
+        return created;
+      });
+      return Response.json({ event }, { status: 201 });
+    } catch (err) {
+      if ((err as { code?: string }).code !== UNIQUE_VIOLATION) throw err;
+    }
+  }
+  return Response.json({ error: "Could not generate a join code" }, { status: 500 });
+}

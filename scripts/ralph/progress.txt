@@ -267,3 +267,11 @@ Started: Fri Oct 16 12:14:30 AM CST 2026
   - Token is in the URL query; the moderator page does not strip it, since the client needs it for API headers.
   - Moderators cannot change Open/Moderated mode (that is PATCH /api/events/:id, host-only).
 ---
+## 2026-10-16 - US-028
+- `POST /api/events/:id/duplicate` (owner-only, 404 otherwise): creates "<name> (copy)" (truncated to 80 chars) with the same dates and moderation mode, a fresh join code (same retry-on-23505 loop as create), and copies interactions as drafts renumbered from position 0 with config copied verbatim, all in one transaction. Votes, entries, participants, questions and the moderator nonce are not copied. Dashboard EventManager has a Duplicate button that adds the copy and shows its join code.
+- Files: app/api/events/[id]/duplicate/route.ts, components/event-manager.tsx, tests/{events.test.ts,event-manager.test.tsx}
+- Verified: lint, typecheck, test pass. No browser tool available, so real-browser verification of the Duplicate button still needs a manual check.
+- **Learnings for future iterations:**
+  - `poll_votes` column is `optionIds` (string[]), not `optionId`; `questions` text column is `text`.
+  - Poll option ids are copied unchanged; they only need to be unique within an interaction, so reuse across events is fine.
+---
