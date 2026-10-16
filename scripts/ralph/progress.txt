@@ -248,3 +248,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Only one interaction is needed live at a time in e2e: close the previous before starting the next.
   - Full suite: lint 0 errors, typecheck, 349 unit tests, build and 2 e2e specs pass.
 ---
+
+## 2026-10-16 - US-024
+- DESIGN.md tokens as CSS variables in app/globals.css (colours, status colours, spacing, radii, type scale, focus ring); dark via prefers-color-scheme unless `data-theme` is set. Fraunces and Public Sans via @fontsource-variable, imported in app/layout.tsx. Header with `ThemeToggle` (components/theme-toggle.tsx, helpers in lib/theme.ts); an inline head script applies the stored theme before paint. Contrast ratios in docs/design-contrast.md.
+- Files: app/globals.css, app/layout.tsx, components/theme-toggle.tsx, lib/theme.ts, tests/theme-toggle.test.tsx, docs/design-contrast.md, package.json
+- **Learnings for future iterations:**
+  - Use `var(--ink)`, `var(--surface)`, `var(--accent)`, `var(--error)`, `var(--success)`, `--space-*`, `--radius-*`, `--text-*`, `--font-heading`. poll-manager and others still hardcode colours: restyle in US-025+.
+  - Native inputs and buttons are still unstyled (white fields in dark theme): US-025/026 must style them.
+  - Never run two `npm test` at once: they share the test DB and fail with FK errors. Also `pkill -f "next dev"` killed my shell; kill by port/PID instead.
+  - Verified at 360px and 1280px, light and dark (screens/us024-*.png).
+---

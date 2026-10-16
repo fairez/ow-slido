@@ -1,3 +1,73 @@
+/* Tokens from DESIGN.md. Dark follows the system unless data-theme says otherwise. */
+:root {
+  color-scheme: light;
+  --bg: #faf6ee;
+  --surface: #fffdf8;
+  --ink: #1f1a17;
+  --ink-muted: #5c534b;
+  --border: #e3dacb;
+  --accent: #b5472b;
+  --accent-ink: #fffdf8;
+  --error: #9b2c1c;
+  --success: #2f5d3a;
+  --focus: #b5472b;
+
+  --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --font-body: "Public Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5625rem;
+  --text-2xl: 1.953rem;
+  --text-3xl: 2.441rem;
+  --text-display: clamp(3rem, 8vw, 6rem);
+
+  --focus-ring: 3px solid var(--focus);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1c1815;
+    --surface: #26211d;
+    --ink: #f3ece1;
+    --ink-muted: #b8ada0;
+    --border: #3a332d;
+    --accent: #e07a5a;
+    --accent-ink: #1c1815;
+    --error: #f08a74;
+    --success: #8fc49a;
+    --focus: #e07a5a;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1815;
+  --surface: #26211d;
+  --ink: #f3ece1;
+  --ink-muted: #b8ada0;
+  --border: #3a332d;
+  --accent: #e07a5a;
+  --accent-ink: #1c1815;
+  --error: #f08a74;
+  --success: #8fc49a;
+  --focus: #e07a5a;
+}
+
 *,
 *::before,
 *::after {
@@ -11,6 +81,36 @@ html {
 body {
   margin: 0;
   overflow-wrap: anywhere;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+a {
+  color: var(--accent);
 }
 
 img,
@@ -46,12 +146,8 @@ input[type="radio"] {
 }
 
 :focus-visible {
-  outline: 3px solid #1a5fd0;
+  outline: var(--focus-ring);
   outline-offset: 2px;
-}
-
-.present :focus-visible {
-  outline-color: #ffd400;
 }
 
 .rating-scale {
@@ -69,7 +165,7 @@ input[type="radio"] {
   place-items: center;
   min-width: 44px;
   min-height: 44px;
-  border: 1px solid var(--border, #8a8178);
+  border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 1.5rem;
@@ -87,7 +183,7 @@ input[type="radio"] {
 }
 
 .rating-choice:has(input:focus-visible) {
-  outline: 3px solid #1a5fd0;
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -111,4 +207,41 @@ input[type="radio"] {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.site-header a {
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.theme-toggle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.theme-toggle:hover {
+  background: var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
