@@ -16,7 +16,7 @@ type Context = { params: Promise<{ id: string }> };
 
 const tooMany = (retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests" },
+    { error: "Too many requests. Wait a moment, then try again." },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: Context) {
 
   const token = readParticipantToken(request, interaction.eventId);
   const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   const byToken = await rateLimit(`rating:token:${participantId}`, TOKEN_LIMIT, WINDOW_SECONDS);
   if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);
@@ -72,7 +72,7 @@ export async function GET(request: Request, { params }: Context) {
   }
 
   const user = await getSessionUser(request);
-  if (!user) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!user) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
   const result = await getResultsForHost(id, user.id);
   if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
   return Response.json({ results: result.results, mine: result.mine });

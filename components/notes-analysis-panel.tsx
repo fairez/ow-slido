@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnalysisEditor } from "@/components/analysis-editor";
 import type { AnalysisEdit } from "@/lib/analysis-edit";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type Analysis = {
   id: string;
@@ -70,10 +71,10 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ acceptNotice: accepted }),
       });
-      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.");
+      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? SERVER_ERROR);
       await load();
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setStarting(false);
     }
@@ -87,10 +88,10 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ published }),
       });
-      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.");
+      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? SERVER_ERROR);
       await load();
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     }
   }
 
@@ -101,11 +102,11 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
         headers: { "content-type": "application/json" },
         body: JSON.stringify(change),
       });
-      if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.";
+      if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? SERVER_ERROR;
       await load();
       return null;
     } catch {
-      return "Network error. Please try again.";
+      return NETWORK_ERROR;
     }
   }
 

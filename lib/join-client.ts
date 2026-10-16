@@ -1,3 +1,4 @@
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 export type JoinResult = { ok: true; eventId: string } | { ok: false; error: string };
 
 export async function joinEvent(code: string): Promise<JoinResult> {
@@ -9,8 +10,8 @@ export async function joinEvent(code: string): Promise<JoinResult> {
     });
     const body = await response.json().catch(() => null);
     if (response.ok && body?.event?.id) return { ok: true, eventId: body.event.id };
-    return { ok: false, error: body?.error ?? "Something went wrong. Please try again." };
+    return { ok: false, error: body?.error ?? SERVER_ERROR };
   } catch {
-    return { ok: false, error: "Network error. Please try again." };
+    return { ok: false, error: NETWORK_ERROR };
   }
 }

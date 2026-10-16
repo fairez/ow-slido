@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
+import { NETWORK_ERROR } from "@/lib/copy";
 
 /** Host controls for the event's moderator link: generate/regenerate, copy, revoke. */
 export function ModeratorLinkManager({ eventId, initialLink }: { eventId: string; initialLink: string | null }) {
@@ -18,7 +19,7 @@ export function ModeratorLinkManager({ eventId, initialLink }: { eventId: string
       if (!res.ok) return setError("Could not update the moderator link.");
       setPath(method === "POST" ? ((await res.json()) as { link: string }).link : null);
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     }
   };
 

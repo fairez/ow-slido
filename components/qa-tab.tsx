@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/card";
 import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type SortMode = "popular" | "recent";
 
@@ -82,7 +83,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
       const body = (await res.json()) as { upvoted: boolean; upvotes: number };
       setQuestions((cur) => cur.map((q) => (q.id === id ? { ...q, upvoted: body.upvoted, upvotes: body.upvotes } : q)));
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     }
   };
 
@@ -113,10 +114,10 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
             setQuestions((cur) => (cur.some((q) => q.id === posted.id) ? cur : sortQuestions([posted, ...cur])));
         }
       } else {
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setSubmitting(false);
     }

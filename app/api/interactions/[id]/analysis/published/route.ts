@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: Context) {
 
   const ip = await rateLimit(`analysis:public:ip:${clientIp(request)}`, 200, 60);
   if (!ip.allowed) {
-    return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(ip.retryAfterSeconds) } });
+    return Response.json({ error: "Too many requests. Wait a moment, then try again." }, { status: 429, headers: { "Retry-After": String(ip.retryAfterSeconds) } });
   }
 
   const [row] = isUuid(id)
@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: Context) {
 
   const token = readParticipantToken(request, row.eventId);
   const participantId = token ? verifyParticipantToken(token, row.eventId) : null;
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   return Response.json({ analysis: await getPublishedAnalysis(id) });
 }

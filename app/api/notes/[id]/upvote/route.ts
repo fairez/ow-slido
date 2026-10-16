@@ -9,7 +9,7 @@ const UPVOTE_WINDOW_SECONDS = 60;
 
 const tooMany = (retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests" },
+    { error: "Too many requests. Wait a moment, then try again." },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const token = readParticipantToken(request, eventId);
   const participantId = token ? verifyParticipantToken(token, eventId) : null;
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   const byToken = await rateLimit(`note-upvote:token:${participantId}`, UPVOTE_TOKEN_LIMIT, UPVOTE_WINDOW_SECONDS);
   if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError } from "@/components/ui/field";
 import type { HostResponse } from "@/lib/open-text";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 /** Host-page list of an open-text interaction's responses, with highlight, hide and delete. */
 export function OpenTextHostPanel({ eventId, interactionId, live }: { eventId: string; interactionId: string; live: boolean }) {
@@ -48,10 +49,10 @@ export function OpenTextHostPanel({ eventId, interactionId, live }: { eventId: s
     setError(null);
     try {
       const res = await fetch(`/api/responses/${id}`, init);
-      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.");
+      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? SERVER_ERROR);
       else await load();
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     }
   }
 

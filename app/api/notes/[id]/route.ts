@@ -11,7 +11,7 @@ type Context = { params: Promise<{ id: string }> };
 
 const tooMany = (retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests" },
+    { error: "Too many requests. Wait a moment, then try again." },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -26,7 +26,7 @@ async function authorize(request: Request, { params }: Context) {
 
   const token = readParticipantToken(request, eventId);
   const participantId = token ? verifyParticipantToken(token, eventId) : null;
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   const byToken = await rateLimit(`notes:token:${participantId}`, NOTE_TOKEN_LIMIT, NOTE_WINDOW_SECONDS);
   if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);

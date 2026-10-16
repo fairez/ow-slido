@@ -15,12 +15,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const token = readParticipantToken(request, id);
   const participantId = token ? verifyParticipantToken(token, id) : null;
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
   const [participant] = await db
     .select({ id: participants.id })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.eventId, id)));
-  if (!participant) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participant) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   return Response.json({ interaction: await getLiveInteraction(id, participant.id) });
 }

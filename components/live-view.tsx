@@ -10,6 +10,7 @@ import { OpenTextForm } from "@/components/open-text-form";
 import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type StateChanged = { interactionId: string; state: "draft" | "live" | "closed" };
 
@@ -128,10 +129,10 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
         if (body.counts) setResults({ counts: body.counts, total: body.total ?? 0 });
       } else {
         if (res.status === 409 && body.error === "You have already voted") setVoted(true);
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -207,10 +208,10 @@ function WordForm({ cloud }: { cloud: LiveWordcloud }) {
         setSent(true);
       } else {
         if (res.status === 409 && body.error === "You have used all your entries") setRemaining(0);
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setSubmitting(false);
     }

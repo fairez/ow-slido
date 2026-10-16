@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/card";
 import { InlineError } from "@/components/ui/field";
 import { RATING_SCALE_MAX } from "@/lib/rating-limits";
 import type { LiveRating } from "@/lib/live-view";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 /** Participant rating: a keyboard-operable radio group (arrow keys move the choice) shown as stars or numbers. */
 export function RatingForm({ rating }: { rating: LiveRating }) {
@@ -32,10 +33,10 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
       if (res.ok) setDone(true);
       else {
         if (res.status === 409 && body.error === "You have already rated this") setDone(true);
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setSubmitting(false);
     }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField } from "@/components/ui/field";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 export type EventSummary = {
   id: string;
@@ -25,7 +26,7 @@ function joinUrl(code: string) {
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
-  return body?.error ?? "Something went wrong. Please try again.";
+  return body?.error ?? SERVER_ERROR;
 }
 
 export function EventManager({ initialEvents }: { initialEvents: EventSummary[] }) {
@@ -61,7 +62,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       setCreated(saved);
       form.reset();
     } catch (err) {
-      setError(err instanceof RangeError ? "Enter valid start and end dates." : "Network error. Please try again.");
+      setError(err instanceof RangeError ? "Enter valid start and end dates." : NETWORK_ERROR);
     } finally {
       setPending(false);
     }
@@ -85,7 +86,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       setEvents((list) => list.map((e) => (e.id === saved.id ? saved : e)));
       setRenaming(null);
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     }
   }
 
@@ -101,7 +102,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       setEvents((list) => [...list, saved].sort(byStart));
       setCreated(saved);
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     }
   }
 
@@ -117,7 +118,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       setCreated((c) => (c?.id === target.id ? null : c));
       setDeleting(null);
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     }
   }
 

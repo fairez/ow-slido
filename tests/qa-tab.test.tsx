@@ -57,11 +57,11 @@ it("adds approved questions live without duplicates", async () => {
 });
 
 it("shows server errors", async () => {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "Please keep questions respectful" }), { status: 400 })));
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "That question contains language we can't accept" }), { status: 400 })));
   render(<QaTab eventId="e1" initial={[]} />);
   fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "bad" } });
   fireEvent.click(screen.getByRole("button", { name: "Send question" }));
-  expect((await screen.findByRole("alert")).textContent).toContain("respectful");
+  expect((await screen.findByRole("alert")).textContent).toContain("language we can't accept");
 });
 
 it("toggles an upvote and shows the new count", async () => {

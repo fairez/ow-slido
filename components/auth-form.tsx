@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { InlineError, TextField } from "@/components/ui/field";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type Mode = "login" | "signup";
 
@@ -36,9 +37,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
         return;
       }
       const body = await response.json().catch(() => null);
-      setError(body?.error ?? "Something went wrong. Please try again.");
+      setError(body?.error ?? SERVER_ERROR);
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
     } finally {
       setPending(false);
     }

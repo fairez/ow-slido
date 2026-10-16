@@ -336,3 +336,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - The AI analysis panels (notes-analysis-panel, analysis-editor, published-analysis) are still inline-styled and were not in the browser axe run (AI is unconfigured there); they use token vars with fallbacks.
   - Verified in browser only via axe/keyboard probes; screenshots not retaken since no layout changed.
 ---
+
+## 2026-10-16 - US-032
+- Copy pass. No exclamation marks, emoji or buzzwords were found in UI text. Moved the repeated server/network error strings (13 files, three wordings) into `lib/copy.ts` (`SERVER_ERROR`, `NETWORK_ERROR`) and reworded six API messages that gave no next step (Not joined, Too many requests, rate-limit note notice, questions profanity, signup duplicate, login failure). Full list in docs/copy-pass.md.
+- Files: lib/copy.ts, 12 components, lib/join-client.ts, lib/questions.ts, 12 API routes, tests/qa-tab.test.tsx, docs/copy-pass.md
+- **Learnings for future iterations:**
+  - Use `SERVER_ERROR` / `NETWORK_ERROR` from `@/lib/copy` for fetch failure fallbacks instead of new strings.
+  - Tests assert on error copy (qa-tab); grep tests before rewording an API message.
+  - Browser check was a login-error screenshot at 360 and 1280px (screens/us032-login-*.png); the alert text was captured before the response, so the exact new strings were verified by unit tests, not by eye.
+  - `pkill -f` kills your own shell here too; use `fuser -k` or Monitor/TaskStop.
+---

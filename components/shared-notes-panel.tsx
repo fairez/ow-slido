@@ -10,6 +10,7 @@ import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { PublishedAnalysis } from "@/components/published-analysis";
 import { NOTE_TEXT_MAX } from "@/lib/note-limits";
 import { AUTHOR_NAME_MAX_LENGTH } from "@/lib/question-types";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type SortMode = "popular" | "recent";
 
@@ -21,8 +22,6 @@ const sortNotes = (list: ParticipantNote[], mode: SortMode) =>
       (mode === "popular" ? b.upvotes - a.upvotes : 0) ||
       b.createdAt.localeCompare(a.createdAt),
   );
-
-const NETWORK_ERROR = "Could not reach the server. Check your connection and try again.";
 
 type Props = { notes: LiveNotes; socket: Socket | null };
 
@@ -143,7 +142,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
         }
       } else {
         if (res.status === 409 && body.error === "You have used all your notes") setRemaining(0);
-        setError(res.status === 429 ? "Slow down a little, then try again." : (body.error ?? "Something went wrong. Please try again."));
+        setError(res.status === 429 ? "Too many posts in a row. Wait a moment, then try again." : (body.error ?? SERVER_ERROR));
       }
     } catch {
       setError(NETWORK_ERROR);
@@ -157,7 +156,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
     try {
       const res = await fetch(`/api/notes/${id}/upvote`, { method: "POST" });
       if (!res.ok) {
-        setError(res.status === 429 ? "Slow down a little, then try again." : "Could not record your upvote.");
+        setError(res.status === 429 ? "Too many posts in a row. Wait a moment, then try again." : "Could not record your upvote.");
         return;
       }
       const body = (await res.json()) as { upvoted: boolean; upvotes: number };
@@ -189,7 +188,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
           setList((cur) => cur.map((x) => (x.id === id ? { ...x, text: edited.text } : x)));
         }
       } else {
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
       setError(NETWORK_ERROR);
@@ -211,7 +210,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
         if (res.ok) setRemaining((r) => Math.min(config.maxNotes, r + 1));
       } else {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(body.error ?? "Something went wrong. Please try again.");
+        setError(body.error ?? SERVER_ERROR);
       }
     } catch {
       setError(NETWORK_ERROR);

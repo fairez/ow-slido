@@ -7,6 +7,7 @@ import { InlineError, Toggle } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import type { HostNote } from "@/lib/note-types";
 import type { HostQuestion } from "@/lib/question-types";
+import { NETWORK_ERROR } from "@/lib/copy";
 
 type Mode = "open" | "moderated";
 
@@ -94,7 +95,7 @@ export function ModerationPanel({
       if (res.ok) return res;
       setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? failure);
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(NETWORK_ERROR);
     }
     return null;
   };

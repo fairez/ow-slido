@@ -10,6 +10,7 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
+import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 export type InteractionItem = {
   id: string;
@@ -46,7 +47,7 @@ const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, scale: "stars5",
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
-  return body?.error ?? "Something went wrong. Please try again.";
+  return body?.error ?? SERVER_ERROR;
 }
 
 const STATE_LABELS: Record<InteractionItem["state"], string> = { draft: "Draft", live: "Live", closed: "Closed" };
@@ -69,7 +70,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
       }
       return response;
     } catch {
-      setError("Network error. Please try again.");
+      setError(NETWORK_ERROR);
       return null;
     }
   }
