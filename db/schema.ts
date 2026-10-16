@@ -176,3 +176,46 @@ export const questionVotes = pgTable(
   },
   (t) => [unique("question_votes_one_per_participant").on(t.questionId, t.participantId)],
 );
+
+export const sharedNotes = pgTable(
+  "shared_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Null for anonymous notes. */
+    authorName: text("author_name"),
+    status: text("status", { enum: ["pending", "approved", "rejected"] })
+      .notNull()
+      .default("approved"),
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("shared_notes_text_length", sql`char_length(${t.text}) between 1 and 500`),
+    check("shared_notes_status", sql`${t.status} in ('pending', 'approved', 'rejected')`),
+    index("shared_notes_interaction_status_idx").on(t.interactionId, t.status),
+    index("shared_notes_participant_idx").on(t.interactionId, t.participantId),
+  ],
+);
+
+export const sharedNoteVotes = pgTable(
+  "shared_note_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => sharedNotes.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("shared_note_votes_one_per_participant").on(t.noteId, t.participantId)],
+);

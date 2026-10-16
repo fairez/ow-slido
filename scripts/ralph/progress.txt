@@ -16,3 +16,11 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Places still switching on type that later stories must extend: lib/live-view.ts, lib/presenter.ts, lib/export.ts, components/poll-manager.tsx, live-view.tsx, presenter-view.tsx.
   - Run `npm run db:migrate:test` after pulling new migrations.
 ---
+
+## 2026-10-16 - US-002
+- Added `shared_notes` (text 1-500 check, status check, default approved, pinned, updated_at) and `shared_note_votes` (unique note+participant), both cascading; migration 0012 applied to dev and test DBs.
+- Files: db/schema.ts, db/migrations/0012*, tests/shared-notes-schema.test.ts
+- **Learnings for future iterations:**
+  - Mirrors `questions`/`question_votes`; notes are scoped by `interaction_id` (questions by event).
+  - `updated_at` has no DB trigger: set it explicitly in the edit API (US-003).
+---
