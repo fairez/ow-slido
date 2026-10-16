@@ -23,14 +23,16 @@ export default async function ModeratePage({
     return (
       <main id="main" className="page">
         <h1>Moderator link not valid</h1>
-        <p>This link is invalid or has been revoked. Ask the host for a new one.</p>
+        <p className="row-meta">This link is invalid or has been revoked. Ask the host for a new one.</p>
       </main>
     );
   }
   const [event] = await getDb().select().from(events).where(eq(events.id, eventId));
   return (
     <main id="main" className="page">
-      <h1>Moderating: {event.name}</h1>
+      <header className="page-head">
+        <h1>Moderating: {event.name}</h1>
+      </header>
       <ModerationPanel
         eventId={eventId}
         initialMode={event.moderationMode}

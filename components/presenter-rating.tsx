@@ -6,14 +6,16 @@ export function PresenterRating({ results, closed }: { results: RatingResults; c
   const max = results.scale === "stars5" ? 5 : 10;
   return (
     <>
-      <p style={{ fontSize: "5rem", fontWeight: 700, margin: "0 0 8px", lineHeight: 1 }}>
-        {results.average === null ? "No ratings yet" : (
+      <p className="present-figure">
+        {results.average === null ? (
+          "No ratings yet"
+        ) : (
           <>
-            {results.average.toFixed(1)} <span style={{ fontSize: "2rem", fontWeight: 400 }}>out of {max}</span>
+            {results.average.toFixed(1)} <span className="present-figure-unit">out of {max}</span>
           </>
         )}
       </p>
-      <p style={{ fontSize: "2rem", margin: "0 0 24px" }}>
+      <p className="present-total">
         {results.total} {results.total === 1 ? "response" : "responses"}
         {closed ? " (closed)" : ""}
       </p>

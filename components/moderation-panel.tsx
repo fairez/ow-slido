@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { InlineError, Toggle } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import type { HostNote } from "@/lib/note-types";
 import type { HostQuestion } from "@/lib/question-types";
@@ -147,42 +150,30 @@ export function ModerationPanel({
   const approvedNotes = notes.filter((n) => n.status === "approved");
   const pending = questions.filter((q) => q.status === "pending");
   const approved = questions.filter((q) => q.status === "approved");
-  const button = { minHeight: 44, padding: "0 12px" };
 
   return (
-    <section aria-labelledby="moderation-title">
+    <section aria-labelledby="moderation-title" className="moderation">
       <h2 id="moderation-title">Q&amp;A moderation</h2>
-      {!moderatorToken && (
-        <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
-          <input
-            type="checkbox"
-            checked={mode === "moderated"}
-            onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")}
-          />
-          Moderated Q&amp;A (questions need approval)
-        </label>
-      )}
-      <p>
+      {!moderatorToken && <Toggle label="Moderated Q&A (questions need approval)" checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
+      <p className="row-meta">
         Mode: <strong>{mode === "moderated" ? "Moderated" : "Open"}</strong>
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <InlineError>{error}</InlineError>}
 
       <h3>Pending ({pending.length})</h3>
       {pending.length === 0 ? (
-        <p>No pending questions.</p>
+        <p className="row-meta">No pending questions.</p>
       ) : (
-        <ul aria-label="Pending questions" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+        <ul aria-label="Pending questions" className="post-list">
           {pending.map((q) => (
-            <li key={q.id} style={{ border: "1px solid #888", borderRadius: 8, padding: 12 }}>
-              <p style={{ margin: 0 }}>{q.text}</p>
-              <small>{q.authorName ?? "Anonymous"}</small>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button type="button" style={button} onClick={() => void change(q.id, { status: "approved" })}>
+            <li key={q.id} className="post" data-state="pending">
+              <p className="post-text">{q.text}</p>
+              <p className="post-meta">{q.authorName ?? "Anonymous"}</p>
+              <div className="post-foot">
+                <Button variant="primary" onClick={() => void change(q.id, { status: "approved" })}>
                   Approve
-                </button>
-                <button type="button" style={button} onClick={() => void change(q.id, { status: "rejected" })}>
-                  Reject
-                </button>
+                </Button>
+                <Button onClick={() => void change(q.id, { status: "rejected" })}>Reject</Button>
               </div>
             </li>
           ))}
@@ -191,35 +182,25 @@ export function ModerationPanel({
 
       <h3>Approved ({approved.length})</h3>
       {approved.length === 0 ? (
-        <p>No approved questions.</p>
+        <p className="row-meta">No approved questions.</p>
       ) : (
-        <ul aria-label="Approved questions" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+        <ul aria-label="Approved questions" className="post-list">
           {approved.map((q) => (
-            <li
-              key={q.id}
-              style={{
-                border: "1px solid #888",
-                borderRadius: 8,
-                padding: 12,
-                opacity: q.answered ? 0.7 : 1,
-              }}
-            >
-              <p style={{ margin: 0, textDecoration: q.answered ? "line-through" : "none" }}>{q.text}</p>
-              <small>
+            <li key={q.id} className="post" data-pinned={q.pinned} data-answered={q.answered}>
+              <p className="post-text">{q.text}</p>
+              <p className="post-meta">
                 {q.authorName ?? "Anonymous"} · ▲ {q.upvotes}
-                {q.pinned ? " · Pinned" : ""}
-                {q.answered ? " · Answered" : ""}
-              </small>
-              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <button type="button" style={button} onClick={() => void change(q.id, { answered: !q.answered })}>
+                {q.pinned && <Badge tone="accent">Pinned</Badge>}
+                {q.answered && <Badge>Answered</Badge>}
+              </p>
+              <div className="post-foot">
+                <Button onClick={() => void change(q.id, { answered: !q.answered })}>
                   {q.answered ? "Mark unanswered" : "Mark answered"}
-                </button>
-                <button type="button" style={button} onClick={() => void change(q.id, { pinned: !q.pinned })}>
-                  {q.pinned ? "Unpin" : "Pin"}
-                </button>
-                <button type="button" style={button} onClick={() => void remove(q.id)}>
+                </Button>
+                <Button onClick={() => void change(q.id, { pinned: !q.pinned })}>{q.pinned ? "Unpin" : "Pin"}</Button>
+                <Button variant="quiet" onClick={() => void remove(q.id)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </li>
           ))}
@@ -231,22 +212,20 @@ export function ModerationPanel({
           <h2>Shared notes moderation</h2>
           <h3>Pending notes ({pendingNotes.length})</h3>
           {pendingNotes.length === 0 ? (
-            <p>No pending notes.</p>
+            <p className="row-meta">No pending notes.</p>
           ) : (
-            <ul aria-label="Pending notes" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+            <ul aria-label="Pending notes" className="post-list">
               {pendingNotes.map((n) => (
-                <li key={n.id} style={{ border: "1px solid #888", borderRadius: 8, padding: 12 }}>
-                  <p style={{ margin: 0 }}>{n.text}</p>
-                  <small>
+                <li key={n.id} className="post" data-state="pending">
+                  <p className="post-text">{n.text}</p>
+                  <p className="post-meta">
                     {n.authorName ?? "Anonymous"} · {n.interactionTitle}
-                  </small>
-                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button type="button" style={button} onClick={() => void changeNote(n.id, { status: "approved" })}>
+                  </p>
+                  <div className="post-foot">
+                    <Button variant="primary" onClick={() => void changeNote(n.id, { status: "approved" })}>
                       Approve note
-                    </button>
-                    <button type="button" style={button} onClick={() => void changeNote(n.id, { status: "rejected" })}>
-                      Reject note
-                    </button>
+                    </Button>
+                    <Button onClick={() => void changeNote(n.id, { status: "rejected" })}>Reject note</Button>
                   </div>
                 </li>
               ))}
@@ -255,23 +234,21 @@ export function ModerationPanel({
 
           <h3>Approved notes ({approvedNotes.length})</h3>
           {approvedNotes.length === 0 ? (
-            <p>No approved notes.</p>
+            <p className="row-meta">No approved notes.</p>
           ) : (
-            <ul aria-label="Approved notes" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+            <ul aria-label="Approved notes" className="post-list">
               {approvedNotes.map((n) => (
-                <li key={n.id} style={{ border: "1px solid #888", borderRadius: 8, padding: 12 }}>
-                  <p style={{ margin: 0 }}>{n.text}</p>
-                  <small>
+                <li key={n.id} className="post" data-pinned={n.pinned}>
+                  <p className="post-text">{n.text}</p>
+                  <p className="post-meta">
                     {n.authorName ?? "Anonymous"} · {n.interactionTitle} · ▲ {n.upvotes}
-                    {n.pinned ? " · Pinned" : ""}
-                  </small>
-                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                    <button type="button" style={button} onClick={() => void changeNote(n.id, { pinned: !n.pinned })}>
-                      {n.pinned ? "Unpin note" : "Pin note"}
-                    </button>
-                    <button type="button" style={button} onClick={() => void removeNote(n.id)}>
+                    {n.pinned && <Badge tone="accent">Pinned</Badge>}
+                  </p>
+                  <div className="post-foot">
+                    <Button onClick={() => void changeNote(n.id, { pinned: !n.pinned })}>{n.pinned ? "Unpin note" : "Pin note"}</Button>
+                    <Button variant="quiet" onClick={() => void removeNote(n.id)}>
                       Delete note
-                    </button>
+                    </Button>
                   </div>
                 </li>
               ))}

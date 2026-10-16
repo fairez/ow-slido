@@ -938,3 +938,423 @@ a.ui-button:not([data-variant]) {
 .sort-bar:first-child {
   margin-top: 0;
 }
+
+/* Moderation (host event page and /moderate). */
+.moderation {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-7);
+}
+
+.moderation h2,
+.moderation h3,
+.moderation p {
+  margin: 0;
+}
+
+.moderation > h2:not(:first-child) {
+  margin-top: var(--space-6);
+}
+
+.moderation h3 {
+  margin-top: var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.moderation .post[data-state="pending"] {
+  border-left: 4px solid var(--accent);
+}
+
+.moderation .post[data-answered="true"] .post-text {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.moderation .post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.moderation .post-foot .ui-button,
+.moderation .row-actions .ui-button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+}
+
+/* Presenter view: built for the back of a room. Tokens only, so both themes keep the contrast. */
+.present {
+  min-height: 100vh;
+  padding: var(--space-6) var(--space-6) var(--space-8);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.present-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.present-title {
+  flex: 1 1 24rem;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 5.5vw, 5rem);
+  font-weight: 600;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.present-join {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+/* A scanner needs dark modules on a light field, so the QR keeps a light backing in dark theme. */
+.present-qr {
+  display: block;
+  padding: var(--space-1);
+  background: #fff;
+}
+
+.present-code {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.present-total {
+  margin: var(--space-5) 0 var(--space-4);
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+}
+
+.present-empty {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+  color: var(--ink-muted);
+}
+
+.present-figure {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-size: clamp(3.5rem, 9vw, 8rem);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.present-figure-unit {
+  font-family: var(--font-body);
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.present-fullscreen {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+}
+
+.present-notice {
+  position: fixed;
+  bottom: var(--space-4);
+  left: var(--space-4);
+  max-width: 60ch;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--text-lg);
+}
+
+.present-bars {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.present-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
+  font-size: clamp(1.5rem, 2.8vw, 2.5rem);
+  font-weight: 600;
+}
+
+.present-bar-head span:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.present-track {
+  display: block;
+  height: clamp(28px, 3vw, 44px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.present-fill {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  transition: width 200ms ease;
+}
+
+.present-fill[data-leading="true"] {
+  background: var(--accent);
+}
+
+.rating-chart {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rating-chart li {
+  display: grid;
+  grid-template-columns: 2.5ch 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.rating-chart-value {
+  font-weight: 700;
+}
+
+.rating-chart-count {
+  min-width: 8ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-chart[data-large] {
+  gap: var(--space-3);
+  font-size: clamp(1.25rem, 2.2vw, 2rem);
+}
+
+.rating-chart:not([data-large]) .present-track {
+  height: 16px;
+}
+
+.word-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.word-cloud li {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.word-cloud li[data-top="true"] {
+  color: var(--accent);
+}
+
+.word-cloud sup {
+  margin-left: var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  color: var(--ink);
+}
+
+.present-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  align-items: start;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.present-cards[data-stack] {
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.present-card {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.present-card[data-highlight="true"] {
+  border: 3px solid var(--accent);
+}
+
+.present-card-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.present-card-text {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  line-height: 1.3;
+  white-space: pre-wrap;
+}
+
+.present-card[data-highlight="true"] .present-card-text {
+  font-weight: 600;
+}
+
+.present-card-meta {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-lg);
+  color: var(--ink-muted);
+}
+
+.present-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.present-switch button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-lg);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.present-switch button:hover {
+  border-color: var(--ink);
+}
+
+.present-switch button[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.present-ai {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.present-ai .ui-badge {
+  font-size: var(--text-base);
+}
+
+.present-section {
+  margin-top: var(--space-5);
+}
+
+.present-subtitle {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+}
+
+.present-desc {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  color: var(--ink-muted);
+}
+
+.present-groups {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.present-summary {
+  max-width: 60ch;
+  margin: 0;
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.present-category {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+  text-align: left;
+  cursor: pointer;
+}
+
+.present-category-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.present-category-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.present-category .present-track {
+  grid-column: 1 / -1;
+}
+
+.present-category[aria-expanded="true"] .present-category-name {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 40rem) {
+  .present {
+    padding: var(--space-4) var(--space-4) var(--space-8);
+  }
+
+  .present-join {
+    width: 100%;
+  }
+
+  .present-code {
+    font-size: var(--text-xl);
+  }
+}

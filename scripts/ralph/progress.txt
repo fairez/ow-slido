@@ -303,3 +303,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - WordCloud and RatingChart are presenter components and still inline-styled: US-029.
   - Verified at 360px and 1280px, light and dark (screens/us028-*.png): no overflow, no console errors.
 ---
+
+## 2026-10-16 - US-029
+- Restyled the presenter view and moderation on tokens (no more black/yellow inline styles). Presenter: Fraunces `.present-title` up to 5rem, join code + QR in an in-flow `.present-join` card in the header (no longer fixed, so it cannot overlap results), poll bars with ink-tint fill and the leading bar in the accent (printed count and percent), rating average as a large serif figure, word cloud in Fraunces with the top word in the accent, open-text and notes as `.present-card`s (highlighted/pinned get an accent border and a text label), Notes/Word cloud/... switch as `.present-switch`, AI label uses `Badge`. Moderation (`/moderate` and the event page) uses `Button` (Approve primary, Reject secondary, Delete quiet), `.post` rows, Pinned/Answered badges, a pending accent edge, `Toggle` and `InlineError`; ModeratorLinkManager restyled to match.
+- Files: components/{presenter-view,presenter-rating,presenter-open-text,presenter-notes,presenter-analysis,rating-chart,word-cloud,moderation-panel,moderator-link-manager}.tsx, app/present/[eventId]/page.tsx, app/moderate/[eventId]/page.tsx, app/globals.css, scripts/ralph/screens/us029.mjs
+- **Learnings for future iterations:**
+  - Presenter classes in globals.css: `.present`, `.present-head/-title/-join/-qr/-code`, `.present-total/-empty/-figure`, `.present-bars/-track/-fill[data-leading]`, `.present-cards/-card[data-highlight]`, `.present-switch`, `.rating-chart`, `.word-cloud`, `.moderation`. The QR keeps `#fff` backing on purpose so it scans in dark theme.
+  - Participant-side API bodies for scripts: words `{word}`, vote `{optionIds}`, rating `{value}`, responses `{text}`, notes `{text}`; questions POST `/api/events/:id/questions` `{text}`.
+  - The "Encountered a script tag" console error in screenshot runs comes from the theme script in the shell (US-024), not this story.
+  - Lint reports 100 errors if `.next-shot` exists; `rm -rf .next-shot` and `git checkout next-env.d.ts tsconfig.json` first.
+  - Verified at 360, 1280 and 1920px, light and dark (screens/us029-*.png): no horizontal overflow.
+---
