@@ -261,3 +261,24 @@ export const ratingResponses = pgTable(
     check("rating_responses_value_range", sql`${t.value} between 1 and 10`),
   ],
 );
+
+/**
+ * One row per AI `complete()` call, used to enforce the per-event and per-day caps.
+ * Stores no prompt or note text. `event_id` is set null (not cascaded) when an event is
+ * deleted so the daily cap cannot be reset by deleting events.
+ */
+export const aiCalls = pgTable(
+  "ai_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    kind: text("kind").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_calls_event_idx").on(t.eventId),
+    index("ai_calls_created_idx").on(t.createdAt),
+  ],
+);

@@ -24,6 +24,7 @@
 ## AI analysis (Shared Notes)
 - Provider-agnostic server client for OpenAI and OpenRouter. Env: `AI_PROVIDER` (`openai` | `openrouter` | `mock`), `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_EVENT_CALL_CAP`, `AI_DAILY_CALL_CAP`. The key belongs to the platform owner and lives only in `.env.local`.
 - NEVER call a real AI API from tests, e2e or Ralph runs: use `AI_PROVIDER=mock` (deterministic fake) or mock `fetch`. Never print, log or commit keys or note text.
+- Client lives in `lib/ai` (`complete(messages, schema, {eventId})`); caps are tracked in `ai_calls`. Hide AI UI with `isAiConfigured()`; never import `lib/ai` from client code.
 - Analysis is started manually by a host only. Never run it automatically.
 
 ## Browser verification (dev-browser is not installed)

@@ -147,3 +147,15 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Rating rows reuse `computeResults` from lib/rating.ts; average is empty when there are no ratings.
   - No UI changed, so no browser check needed.
 ---
+
+## 2026-10-16 - US-015
+- AI provider client in `lib/ai`: `complete(messages, schema, {eventId, kind})` (index.ts), providers openai/openrouter/mock (providers.ts), env config (config.ts), cap bookkeeping (usage.ts), error-to-HTTP mapping (http.ts). Admin-only `GET /api/ai/status` and `POST /api/ai/test`.
+- Files: lib/ai/*, app/api/ai/status|test/route.ts, db/schema.ts (`ai_calls`), migration 0015, tests/ai-client.test.ts
+- **Learnings for future iterations:**
+  - A schema is `{name, jsonSchema, parse(value) -> {ok,value}|{ok:false,error}}`. The mock provider builds a valid reply from `jsonSchema` (first enum value, "mock" strings, one array item, min number), so write schemas with enums/required fields and the mock output will parse.
+  - One `complete()` = one cap slot, even with HTTP retries and the single repair retry. Caps default to 20 per event and 200 per UTC day; counted in `ai_calls` under an advisory lock.
+  - `ai_calls.event_id` is `ON DELETE SET NULL`, not cascade, so deleting an event cannot reset the daily cap. The table holds no text.
+  - `AiError.code`: not_configured, event_cap, daily_cap, timeout, provider, invalid_output. Use `aiErrorResponse(err)` from lib/ai/http.ts in routes.
+  - Tests: stub `fetch` with `vi.stubGlobal` and pass `{http: {sleep: async () => {}}}` to skip backoff; `{timeoutMs}` shortens the timeout. Join codes in test events must be 4-6 digits.
+  - Use `isAiConfigured()` to hide AI UI; never import lib/ai from client components (it reads the key).
+---
