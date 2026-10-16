@@ -3,8 +3,10 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { PresenterNotes } from "@/components/presenter-notes";
 import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
 export type NavItem = { id: string; state: "draft" | "live" | "closed" };
@@ -92,9 +94,13 @@ export function PresenterView({
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/present`);
+      // Name the notes board on screen so it stays up after the host closes it.
+      const closed = cursor.current ? `?closed=${encodeURIComponent(cursor.current)}` : "";
+      const res = await fetch(`/api/events/${eventId}/present${closed}`);
       if (!res.ok) return;
-      setPoll(((await res.json()) as { interaction: PresenterState | null }).interaction);
+      const next = ((await res.json()) as { interaction: PresenterState | null }).interaction;
+      if (next) cursor.current = next.id;
+      setPoll(next);
     } catch {
       // Offline: the next reconnect refetches.
     }
@@ -120,11 +126,32 @@ export function PresenterView({
       void refetch();
       void refetchList();
     };
+    const forNotes = (id: string, fn: (notes: PublicNote[]) => PublicNote[]) =>
+      setPoll((cur) => (cur && cur.type === "sharedNotes" && cur.id === id ? { ...cur, notes: fn(cur.notes) } : cur));
+    const upsert = (msg: { note: PublicNote | null }) => {
+      const note = msg.note;
+      if (!note) return;
+      forNotes(note.interactionId, (list) =>
+        list.some((n) => n.id === note.id) ? list.map((n) => (n.id === note.id ? note : n)) : [...list, note],
+      );
+    };
+    const onRemoved = (msg: { interactionId: string; noteId: string }) =>
+      forNotes(msg.interactionId, (list) => list.filter((n) => n.id !== msg.noteId));
+    const onVotes = (msg: { interactionId: string; noteId: string; upvotes: number }) =>
+      forNotes(msg.interactionId, (list) => list.map((n) => (n.id === msg.noteId ? { ...n, upvotes: msg.upvotes } : n)));
+    socket.on("note:added", upsert);
+    socket.on("note:updated", upsert);
+    socket.on("note:removed", onRemoved);
+    socket.on("note:votes", onVotes);
     socket.on("poll:counts", onCounts);
     socket.on("wordcloud:words", onWords);
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("note:added", upsert);
+      socket.off("note:updated", upsert);
+      socket.off("note:removed", onRemoved);
+      socket.off("note:votes", onVotes);
       socket.off("poll:counts", onCounts);
       socket.off("wordcloud:words", onWords);
       socket.off("state-changed", onChange);
@@ -174,6 +201,18 @@ export function PresenterView({
           No live interaction
         </p>
       </>
+    );
+  }
+
+  if (poll.type === "sharedNotes") {
+    return (
+      <section aria-labelledby="present-title">
+        {extras}
+        <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
+          {poll.title}
+        </h1>
+        <PresenterNotes notes={poll.notes} closed={poll.state === "closed"} />
+      </section>
     );
   }
 

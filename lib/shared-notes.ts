@@ -302,6 +302,31 @@ export async function listNotes(
   return { ok: true, notes };
 }
 
+/** Approved notes for the presenter screen, with vote counts and no participant ids. */
+export async function listPresenterNotes(interactionId: string): Promise<PublicNote[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(sharedNotes)
+    .where(and(eq(sharedNotes.interactionId, interactionId), eq(sharedNotes.status, "approved")));
+  const counts = await db
+    .select({ noteId: sharedNoteVotes.noteId, n: sql<number>`count(*)::int` })
+    .from(sharedNoteVotes)
+    .innerJoin(sharedNotes, eq(sharedNotes.id, sharedNoteVotes.noteId))
+    .where(and(eq(sharedNotes.interactionId, interactionId), eq(sharedNotes.status, "approved")))
+    .groupBy(sharedNoteVotes.noteId);
+  const countById = new Map(counts.map((c) => [c.noteId, c.n]));
+  return rows.map((r) => ({
+    id: r.id,
+    interactionId: r.interactionId,
+    text: r.text,
+    authorName: r.authorName,
+    pinned: r.pinned,
+    createdAt: r.createdAt.toISOString(),
+    upvotes: countById.get(r.id) ?? 0,
+  }));
+}
+
 export type UpvoteResult =
   | { ok: true; upvoted: boolean; upvotes: number }
   | { ok: false; status: 403 | 404 | 409; error: string };

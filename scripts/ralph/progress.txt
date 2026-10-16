@@ -78,3 +78,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Inserting interactions directly in tests needs `position`.
   - Verified at 360px and 1280px (screens/us007-mod-*.png), no horizontal overflow; styling is pre-restyle by design (US-027).
 ---
+
+## 2026-10-16 - US-008
+- Presenter view for shared notes: `components/presenter-notes.tsx` (prompt, note count, Top upvoted / Newest toggle, pinned notes first with a yellow border and "Pinned" label, long text wraps). `getPresenterState(eventId, closedNotesId?)` returns a `sharedNotes` state for the live interaction, or for a closed notes interaction when named; GET /api/events/:id/present accepts `?closed=<id>`. PresenterView applies `note:added/updated/removed/votes` live and keeps a closed board on screen.
+- Files: lib/presenter.ts, lib/shared-notes.ts (listPresenterNotes), app/api/events/[id]/present/route.ts, components/presenter-view.tsx, components/presenter-notes.tsx, tests/presenter.test.ts, tests/presenter-view.test.tsx
+- **Learnings for future iterations:**
+  - Presenter state is live-only by default; the client passes its cursor as `?closed=` on refetch so a just-closed notes board stays up. A fresh page load of a closed board shows "No live interaction".
+  - Join code and QR come from the shared corner in presenter-view.tsx. At 360px that fixed corner squeezes the title and the fullscreen button overlaps content; US-029/US-030 should fix it in the restyle.
+  - Screenshot script lives at scripts/ralph/screens/us008.mjs (gitignored); API create uses `prompt`, `maxNotes`, `moderation` at the top level of the body.
+  - Verified at 360px and 1280px (screens/us008-*.png), no horizontal overflow; styling is pre-restyle by design (US-029).
+---
