@@ -230,3 +230,11 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Participant page is /e/:eventId. Screenshot script: scripts/ralph/screens/us021.mjs (port 3201, AI_PROVIDER=mock so the disclosure shows). Verified at 360px and 1280px, no overflow, live withdraw works. Pre-restyle styling by design.
   - A `.next-shot` dir may be recreated by another dev server; lint with `npx eslint . --ignore-pattern ".next-shot/**"` if it is not yours.
 ---
+
+## 2026-10-16 - US-022
+- CSV export gains an analysis table (after ratings) for each sharedNotes interaction with a done run: header `section,title,kind,item,count,weight,model,run_at,ai_generated,edited`; rows for summary, each category (count = note ids in it) and each keyword (weight). Model, finish time, `ai_generated=yes` and `edited` repeat on every row, so edited results export as edited. No analysis, no section; note ids and text never appear.
+- Files: lib/export.ts, tests/export.test.ts
+- **Learnings for future iterations:**
+  - Uses the newest `done` row (failed runs ignored), matching the host panel's `lastDone`.
+  - Lint warnings come from scripts/ralph/screens/*.mjs (unused vars), not app code.
+---

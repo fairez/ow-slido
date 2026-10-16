@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, interactions, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
+import { events, interactions, noteAnalyses, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -227,5 +227,46 @@ test("open text and rating get their own sections; hidden responses and particip
     ["rating", "Session", "stars5", "4.33", "3", "4", "2"],
     ["rating", "Session", "stars5", "4.33", "3", "5", "1"],
   ]);
+  for (const id of participantIds) expect(text).not.toContain(id);
+});
+
+test("analysis section: summary, categories with counts, keywords, model, run time, AI and edited markers; no ids", async () => {
+  const [board] = await db
+    .insert(interactions)
+    .values({ eventId, type: "sharedNotes", title: "Ideas", position: 2, config: { prompt: "Ideas" } })
+    .returning();
+  const [note] = await db
+    .insert(sharedNotes)
+    .values({ interactionId: board.id, participantId: participantIds[0], text: "Plain note" })
+    .returning();
+  expect(parseCsv(await (await get(hostCookie)).text()).some((r) => r[0] === "analysis")).toBe(false);
+
+  const finishedAt = new Date("2026-10-16T10:00:00Z");
+  await db.insert(noteAnalyses).values({
+    interactionId: board.id,
+    status: "done",
+    noteCount: 1,
+    notesSnapshotHash: "h",
+    summary: "People want, more time",
+    categories: [{ name: "Time", description: "d", noteIds: [note.id, "x"] }],
+    keywords: [{ word: "time", weight: 5 }],
+    edited: true,
+    model: "mock-1",
+    finishedAt,
+  } as never);
+  await db.insert(noteAnalyses).values({ interactionId: board.id, status: "failed", noteCount: 1, notesSnapshotHash: "h" } as never);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const at = rows.findIndex((r) => r[0] === "section" && r[2] === "kind");
+  expect(rows[at - 1]).toEqual([""]);
+  expect(rows[at]).toEqual(["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"]);
+  const tail = ["mock-1", finishedAt.toISOString(), "yes", "yes"];
+  expect(rows.slice(at + 1)).toEqual([
+    ["analysis", "Ideas", "summary", "People want, more time", "", "", ...tail],
+    ["analysis", "Ideas", "category", "Time", "2", "", ...tail],
+    ["analysis", "Ideas", "keyword", "time", "", "5", ...tail],
+  ]);
+  expect(text).not.toContain(note.id);
   for (const id of participantIds) expect(text).not.toContain(id);
 });

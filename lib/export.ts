@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { interactions, openTextResponses, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes } from "@/db/schema";
+import { interactions, noteAnalyses, openTextResponses, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { PollConfig } from "@/lib/polls";
 import type { RatingConfig } from "@/lib/interaction-config";
@@ -10,6 +10,7 @@ export const EXPORT_HEADER = ["section", "title", "item", "count", "author"] as 
 export const NOTES_EXPORT_HEADER = ["section", "title", "note", "status", "pinned", "upvotes", "author"] as const;
 export const OPEN_TEXT_EXPORT_HEADER = ["section", "title", "response", "highlighted"] as const;
 export const RATING_EXPORT_HEADER = ["section", "title", "scale", "average", "total", "value", "count"] as const;
+export const ANALYSIS_EXPORT_HEADER = ["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"] as const;
 
 /** Quotes a field for CSV; a leading formula character is neutralised so spreadsheets don't evaluate user text. */
 export function csvField(value: string | number) {
@@ -111,6 +112,29 @@ export async function buildEventCsv(eventId: string) {
     }
     rows.push([], ...ratingRows);
   }
+
+  const analysisRows: (string | number)[][] = [];
+  for (const interaction of notesInteractions) {
+    // Only the newest finished run, and only for hosts who ran one; notes are counted, never listed.
+    const [a] = await db
+      .select()
+      .from(noteAnalyses)
+      .where(and(eq(noteAnalyses.interactionId, interaction.id), eq(noteAnalyses.status, "done")))
+      .orderBy(desc(noteAnalyses.createdAt))
+      .limit(1);
+    if (!a) continue;
+    const meta = [a.model ?? "", (a.finishedAt ?? a.createdAt).toISOString(), "yes", a.edited ? "yes" : "no"];
+    const row = (kind: string, item: string, count: number | "", weight: number | "") =>
+      analysisRows.push(["analysis", interaction.title, kind, item, count, weight, ...meta]);
+    if (a.summary) row("summary", a.summary, "", "");
+    for (const c of Array.isArray(a.categories) ? (a.categories as { name?: unknown; noteIds?: unknown }[]) : []) {
+      row("category", String(c.name ?? ""), Array.isArray(c.noteIds) ? c.noteIds.length : 0, "");
+    }
+    for (const k of Array.isArray(a.keywords) ? (a.keywords as { word?: unknown; weight?: unknown }[]) : []) {
+      row("keyword", String(k.word ?? ""), "", Number(k.weight) || 0);
+    }
+  }
+  if (analysisRows.length > 0) rows.push([], [...ANALYSIS_EXPORT_HEADER], ...analysisRows);
 
   return rows.map((r) => r.map(csvField).join(",")).join("\r\n") + "\r\n";
 }
