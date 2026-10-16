@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { findNotesInteractionEvent, startAnalysis } from "@/lib/note-analysis";
+import "@/lib/note-analysis-ai";
 import { findOwnedEvent } from "@/lib/polls";
 
 type Context = { params: Promise<{ id: string }> };

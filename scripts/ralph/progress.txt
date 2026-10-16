@@ -170,3 +170,16 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Single-job guard is a `FOR UPDATE` on the interaction row inside the start transaction.
   - A leftover `.next-shot` dir makes `npm run lint` fail with hundreds of errors; delete it first.
 ---
+
+## 2026-10-16 - US-017
+- `lib/note-analysis-ai.ts`: `analyzeNotes` builds the versioned prompt (`notes-v1`), sends approved note text only as `<note id="n1">` data (angle brackets escaped, instruction to ignore instructions inside notes), validates summary (<=150 words), 3-8 categories (fewer only when under 3 notes), up to 50 keywords. It registers itself with `setAnalysisRunner`, and the analyze route imports it.
+- Batches of 200 notes are merged: categories by lowercase name, one extra `complete()` call merges summaries, keywords sum weights. Unknown ids are dropped, a note appears in one category only, leftovers (and categories beyond 8) go to "Uncategorized".
+- Fallback (word frequency, stop words, no summary/categories, model `word-frequency`) is returned on not_configured, event_cap, daily_cap, timeout, provider errors. `invalid_output` throws a readable error and fails the job.
+- Files: lib/note-analysis-ai.ts, app/api/interactions/[id]/analyze/route.ts, tests/note-analysis-ai.test.ts
+- **Learnings for future iterations:**
+  - A failed job is a new row; the earlier `done` row is untouched, but `getLatestAnalysis` returns the newest row (failed). US-018/020 should show the last `done` analysis alongside a failed latest one if the UI needs "keeps the previous good analysis" visible.
+  - Fallback results have an empty summary and `categories: []`; UI must handle that and show it as "keywords only".
+  - Stored category shape: `{name, description, noteIds[]}` with real note ids; keywords `{word, weight}`.
+  - Tests pass `{provider}` (a scripted AiProvider) to `analyzeNotes`; AI_PROVIDER=mock yields "mock" summary and everything in Uncategorized.
+  - No UI changed, so no browser check needed.
+---
