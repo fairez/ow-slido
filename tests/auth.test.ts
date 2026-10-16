@@ -63,7 +63,7 @@ test("signup creates a lowercase-email user with a hashed password and logs in",
   const setCookie = res.headers.get("set-cookie") ?? "";
   expect(setCookie).toMatch(/HttpOnly/i);
   expect(setCookie).toMatch(/SameSite=Lax/i);
-  expect(setCookie).toMatch(/Secure/i);
+  expect(setCookie).not.toMatch(/Secure/i); // request was plain http
 
   const meRes = await me(get("/api/auth/me", sessionCookie(res)));
   expect(meRes.status).toBe(200);
@@ -173,4 +173,30 @@ test("login records first_login_at once", async () => {
   expect(first).toBeInstanceOf(Date);
   await login(post("/api/auth/login", creds));
   expect(await read()).toEqual(first);
+});
+
+test("cookies are Secure only when the request arrived over https", async () => {
+  const body = JSON.stringify(creds);
+  const make = (headers: Record<string, string>) =>
+    new Request("http://app.example.test/api/auth/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body,
+    });
+
+  const proxied = await signup(make({ "x-forwarded-proto": "https" }));
+  expect(proxied.headers.get("set-cookie")).toMatch(/Secure/i);
+
+  await truncateAll(db);
+  const plain = await signup(make({}));
+  expect(plain.headers.get("set-cookie")).not.toMatch(/Secure/i);
+  const loggedIn = await login(
+    new Request("http://192.0.2.10:3000/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    }),
+  );
+  expect(loggedIn.status).toBe(200);
+  expect(loggedIn.headers.get("set-cookie")).not.toMatch(/Secure/i);
 });

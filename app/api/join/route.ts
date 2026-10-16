@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { events, participants } from "@/db/schema";
+import { isSecureRequest } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import {
@@ -54,6 +55,6 @@ export async function POST(request: Request) {
       event: { id: event.id, name: event.name, joinCode: event.joinCode },
       participant: { id: participantId },
     },
-    { headers: { "set-cookie": participantSetCookie(event.id, participantId) } },
+    { headers: { "set-cookie": participantSetCookie(event.id, participantId, isSecureRequest(request)) } },
   );
 }

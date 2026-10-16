@@ -30,16 +30,24 @@ export function verifySessionToken(token: string, now = Date.now()): string | nu
   return userId;
 }
 
-function cookieAttributes(maxAge: number) {
-  return `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+/** True when the client reached us over HTTPS, directly or through a TLS-terminating proxy. */
+export function isSecureRequest(request: Request): boolean {
+  const forwarded = request.headers.get("x-forwarded-proto")?.split(",")[0].trim().toLowerCase();
+  if (forwarded) return forwarded === "https";
+  return new URL(request.url).protocol === "https:";
 }
 
-export function sessionSetCookie(userId: string) {
-  return `${SESSION_COOKIE}=${createSessionToken(userId)}; ${cookieAttributes(SESSION_MAX_AGE_SECONDS)}`;
+/** `Secure` cookies are dropped by browsers on plain http (except localhost), so only set it on https. */
+export function cookieAttributes(maxAge: number, secure: boolean) {
+  return `Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Lax; Max-Age=${maxAge}`;
 }
 
-export function sessionClearCookie() {
-  return `${SESSION_COOKIE}=; ${cookieAttributes(0)}`;
+export function sessionSetCookie(userId: string, secure: boolean) {
+  return `${SESSION_COOKIE}=${createSessionToken(userId)}; ${cookieAttributes(SESSION_MAX_AGE_SECONDS, secure)}`;
+}
+
+export function sessionClearCookie(secure: boolean) {
+  return `${SESSION_COOKIE}=; ${cookieAttributes(0, secure)}`;
 }
 
 export function readSessionToken(request: Request): string | null {

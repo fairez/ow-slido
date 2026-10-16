@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookieAttributes } from "@/lib/auth/session";
 
 export const PARTICIPANT_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
@@ -27,9 +28,9 @@ export function verifyParticipantToken(token: string, eventId: string): string |
   return participantId;
 }
 
-export function participantSetCookie(eventId: string, participantId: string) {
+export function participantSetCookie(eventId: string, participantId: string, secure: boolean) {
   const value = createParticipantToken(eventId, participantId);
-  return `${participantCookieName(eventId)}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${PARTICIPANT_MAX_AGE_SECONDS}`;
+  return `${participantCookieName(eventId)}=${value}; ${cookieAttributes(PARTICIPANT_MAX_AGE_SECONDS, secure)}`;
 }
 
 export function readParticipantToken(request: Request, eventId: string): string | null {

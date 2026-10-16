@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { readCredentials } from "@/lib/auth/credentials";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { sessionSetCookie } from "@/lib/auth/session";
+import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -43,6 +43,6 @@ export async function POST(request: Request) {
 
   return Response.json(
     { user: { id: user.id, email: user.email } },
-    { headers: { "set-cookie": sessionSetCookie(user.id) } },
+    { headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } },
   );
 }

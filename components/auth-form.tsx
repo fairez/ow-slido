@@ -45,7 +45,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   return (
     <main style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
       <h1>{copy.title}</h1>
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+      <form method="post" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
         <label style={{ display: "grid", gap: 4 }}>
           Email
           <input name="email" type="email" autoComplete="email" required style={{ padding: 8, font: "inherit" }} />

@@ -1,7 +1,7 @@
 import { users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { MIN_PASSWORD_LENGTH, isValidEmail, readCredentials } from "@/lib/auth/credentials";
-import { sessionSetCookie } from "@/lib/auth/session";
+import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 
 export async function POST(request: Request) {
@@ -28,6 +28,6 @@ export async function POST(request: Request) {
 
   return Response.json(
     { user },
-    { status: 201, headers: { "set-cookie": sessionSetCookie(user.id) } },
+    { status: 201, headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } },
   );
 }
