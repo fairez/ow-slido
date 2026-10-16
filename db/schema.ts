@@ -219,3 +219,26 @@ export const sharedNoteVotes = pgTable(
   },
   (t) => [unique("shared_note_votes_one_per_participant").on(t.noteId, t.participantId)],
 );
+
+export const openTextResponses = pgTable(
+  "open_text_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Hidden by the host: stored, never sent to participants or the presenter. */
+    hidden: boolean("hidden").notNull().default(false),
+    highlighted: boolean("highlighted").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("open_text_responses_text_length", sql`char_length(${t.text}) between 1 and 300`),
+    index("open_text_responses_interaction_idx").on(t.interactionId, t.createdAt),
+    index("open_text_responses_participant_idx").on(t.interactionId, t.participantId),
+  ],
+);

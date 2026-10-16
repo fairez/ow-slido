@@ -97,3 +97,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Section tables are separated by an empty row; the test parser returns it as `[""]`.
   - No UI changed, so no browser check needed.
 ---
+
+## 2026-10-16 - US-010
+- Open text responses API: `open_text_responses` table (migration 0013, text 1-300 check, hidden, highlighted, cascades). `lib/open-text.ts` has submit/list/host-update/delete; routes `POST|GET /api/interactions/:id/responses` and `PATCH|DELETE /api/responses/:id` (owner session only; moderator links do not apply).
+- Files: db/schema.ts, db/migrations/0013*, lib/open-text.ts, lib/open-text-limits.ts, app/api/interactions/[id]/responses/route.ts, app/api/responses/[id]/route.ts, tests/open-text-api.test.ts
+- **Learnings for future iterations:**
+  - GET serves two callers: a joined participant (visible responses, newest first) or the owning host session (all responses with `hidden`). Hidden responses never reach participants or the presenter.
+  - Events: `response:added` / `response:updated` (payload `{response}`), `response:removed` `{interactionId, responseId}`. Hiding publishes removed, unhiding publishes added; hiding also clears `highlighted`.
+  - `listPresenterResponses(interactionId)` is ready for the presenter state; US-011 should wire live-view.ts / presenter.ts / UI.
+  - Responses count toward the limit even when hidden. Host and participant UIs are US-011.
+---
