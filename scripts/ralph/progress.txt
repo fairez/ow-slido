@@ -323,3 +323,16 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Event names are capped (50 chars or so); the API rejects longer names with no `joinCode` in the response.
   - `npm test` recreates `.next-shot`; `rm -rf` it before lint.
 ---
+
+## 2026-10-16 - US-031
+- Contrast: every token pair re-checked with contrast-check.py. Control boundaries (inputs, secondary buttons, choices, rating options, theme toggle) used `--border` at 1.3:1, so added `--control-border` (3.76-4.62:1 in both themes); `--border` stays for decorative separators. docs/design-contrast.md now has a non-text table.
+- Real-browser axe (colour-contrast on, WCAG 2 A/AA + best-practice) over all key pages and every interaction type in light and dark: no contrast or serious violations. Fixed the idle presenter state having no `h1` (now an `h1` with `aria-live="polite"`).
+- Keyboard walkthrough (join, vote, notes post, host pages, dialog Escape) works; focus ring visible everywhere. Charts already expose text values (progressbar valuetext, printed counts, sr-only word list).
+- Files: app/globals.css, components/presenter-view.tsx, docs/design-contrast.md, scripts/ralph/screens/us031.mjs, us031-keys.mjs
+- **Learnings for future iterations:**
+  - Use `--control-border` for anything the user must find as a control; `--border` is too faint (1.3:1).
+  - `us031.mjs` is a reusable axe-in-browser audit (needs :3200 dev server and `.env.local` sourced); `nextjs-portal` focus stops in `us031-keys.mjs` are the dev overlay, not app bugs.
+  - `/join` without a code is the default Next 404 (no main/h1); not a real page.
+  - The AI analysis panels (notes-analysis-panel, analysis-editor, published-analysis) are still inline-styled and were not in the browser axe run (AI is unconfigured there); they use token vars with fallbacks.
+  - Verified in browser only via axe/keyboard probes; screenshots not retaken since no layout changed.
+---

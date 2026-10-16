@@ -219,9 +219,9 @@ export function PresenterView({
     return (
       <>
         <header className="present-head">
-          <p role="status" className="present-title">
+          <h1 aria-live="polite" className="present-title">
             No live interaction
-          </p>
+          </h1>
           {corner}
         </header>
         {extras}

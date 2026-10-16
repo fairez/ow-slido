@@ -16,4 +16,16 @@ Checked with `docs/antislop/skills/antislop-human/contrast-check.py`. Normal tex
 | `--success` on `--bg` | 7.09:1 | 8.84:1 |
 | `--success` on `--surface` | 7.52:1 | 7.99:1 |
 
-`--border` is a separator, not text, so it is not in the table. The toggle button uses `--ink` on `--bg`.
+## Non-text contrast (3:1 minimum)
+
+| Component boundary on background | Light | Dark |
+|---|---|---|
+| `--control-border` on `--bg` | 3.76:1 | 4.62:1 |
+| `--control-border` on `--surface` | 3.99:1 | 4.18:1 |
+| `--focus` on `--bg` (focus ring) | 4.99:1 | 5.96:1 |
+
+`--control-border` outlines inputs, selects, textareas, secondary buttons, choice and rating options and the theme toggle. `--border` (1.36:1 light, 1.28:1 dark on `--surface`) is only for decorative separators and card edges, never for a control. The toggle button uses `--ink` on `--bg`.
+
+## Verified in a browser
+
+`scripts/ralph/screens/us031.mjs` runs axe-core (WCAG 2 A/AA, colour-contrast included) over the home, auth, dashboard, event, presenter, participant and moderation pages for every interaction type, in light and dark. It reports no colour-contrast violations. `us031-keys.mjs` walks join, vote, notes and host pages by keyboard and checks names and focus rings.
