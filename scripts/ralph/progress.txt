@@ -67,3 +67,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Stop your dev server with `kill <pid>` from `ss -ltnp`; `pkill -f` with the port in the pattern kills your own shell.
   - Verified at 360px and 1280px (screens/us006-*.png); styling is pre-restyle by design (US-028).
 ---
+
+## 2026-10-16 - US-007
+- Note moderation: `GET /api/events/:id/moderation` now also returns `notes` (pending + approved, with interaction title and upvotes, no participant ids); `PATCH/DELETE /api/events/:id/notes/:noteId` (approve/reject pending, pin approved, delete any) behind `authorizeModeration`, so the moderator link covers notes and nothing else. `ModerationPanel` gained an `initialNotes` prop and a "Shared notes moderation" section on the host event page and the moderator page.
+- Files: lib/moderation.ts, lib/note-types.ts, app/api/events/[id]/notes/[noteId]/route.ts, app/api/events/[id]/moderation/route.ts, components/moderation-panel.tsx, app/dashboard/events/[id]/page.tsx, app/moderate/[eventId]/page.tsx, tests/shared-notes-moderation.test.ts, tests/moderation-panel.test.tsx
+- **Learnings for future iterations:**
+  - Approve publishes `note:added`, pin publishes `note:updated`, rejecting/deleting a visible note publishes `note:removed`; pending/rejected changes publish nothing to participants. The host panel refetches on `note:pending/added/updated`.
+  - Rejected notes stay in the table (they still count toward the author's limit) and are 404 to moderation.
+  - `sharedNotes.status` defaults to approved in the schema; tests that need a pending note must set it.
+  - Inserting interactions directly in tests needs `position`.
+  - Verified at 360px and 1280px (screens/us007-mod-*.png), no horizontal overflow; styling is pre-restyle by design (US-027).
+---

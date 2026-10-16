@@ -107,3 +107,38 @@ it("moderator mode sends the token, hides the mode switch and still moderates", 
     expect.objectContaining({ headers: expect.objectContaining({ "x-moderator-token": "tok" }) }),
   );
 });
+
+const note = (id: string, text: string, extra = {}) => ({
+  id,
+  interactionId: "i1",
+  interactionTitle: "Thoughts?",
+  text,
+  authorName: null,
+  status: "pending" as const,
+  pinned: false,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  upvotes: 0,
+  ...extra,
+});
+
+it("approves a pending note and offers Pin and Delete afterwards", async () => {
+  const fetchMock = vi.fn(
+    async () => new Response(JSON.stringify({ ok: true, note: note("n1", "Idea", { status: "approved" }) }), { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[]} initialNotes={[note("n1", "Idea")]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Approve note" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pin note" })).toBeTruthy());
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/events/e1/notes/n1",
+    expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "approved" }) }),
+  );
+  expect(screen.getByRole("button", { name: "Delete note" })).toBeTruthy();
+});
+
+it("rejecting a note removes it from the queue", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, note: null }), { status: 200 })));
+  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[]} initialNotes={[note("n1", "Spam")]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Reject note" }));
+  await waitFor(() => expect(screen.queryByText("Spam")).toBeNull());
+});

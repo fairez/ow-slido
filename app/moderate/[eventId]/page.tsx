@@ -3,7 +3,7 @@ import { events } from "@/db/schema";
 import { ModerationPanel } from "@/components/moderation-panel";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
-import { listHostQuestions } from "@/lib/moderation";
+import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { verifyModeratorToken } from "@/lib/moderator-token";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export default async function ModeratePage({
         eventId={eventId}
         initialMode={event.moderationMode}
         initialQuestions={await listHostQuestions(eventId)}
+        initialNotes={await listHostNotes(eventId)}
         moderatorToken={token}
       />
     </main>

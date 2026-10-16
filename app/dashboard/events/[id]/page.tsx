@@ -9,7 +9,7 @@ import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { listHostQuestions } from "@/lib/moderation";
+import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { createModeratorToken } from "@/lib/moderator-token";
 import { findOwnedEvent } from "@/lib/polls";
 
@@ -30,6 +30,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
 
   const hostQuestions = await listHostQuestions(event.id);
+  const hostNotes = await listHostNotes(event.id);
 
   const moderatorLink = event.moderatorNonce
     ? `/moderate/${event.id}?t=${encodeURIComponent(createModeratorToken(event.id, event.moderatorNonce))}`
@@ -51,7 +52,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         </a>
       </p>
       <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} />
-      <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} />
+      <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} initialNotes={hostNotes} />
       <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />
     </main>
   );
