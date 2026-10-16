@@ -2,11 +2,12 @@
 
 import { useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
+import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN } from "@/lib/interaction-config";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 
 export type InteractionItem = {
   id: string;
-  type: "poll" | "wordcloud";
+  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
   title: string;
   state: "draft" | "live" | "closed";
   position: number;
@@ -16,12 +17,24 @@ export type InteractionItem = {
     showResultsToParticipants?: boolean;
     prompt?: string;
     maxEntriesPerParticipant?: number;
+    maxNotesPerParticipant?: number;
+    moderation?: "open" | "moderated";
+    showAuthorNames?: boolean;
   };
 };
 
-type Draft = { kind: "poll" | "wordcloud"; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+type Kind = "poll" | "wordcloud" | "sharedNotes";
+const TYPE_LABELS: Record<InteractionItem["type"], string> = {
+  poll: "Poll",
+  wordcloud: "Word cloud",
+  sharedNotes: "Shared notes",
+  openText: "Open text",
+  rating: "Rating",
+};
 
-const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
+type Draft = { kind: Kind; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+
+const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, maxNotes: 3, moderated: false, showAuthors: false, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
@@ -63,7 +76,15 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
     event.preventDefault();
     if (!draft) return;
     const body =
-      draft.kind === "wordcloud"
+      draft.kind === "sharedNotes"
+        ? {
+            type: "sharedNotes",
+            prompt: draft.question,
+            maxNotesPerParticipant: draft.maxNotes,
+            moderation: draft.moderated ? "moderated" : "open",
+            showAuthorNames: draft.showAuthors,
+          }
+        : draft.kind === "wordcloud"
         ? { type: "wordcloud", prompt: draft.question, maxEntriesPerParticipant: draft.maxEntries }
         : {
             type: "poll",
@@ -121,8 +142,12 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
 
   function edit(item: InteractionItem) {
     setError(null);
+    if (item.type !== "poll" && item.type !== "wordcloud" && item.type !== "sharedNotes") return;
     setDraft({
       kind: item.type,
+      maxNotes: item.config.maxNotesPerParticipant ?? 3,
+      moderated: item.config.moderation === "moderated",
+      showAuthors: item.config.showAuthorNames ?? false,
       maxEntries: item.config.maxEntriesPerParticipant ?? 3,
       id: item.id,
       question: item.title,
@@ -139,7 +164,7 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
   return (
     <section>
       <h2>Interactions</h2>
-      {error && (
+      {error && !draft && (
         <p role="alert" style={{ color: "#b00020" }}>
           {error}
         </p>
@@ -152,7 +177,7 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
             <li key={item.id} style={{ border: "1px solid #ccc", padding: 12 }}>
               <strong>{item.title}</strong>
               <div>
-                {item.type} · <span data-testid="state">{item.state}</span>
+                {TYPE_LABELS[item.type]} · <span data-testid="state">{item.state}</span>
               </div>
               {item.state !== "closed" && (
                 <div style={{ marginTop: 8 }}>
@@ -165,7 +190,9 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
               )}
               {item.state === "draft" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => edit(item)} style={buttonStyle}>Edit</button>
+                  {(item.type === "poll" || item.type === "wordcloud" || item.type === "sharedNotes") && (
+                    <button type="button" onClick={() => edit(item)} style={buttonStyle}>Edit</button>
+                  )}
                   <button type="button" onClick={() => duplicate(item)} style={buttonStyle}>Duplicate</button>
                   <button type="button" onClick={() => remove(item)} style={buttonStyle}>Delete</button>
                   <button type="button" aria-label={`Move ${item.title} up`} disabled={index === 0} onClick={() => move(index, -1)} style={buttonStyle}>↑</button>
@@ -179,14 +206,14 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
 
       {draft ? (
         <form onSubmit={save} style={{ display: "grid", gap: 12, maxWidth: 480, marginTop: 16 }}>
-          <h3>{draft.id ? "Edit" : "New"} {draft.kind === "wordcloud" ? "word cloud" : "poll"}</h3>
+          <h3>{draft.id ? "Edit" : "New"} {TYPE_LABELS[draft.kind].toLowerCase()}</h3>
           <label style={{ display: "grid", gap: 4 }}>
-            {draft.kind === "wordcloud" ? "Prompt" : "Question"}
+            {draft.kind === "poll" ? "Question" : "Prompt"}
             <input
               value={draft.question}
               onChange={(e) => setDraft({ ...draft, question: e.target.value })}
               required
-              maxLength={draft.kind === "wordcloud" ? WORDCLOUD_PROMPT_MAX : POLL_QUESTION_MAX}
+              maxLength={draft.kind === "wordcloud" ? WORDCLOUD_PROMPT_MAX : draft.kind === "sharedNotes" ? INTERACTION_PROMPT_MAX : POLL_QUESTION_MAX}
               style={inputStyle}
             />
           </label>
@@ -204,6 +231,35 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
                 style={inputStyle}
               />
             </label>
+          )}
+          {draft.kind === "sharedNotes" && (
+            <>
+              <label style={{ display: "grid", gap: 4 }}>
+                Notes per participant
+                <input
+                  type="number"
+                  min={NOTES_MIN}
+                  max={NOTES_MAX}
+                  step={1}
+                  value={Number.isNaN(draft.maxNotes) ? "" : draft.maxNotes}
+                  onChange={(e) => setDraft({ ...draft, maxNotes: e.target.valueAsNumber })}
+                  required
+                  style={inputStyle}
+                />
+              </label>
+              <fieldset style={{ display: "grid", gap: 4, margin: 0 }}>
+                <legend>Moderation</legend>
+                <label>
+                  <input type="radio" name="moderation" checked={!draft.moderated} onChange={() => setDraft({ ...draft, moderated: false })} /> Open: notes appear right away
+                </label>
+                <label>
+                  <input type="radio" name="moderation" checked={draft.moderated} onChange={() => setDraft({ ...draft, moderated: true })} /> Moderated: notes wait for approval
+                </label>
+              </fieldset>
+              <label>
+                <input type="checkbox" checked={draft.showAuthors} onChange={(e) => setDraft({ ...draft, showAuthors: e.target.checked })} /> Show author names
+              </label>
+            </>
           )}
           {draft.kind === "poll" && draft.options.map((option, index) => (
             <div key={option.id ?? index} style={{ display: "flex", gap: 8 }}>
@@ -244,18 +300,26 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
           </label>
             </>
           )}
+          {error && (
+            <p role="alert" style={{ color: "#b00020", margin: 0 }}>
+              {error}
+            </p>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" disabled={pending} style={buttonStyle}>{pending ? "Saving…" : draft.kind === "wordcloud" ? "Save word cloud" : "Save poll"}</button>
-            <button type="button" onClick={() => setDraft(null)} style={buttonStyle}>Cancel</button>
+            <button type="submit" disabled={pending} style={buttonStyle}>{pending ? "Saving…" : `Save ${TYPE_LABELS[draft.kind].toLowerCase()}`}</button>
+            <button type="button" onClick={() => { setError(null); setDraft(null); }} style={buttonStyle}>Cancel</button>
           </div>
         </form>
       ) : (
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
           <button type="button" onClick={() => setDraft(blank())} style={buttonStyle}>
             New poll
           </button>
           <button type="button" onClick={() => setDraft(blank("wordcloud"))} style={buttonStyle}>
             New word cloud
+          </button>
+          <button type="button" onClick={() => setDraft(blank("sharedNotes"))} style={buttonStyle}>
+            New shared notes
           </button>
         </div>
       )}

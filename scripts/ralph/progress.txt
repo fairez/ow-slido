@@ -44,3 +44,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Upvote errors: 403 own note, 404 pending/rejected/unknown, 409 draft. Closed interactions still accept upvotes.
   - List hides draft interactions (404). Sorting is done in JS after fetching approved rows.
 ---
+
+## 2026-10-16 - US-005
+- Shared notes in the host builder: "New shared notes" form (prompt, notes per participant 1-10, Open/Moderated radios, show author names). Type labels in the list ("Shared notes"), Start/Close/Duplicate/Delete work unchanged. Server validation errors now render inside the open form.
+- Files: components/poll-manager.tsx
+- **Learnings for future iterations:**
+  - poll-manager.tsx is still inline-styled and hardcodes the error colour; US-027 restyles it. `TYPE_LABELS` and `Kind` there are where US-011/US-013 add openText and rating (Edit button is hidden for those types until then).
+  - The dev server rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them and `rm -rf .next-shot` before running lint, or eslint scans the build output.
+  - Screenshot flow: run dev on :3200 with `DATABASE_URL=$TEST_DATABASE_URL` so signups land in the test DB. Don't `pkill -f` with the env string; it kills your own shell.
+  - Verified in Playwright at 360px and 1280px (screens/us005-*.png). Styling is pre-restyle by design.
+---
