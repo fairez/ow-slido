@@ -9,3 +9,4 @@ scripts/ralph/.last-branch
 .next-e2e
 test-results
 playwright-report
+scripts/ralph/ralph.log
