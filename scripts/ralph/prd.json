@@ -1,524 +1,536 @@
 {
   "project": "OW Slido",
-  "branchName": "ralph/slido-clone-mvp",
-  "description": "Slido Clone MVP - live polls, word clouds and moderated Q&A for audiences joining by code",
+  "branchName": "ralph/phase2a-shared-notes-ai-ui",
+  "description": "Phase 2a - Shared Notes (merged with ideas board) with manual AI analysis, open text, rating, and a Warm editorial UI improvement following antislop rules",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Scaffold Next.js app with tooling",
-      "description": "As a developer, I need a working app skeleton so that all later stories have a base.",
+      "title": "Register shared notes, open text and rating types",
+      "description": "As a developer, I need the shared interaction model to accept the new types so that they reuse state, ordering and the one-live rule.",
       "acceptanceCriteria": [
-        "Next.js (App Router) + TypeScript project in the repo root, with ESLint and Vitest configured; scripts: dev, build, lint, typecheck, test",
-        "Custom Node server (server.ts) hosts Next.js and attaches Socket.IO at /socket.io; `npm run dev` starts both on port 3000",
-        "Reads DATABASE_URL, TEST_DATABASE_URL, SESSION_SECRET, PARTICIPANT_TOKEN_SECRET from .env.local; commit a .env.example with the same keys and no values",
-        "Home page at / renders a placeholder; a smoke test passes",
-        "`npm run lint` and `npm run build` succeed",
+        "`interactions.type` accepts `sharedNotes`, `openText` and `rating` in addition to `poll` and `wordcloud` (extend the enum/check constraint with a migration; no data migration needed)",
+        "Each new type has a validated `config` schema (zod or equivalent) used by the interaction create/update endpoints; invalid config returns 400",
+        "sharedNotes config: prompt (max 200), maxNotesPerParticipant 1-10, moderation 'open'|'moderated', showAuthorNames (bool). openText config: prompt (max 200), maxResponsesPerParticipant 1-3. rating config: prompt (max 200), scale 'stars5'|'numeric10'",
+        "The draft/live/closed states, start/close endpoints, reorder, duplicate and the one-live-per-event rule work for the new types (duplicate copies config only, never responses)",
+        "Event deletion cascades to every new table added in later stories (convention documented in CLAUDE.md)",
+        "Tests cover config validation per type and start/close for each type",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Database layer and migrations",
-      "description": "As a developer, I need a migration tool and DB client so that schema changes are repeatable.",
+      "title": "Shared notes tables",
+      "description": "As a developer, I need storage for notes and their upvotes.",
       "acceptanceCriteria": [
-        "Use Drizzle ORM + drizzle-kit (or an equivalent SQL migration tool) with the `pg` driver against DATABASE_URL",
-        "Scripts: db:migrate, db:migrate:test (runs against TEST_DATABASE_URL), db:reset:test",
-        "A test helper truncates tables between tests using TEST_DATABASE_URL",
-        "A trivial migration runs successfully on both databases",
-        "Document the commands in the root CLAUDE.md",
-        "Typecheck passes",
-        "Tests pass"
+        "`shared_notes` table: id, interaction_id (FK cascade), participant_id (FK cascade), text (max 500), author_name (nullable), status ('pending'|'approved'|'rejected', default 'approved'), pinned (bool), created_at, updated_at",
+        "`shared_note_votes` table: note_id (FK cascade), participant_id (FK cascade), created_at, UNIQUE(note_id, participant_id)",
+        "Indexes for listing by interaction and status",
+        "Migration runs on dev and test databases",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Users table",
-      "description": "As a developer, I need host accounts stored so that hosts can log in.",
+      "title": "Submit, edit and delete own note API",
+      "description": "As a participant, I want to write notes about the event and fix or remove my own.",
       "acceptanceCriteria": [
-        "`users` table: id, email (unique, lowercase), password_hash, role (only value 'admin'), active (default true), created_at",
-        "Migration runs successfully on both databases",
-        "Typecheck passes"
+        "POST /api/interactions/:id/notes (participant cookie required): trims text, max 500 chars, rejects empty, enforces maxNotesPerParticipant, only while the interaction is 'live' (409 otherwise), rate limited per participant and IP",
+        "Author name is stored only if the participant supplied one and showAuthorNames is true; otherwise null",
+        "In 'moderated' mode new notes are 'pending'; in 'open' mode they are 'approved'",
+        "Profanity filter reuses the shared filter used by word cloud and Q&A; blocked notes are rejected with a clear message",
+        "PATCH and DELETE /api/notes/:id work only for the note's own participant and only while the interaction is live; editing a note in moderated mode returns it to 'pending'",
+        "Sets participants.first_response_at on the first response",
+        "Tests cover limit, closed state, moderation modes, profanity, ownership, rate limit",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Auth API: sign up, log in, log out",
-      "description": "As a host, I want to sign up and log in with email and password.",
+      "title": "Note upvote and list API",
+      "description": "As a participant, I want to upvote other people's notes and see the list.",
       "acceptanceCriteria": [
-        "POST /api/auth/signup, /api/auth/login, /api/auth/logout; passwords hashed with argon2 or bcrypt",
-        "Sessions use a secure, httpOnly, sameSite cookie; GET /api/auth/me returns the current user or 401",
-        "Invalid credentials return 401 with a generic error message; duplicate email returns 409; inactive users cannot log in",
-        "A shared `requireAdmin` helper rejects requests without an active session with 401",
-        "Tests cover signup, login, logout, bad password, duplicate email, requireAdmin",
+        "POST /api/notes/:id/upvote toggles the participant's upvote (tap again removes it); UNIQUE constraint enforced; own notes cannot be upvoted (403); only approved notes in a live or closed interaction can be upvoted",
+        "GET /api/interactions/:id/notes returns approved notes only for participants (never pending or rejected), with vote count, 'mine' and 'iUpvoted' flags, sortable by popular or recent; pinned first",
+        "Vote and note changes publish updates to the event room",
+        "Tests cover toggle, own-note rejection, hidden-note rejection, sort order, and that pending notes never leak",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Shared rate limiter",
-      "description": "As a developer, I need a reusable rate limiter so that endpoints can be protected.",
+      "title": "Shared notes builder in the host UI",
+      "description": "As a host, I want to create a shared notes prompt.",
       "acceptanceCriteria": [
-        "`rateLimit(key, limit, windowSeconds)` utility with an in-memory store behind an interface (Redis is NOT installed in this environment; a Redis adapter can be added later)",
-        "Login is limited per IP and per email (e.g. 10 attempts / 15 minutes) and returns 429 when exceeded",
-        "Unit tests cover under-limit, over-limit and window reset",
+        "Interaction builder offers 'Shared notes' with prompt, notes-per-participant limit (1-10), Open/Moderated mode and a show-author-names toggle",
+        "Notes interactions appear in the event's interaction list with state and Start/Close like other types; duplicate and delete work",
+        "Validation errors are shown inline",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Login and signup pages with dashboard guard",
-      "description": "As a host, I want sign-up and login pages so that I can reach my dashboard.",
+      "title": "Participant notes screen",
+      "description": "As a participant, I want to write and upvote notes from my phone.",
       "acceptanceCriteria": [
-        "/signup and /login pages with email/password forms and visible error messages",
-        "/dashboard shows the user's email and a Log out button",
-        "Unauthenticated visits to /dashboard redirect to /login",
-        "Layout works at 360px width",
+        "When a notes interaction is live the participant sees the prompt, a text box with a character counter (500), an optional name field (only when the host enabled author names), and the remaining-notes count",
+        "The list shows approved notes with upvote buttons (own notes show an edit/delete action instead), Popular and Recent sorting, and updates live",
+        "In moderated mode, after submit the participant sees that the note is waiting for approval",
+        "Controls have accessible labels, visible focus and 44px tap targets",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Events table and event API",
-      "description": "As a host, I want to create and manage events through an API.",
+      "title": "Moderate notes",
+      "description": "As a host or moderator, I want to review notes before the audience sees them.",
       "acceptanceCriteria": [
-        "`events` table: id, owner_id (FK users, ON DELETE CASCADE), name (max 80), starts_at, ends_at, join_code (unique, 4-6 digits), moderation_mode ('open'|'moderated', default 'open'), created_at",
-        "POST/GET/PATCH/DELETE /api/events (admin only); join code generated unique on create; GET lists events sorted by start date",
-        "Name is required and max 80 chars; ends_at cannot be before starts_at",
-        "Deleting an event cascades to every table that references it (add ON DELETE CASCADE to future event-owned tables)",
-        "Tests cover create, list order, rename, delete, validation, 401",
+        "The existing moderation queue (host page and moderator link) also lists pending notes with Approve and Reject; approved notes reach participants within 1 second, rejected never do",
+        "Host can pin and delete notes; pinned notes show first",
+        "The moderator link grants access to note moderation only, nothing else (extend the existing scope check and tests)",
+        "Tests cover approve, reject, pin, delete, scope of the moderator token, and no leakage of pending notes",
         "Typecheck passes",
-        "Tests pass"
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Event dashboard UI",
-      "description": "As a host, I want to create, rename and delete events from the dashboard.",
+      "title": "Presenter view for shared notes",
+      "description": "As a host, I want to show the notes on the projector.",
       "acceptanceCriteria": [
-        "'New event' form with name, start and end date; on save the event shows its join code and join URL",
-        "Dashboard lists events sorted by start date",
-        "Host can rename an event and delete one after a confirmation dialog",
+        "Presenter view for a live or closed notes interaction shows the prompt, the note count, and switchable views: Top upvoted and Newest; pinned notes are highlighted",
+        "Updates live without refresh; long notes wrap and large type stays readable at 1280px",
+        "Shows the join code and QR like other presenter views",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Participants table and join API",
-      "description": "As a participant, I want to join an event by code without an account.",
+      "title": "Export shared notes in CSV",
+      "description": "As a host, I want notes in the CSV export.",
       "acceptanceCriteria": [
-        "`participants` table: id, event_id (FK cascade), token_hash or token id, joined_at, nickname (nullable), first_response_at (nullable)",
-        "POST /api/join {code} returns the event and sets a signed anonymous participant token cookie; invalid code returns 404 'Event not found'",
-        "Re-joining with an existing valid token for the same event reuses the participant record",
-        "Join endpoint is rate limited per IP; no personal data is stored",
-        "Tests cover valid code, invalid code, token reuse, rate limit",
+        "The event CSV includes a shared-notes section: interaction title, note text, status, pinned, upvote count, author name only if the participant provided one",
+        "No participant ids, tokens or IPs appear in the file",
+        "Tests parse the CSV and assert contents and absence of identifiers",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Join pages",
-      "description": "As a participant, I want to enter a code on the home page or open a join link.",
+      "title": "Open text responses API",
+      "description": "As a participant, I want to answer an open question.",
       "acceptanceCriteria": [
-        "Home page has one code input and a Join button; invalid code shows 'Event not found'",
-        "/join/[code] joins directly and skips the code step",
-        "Participant view page /e/[eventId] shows the event name and a waiting state",
-        "Layout works at 360px width with tap targets of at least 44px",
+        "`open_text_responses` table (interaction_id, participant_id FK cascade, text max 300, hidden bool, highlighted bool, created_at)",
+        "POST /api/interactions/:id/responses: trims, max 300 chars, enforces maxResponsesPerParticipant (1-3), only while live, rate limited, profanity filter",
+        "Host endpoints to highlight, hide and delete a response (owner only); participants never receive hidden responses",
+        "GET returns responses newest first and publishes changes to the event room",
+        "Tests cover limit, closed state, profanity, hide/highlight/delete, ownership",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Interaction base model",
-      "description": "As a developer, I need one shared model for live interactions.",
+      "title": "Open text UI",
+      "description": "As a host and participant, I want to ask and answer open questions.",
       "acceptanceCriteria": [
-        "`interactions` table: id, event_id (FK cascade), type ('poll'|'wordcloud'), title, state ('draft'|'live'|'closed', default draft), position, config (jsonb), created_at",
-        "Partial unique index allows at most one 'live' interaction per event",
-        "Q&A is NOT an interaction (separate per-event stream)",
-        "Migration runs on both databases",
-        "Typecheck passes"
+        "Host builder form for open text (prompt, responses per participant 1-3)",
+        "Participant view: text area with counter and remaining responses count, confirmation after submit",
+        "Presenter view lists responses live, newest first, with highlighted ones emphasised; host can highlight, hide or delete from the host page",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-012",
-      "title": "Poll API: create and manage drafts",
-      "description": "As a host, I want to create and edit polls through an API.",
+      "title": "Rating API",
+      "description": "As a participant, I want to rate something once.",
       "acceptanceCriteria": [
-        "POST/GET/PATCH/DELETE /api/events/:id/interactions for type 'poll'; config holds options (2-10, each with id and label), multiSelect, showResultsToParticipants (default false)",
-        "Validation: question required, 2-10 options",
-        "Endpoints to reorder (update position), duplicate (copy in draft) and delete; only drafts can be edited or deleted",
-        "Only the event owner can use these endpoints (403/404 otherwise)",
-        "Tests cover validation, duplicate, reorder, edit-only-in-draft, ownership",
+        "`rating_responses` table (interaction_id, participant_id FK cascade, value, created_at) with UNIQUE(interaction_id, participant_id)",
+        "POST /api/interactions/:id/rating validates value against the scale (1-5 stars or 1-10 numeric), only while live, one per participant (409 on repeat), rate limited",
+        "Results endpoint returns average, total and distribution; publishes updates to the event room",
+        "Tests cover both scales, out-of-range values, duplicate, closed state, aggregates",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Poll builder UI",
-      "description": "As a host, I want a form to build polls.",
+      "title": "Rating UI",
+      "description": "As a host and participant, I want to run and answer a rating.",
       "acceptanceCriteria": [
-        "Event page lists the event's interactions with their state",
-        "Poll form: question, 2-10 options (add/remove), single/multi-select toggle, show-results-to-participants toggle",
-        "Host can edit, reorder, duplicate and delete draft polls from the list",
+        "Host builder form for rating (prompt, stars 1-5 or numeric 1-10)",
+        "Participant view: accessible star/number selector operable by keyboard, confirmation after submit",
+        "Presenter view shows the average (to one decimal), total responses and a distribution chart with printed values; updates live",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 13,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Realtime infrastructure",
-      "description": "As a developer, I need realtime rooms so that state changes reach participants quickly.",
+      "title": "Export open text and rating in CSV",
+      "description": "As a host, I want these responses in the CSV export.",
       "acceptanceCriteria": [
-        "Socket.IO rooms per event: participants join with their token, the host with their session; `publish(eventId, name, payload)` server helper behind an interface (in-memory now; Redis adapter later)",
-        "Client hook `useEventSocket(eventId)` with automatic reconnect and polling fallback",
-        "Unauthorized sockets cannot join host-only rooms",
-        "Integration test: two clients in one event receive a published message; a client in another event does not",
+        "CSV includes open text responses (text, highlighted, hidden flag; hidden rows excluded) and rating results (average, total, count per value)",
+        "No participant identifiers appear in the file",
+        "Tests parse the CSV and assert contents",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 14,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Start and close interactions",
-      "description": "As a host, I want to start and close an interaction.",
+      "title": "AI provider client",
+      "description": "As a platform owner, I want one server-side AI client for OpenAI and OpenRouter, using my API key.",
       "acceptanceCriteria": [
-        "POST /api/interactions/:id/start sets state 'live' and closes any other live interaction in that event atomically; POST .../close sets 'closed'",
-        "Participants in the room receive a 'state-changed' event within 1 second",
-        "Starting a closed interaction is rejected unless explicitly reopened via a new draft copy",
-        "Host event page has Start and Close buttons showing the current state",
-        "Tests cover one-live-at-a-time and the socket broadcast",
+        "`lib/ai` exposes `complete(messages, schema)` behind an interface with providers: openai (https://api.openai.com/v1/chat/completions), openrouter (https://openrouter.ai/api/v1/chat/completions) and mock (deterministic fake for tests, e2e and dev without a key); selected by AI_PROVIDER, model by AI_MODEL, keys by OPENAI_API_KEY / OPENROUTER_API_KEY, read only on the server",
+        "Requests ask for JSON output, have a timeout, retry with backoff on 429/5xx, and output is validated against the given schema (one repair retry, then fail)",
+        "Per-event and per-day call caps (AI_EVENT_CALL_CAP, AI_DAILY_CALL_CAP) enforced and persisted in the database; exceeding a cap returns a clear error",
+        "If no provider/key is configured, `isAiConfigured()` is false and AI features are hidden elsewhere; Shared Notes still works",
+        "Keys and note text are never logged or returned to the browser",
+        "Admin-only GET /api/ai/status (provider, model, configured) and POST /api/ai/test that makes one tiny call",
+        "Tests use the mock provider and a mocked fetch; no real network calls",
         "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 15,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Participant live view",
-      "description": "As a participant, I want to see the live poll appear without refreshing.",
+      "title": "Analysis storage and job runner",
+      "description": "As a developer, I need to store analyses and run them in the background.",
       "acceptanceCriteria": [
-        "Participant page shows the live interaction (poll options) in real time, 'Waiting for the host' when none is live, and 'Voting closed' when it closes",
-        "Loading the page mid-event shows the current live interaction",
-        "Single column layout, 360px width, 44px tap targets",
+        "`note_analyses` table: id, interaction_id (FK cascade), status ('queued'|'running'|'done'|'failed'), notes_snapshot_hash, note_count, summary, categories (jsonb), keywords (jsonb), edited (bool), published (bool), model, prompt_version, error, created_at, finished_at",
+        "POST /api/interactions/:id/analyze (owner only, manual trigger) creates a job and returns immediately; only one running job per interaction (409); a job runner executes in the background and updates status",
+        "GET /api/interactions/:id/analysis returns the latest analysis with status; analysis is flagged 'outdated' when the current approved notes differ from notes_snapshot_hash",
+        "Analysis never starts automatically on new notes, on close or on a timer (test this)",
+        "Tests cover queueing, one-at-a-time, status transitions, outdated flag",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 16,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Vote API",
-      "description": "As a participant, I want my vote recorded exactly once.",
+      "title": "Summarize, categorize and extract keywords",
+      "description": "As a host, I want the AI to turn notes into themes.",
       "acceptanceCriteria": [
-        "`poll_votes` table: id, interaction_id (FK cascade), participant_id (FK cascade), option_ids (jsonb), created_at, with UNIQUE(interaction_id, participant_id)",
-        "POST /api/interactions/:id/vote validates options belong to the poll, respects single/multi-select, rejects votes when the poll is not live (409) and second votes (409)",
-        "Sets participants.first_response_at on the first response",
-        "Vote endpoint is rate limited per participant token and per IP",
-        "Successful votes publish updated counts to the event room",
-        "Tests cover valid, duplicate, closed poll, invalid option, single-select with multiple options, rate limit",
+        "Analysis sends only approved note text with an opaque note id (no author names, participant ids, tokens or IPs) using a versioned prompt; notes are passed as delimited data with an instruction to ignore any instructions inside them",
+        "Validated result: summary (max 150 words); 3-8 categories each with name, one-line description and note ids; every note assigned to exactly one category or 'Uncategorized'; up to 50 keywords with positive weights (lowercased, merged duplicates, profanity filtered)",
+        "More than 200 notes are processed in batches and merged into one result; the model and prompt version are stored",
+        "Invalid or partial model output fails the job with a readable error and keeps the previous good analysis",
+        "A non-AI fallback builds keywords from word frequency (stop words removed) and is used when AI is unconfigured, capped or failed",
+        "Tests with the mock provider cover the happy path, batching, unknown note ids ignored, uncategorized assignment, and the fallback",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 17,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Vote UI and confirmation",
-      "description": "As a participant, I want to submit my vote and see confirmation.",
+      "title": "Analyze notes: host controls",
+      "description": "As a host, I want to run the analysis when I choose.",
       "acceptanceCriteria": [
-        "Participant selects option(s) and taps Submit; a confirmation is shown afterwards and the form is locked",
-        "Results are shown to the participant only if the poll's showResultsToParticipants is true",
-        "Server errors (already voted, closed) show a clear message",
-        "Radio/checkbox controls have accessible labels and visible focus",
+        "Notes interaction page shows an 'Analyze notes' button (hidden when AI is unconfigured), the note count, progress while running, errors, and the last run time",
+        "Before the first analysis on an event the host must accept a notice that approved note text is sent to a third-party AI service (stored per event)",
+        "The result shows an 'outdated' badge when new notes arrived, with a re-run button; re-running over host edits asks for confirmation",
+        "Button is disabled while a job runs; cap errors are shown plainly",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 18,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-019",
-      "title": "Presenter view with live results",
-      "description": "As a host, I want a full-screen results view.",
+      "title": "Show analysis as word cloud and charts",
+      "description": "As a host, I want the themes on the projector.",
       "acceptanceCriteria": [
-        "/present/[eventId] (admin only) shows the live question, a bar chart with count, percent and total votes, updating live without refresh",
-        "Bars use labels and values, not colour alone; large high-contrast type",
-        "Shows 'No live interaction' when none is live",
+        "Presenter view for a notes interaction gains views: Word cloud (keyword weights; frequency fallback when no AI result), Categories (bar chart with count and percent per category), Top notes by category, and Summary",
+        "Clicking a category lists its notes ordered by upvotes",
+        "Charts print labels and values; the leading item uses the accent, the rest ink tints; respects prefers-reduced-motion",
+        "Every AI-derived view carries an 'AI-generated' label and shows the 'outdated' state when it applies",
+        "Participants see the analysis only after the host publishes it (publish/unpublish toggle on the host page)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 19,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-020",
-      "title": "Presenter join code, QR and navigation",
-      "description": "As a host, I want the room to join easily and to move between polls.",
+      "title": "Review and edit AI results",
+      "description": "As a host, I want to correct the AI before sharing.",
       "acceptanceCriteria": [
-        "Join code and a QR code of the join URL are shown in a corner of the presenter view",
-        "Left/right arrow keys move to the previous/next interaction of the event (starting it and closing the current one)",
-        "Escape exits fullscreen; the page works in fullscreen",
+        "Host can rename, merge and delete categories, move a note to another category, edit the summary and remove keywords; edits set analyses.edited",
+        "Edits persist and are what the presenter and participants see",
+        "Tests cover merge, rename, move and that notes are never lost when a category is deleted (they become Uncategorized)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 20,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-021",
-      "title": "Word cloud API",
-      "description": "As a host, I want to create word cloud prompts and collect words.",
+      "title": "Participant disclosure and published analysis",
+      "description": "As a participant, I want to know AI may process my notes and see the published themes.",
       "acceptanceCriteria": [
-        "Interaction type 'wordcloud' with config maxEntriesPerParticipant (1-5) and prompt; create/edit via the interaction endpoints",
-        "`wordcloud_entries` table (interaction_id, participant_id FK cascade, normalized_word, created_at)",
-        "POST /api/interactions/:id/words: trims, lowercases, max 25 chars, enforces per-participant limit, rejects when not live, rate limited",
-        "Profanity filter: blocked words are stored but flagged hidden and never returned in results",
-        "GET results returns merged counts of identical words; changes publish to the event room",
-        "Tests cover normalization, merge, limit, profanity, closed state",
+        "The participant notes screen shows a one-line disclosure when AI is configured: notes may be summarised by an AI service (no names are sent)",
+        "When the host publishes an analysis, participants see the summary, categories with counts, and the word cloud; unpublished analyses are never returned to participants (test this)",
+        "Layout works at 360px",
         "Typecheck passes",
-        "Tests pass"
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 21,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-022",
-      "title": "Word cloud UI",
-      "description": "As a host and participant, I want to build, answer and display word clouds.",
+      "title": "Export analysis in CSV",
+      "description": "As a host, I want the analysis in the export.",
       "acceptanceCriteria": [
-        "Host form for word cloud prompts with max entries 1-5 in the interaction builder",
-        "Participant view: input to submit words with remaining-entries count and errors",
-        "Presenter view renders words sized by frequency, updating live (include a non-colour cue such as the count on hover/focus and an accessible text list)",
+        "CSV includes the analysis: summary, each category with its note count, keywords with weights, plus model, run time and an AI-generated marker; edited results are exported as edited",
+        "Included only for hosts who ran an analysis; no identifiers",
+        "Tests parse the CSV",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 22,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-023",
-      "title": "Questions API (Q&A)",
-      "description": "As a participant, I want to ask questions.",
+      "title": "Extend end-to-end test and docs",
+      "description": "As a maintainer, I need proof that the new features work together.",
       "acceptanceCriteria": [
-        "`questions` table: id, event_id (FK cascade), participant_id, text (max 300), author_name (nullable), status ('pending'|'approved'|'rejected'), answered (bool), pinned (bool), created_at",
-        "POST /api/events/:id/questions: anonymous by default, name only if provided, profanity filter, rate limit 5 per participant per minute",
-        "In 'moderated' mode new questions are 'pending'; in 'open' mode they are 'approved'",
-        "GET for participants returns only approved questions (never pending or rejected)",
-        "Tests cover moderated/open modes, rate limit, never exposing pending questions",
-        "Typecheck passes",
-        "Tests pass"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-024",
-      "title": "Q&A participant UI",
-      "description": "As a participant, I want a Q&A tab to ask questions.",
-      "acceptanceCriteria": [
-        "Q&A tab with a text box (max 300 chars with counter) and optional name field",
-        "In moderated mode shows 'Your question is waiting for approval' after submit",
-        "Approved questions list appears and updates live",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-025",
-      "title": "Upvote questions",
-      "description": "As a participant, I want to upvote questions.",
-      "acceptanceCriteria": [
-        "`question_votes` table with UNIQUE(question_id, participant_id); POST toggles the upvote (tap again removes it)",
-        "Question list returns vote counts; sortable by Popular and Recent in the UI; counts update live",
-        "Participants cannot vote on pending/rejected questions; endpoint rate limited",
-        "Tests cover toggle, uniqueness, hidden-question rejection",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-026",
-      "title": "Moderation queue",
-      "description": "As a host, I want to moderate questions.",
-      "acceptanceCriteria": [
-        "Event setting toggles Open/Moderated Q&A (events.moderation_mode)",
-        "Host page lists pending questions with Approve and Reject; approved questions reach participants within 1 second, rejected never do",
-        "Host can mark answered, pin and delete questions (pinned first, answered visually marked)",
-        "Host-only endpoints enforce ownership; tests cover approve, reject, pin, answer, delete and that pending questions never leak",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-027",
-      "title": "Moderator link",
-      "description": "As a host, I want to invite a moderator by link without an account.",
-      "acceptanceCriteria": [
-        "Host can generate a moderator link per event containing a signed token scoped to that event and to the moderation queue only",
-        "Opening it shows the moderation queue (approve/reject/answer/pin/delete) and nothing else; every other admin page and endpoint still returns 401/403",
-        "Host can revoke and regenerate the link; a revoked link stops working immediately",
-        "Tests cover valid, revoked, wrong-event token, and access to non-queue endpoints being denied",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-028",
-      "title": "Duplicate event",
-      "description": "As a host, I want to duplicate an event.",
-      "acceptanceCriteria": [
-        "POST /api/events/:id/duplicate creates a new event with a new unique join code and copies interactions as drafts; results, participants and Q&A are not copied",
-        "Dashboard has a Duplicate action",
-        "Tests verify copied interactions are draft and no responses are copied",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-029",
-      "title": "Export results as CSV",
-      "description": "As a host, I want to export results.",
-      "acceptanceCriteria": [
-        "GET /api/events/:id/export.csv (owner only) returns polls with votes per option, word counts, and questions with upvotes",
-        "No participant identifiers (tokens, ids, IPs) appear in the file; author names appear only if the participant provided one",
-        "'Export CSV' button on the event page downloads the file",
-        "Tests parse the CSV and assert contents and absence of identifiers",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-030",
-      "title": "Presence and engagement metrics",
-      "description": "As a host, I want to see live participants, and the product needs engagement data.",
-      "acceptanceCriteria": [
-        "Socket presence tracks connected participants per event; dashboard shows the live participant count per event, updating live",
-        "Peak concurrent participants stored per event (events.peak_participants)",
-        "Store users.first_login_at and the host's first_interaction_live_at; participants have joined_at and first_response_at (set in US-017)",
-        "No new personal data is stored",
-        "Tests cover count increment/decrement on connect/disconnect and peak tracking",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-031",
-      "title": "Accessibility and responsive pass",
-      "description": "As a user, I want the app to be usable on phones and with a keyboard.",
-      "acceptanceCriteria": [
-        "Participant pages work at 360px with no horizontal scroll; tap targets >= 44px",
-        "All voting, word and Q&A controls reachable and operable by keyboard with visible focus and accessible labels",
-        "Charts expose text alternatives (values and labels)",
-        "Run axe or an equivalent automated check on participant, presenter and dashboard pages with no serious violations",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-032",
-      "title": "End-to-end smoke test and README",
-      "description": "As a maintainer, I need proof the MVP works end to end.",
-      "acceptanceCriteria": [
-        "Playwright (or equivalent) test: host signs up, creates event and poll, starts it; a participant joins by code and votes; results appear on the presenter page; passes via `npm run test:e2e`",
-        "README documents setup (env vars, db:migrate), commands, and architecture; notes that Redis is optional/not used yet",
+        "Playwright e2e (AI_PROVIDER=mock): host creates a notes interaction, starts it; two participants add notes and upvote; the host moderates, runs Analyze, sees categories on the presenter page; a rating and an open text round also work",
+        "README documents the new interaction types, AI env vars (including that the owner's key goes only in .env.local), the manual-only analysis, and `AI_PROVIDER=mock`",
         "`npm run lint`, `typecheck`, `test`, `build` and `test:e2e` all pass",
         "Typecheck passes",
         "Tests pass"
       ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Design tokens, fonts and theme toggle",
+      "description": "As a user, I want a consistent look with a light and a dark theme.",
+      "acceptanceCriteria": [
+        "Install @fontsource-variable/fraunces and @fontsource-variable/public-sans (npm only, no runtime CDN) and wire them as heading and body fonts",
+        "Define the DESIGN.md tokens as CSS variables for light and dark (colors, spacing scale, radii 4px/8px, type scale, focus ring); dark follows prefers-color-scheme, and a header toggle stores the choice (try/catch around storage) and sets data-theme; no flash of wrong theme on load",
+        "Every token pair used for text passes `contrast-check.py` (record the ratios in docs/design-contrast.md)",
+        "Remove ad-hoc inline colours from shared components only where tokens now replace them; global reset, base typography and focus styles in place",
+        "A test asserts the theme toggle sets the attribute and persists",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Shared UI primitives and app shell",
+      "description": "As a developer, I need reusable components so screens stay consistent.",
+      "acceptanceCriteria": [
+        "Components in components/ui: Button (primary/secondary/quiet, disabled and busy states), TextField, TextArea, Select/Toggle, Card/Panel, Badge, Dialog (Escape closes, focus trapped), EmptyState, InlineError, ThemeToggle",
+        "Host app shell: header with product name, nav and theme toggle; restrained content width; skip link",
+        "All use tokens only; states (hover, focus-visible, disabled, loading, error) implemented; no gradients, glass, glow or decorative icons",
+        "Component tests cover Dialog keyboard behaviour and Button states",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Restyle auth, home and join pages",
+      "description": "As a first-time visitor, I want clear entry pages.",
+      "acceptanceCriteria": [
+        "Home (join by code), /login, /signup and /join/[code] use the primitives and tokens, with a clear primary action each and warm, plain copy",
+        "Error and loading states styled (invalid code, wrong password)",
+        "Works at 360px, keyboard operable, themes both verified",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Restyle host dashboard and event page",
+      "description": "As a host, I want the management screens to be clear and calm.",
+      "acceptanceCriteria": [
+        "Dashboard and event page use primitives; interaction list shows type, state and actions with clear hierarchy (Start/Close is the accent action)",
+        "Forms for every interaction type share one consistent layout; empty states are written, not blank",
+        "Dense areas vary spacing deliberately (antislop RHYTHM 2); confirm dialogs use Dialog",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Restyle participant screens",
+      "description": "As a participant on a phone, I want the live screens to be easy and inviting.",
+      "acceptanceCriteria": [
+        "Waiting, poll, word cloud, Q&A, notes, open text and rating screens use tokens and primitives, single column, 44px targets, 360px verified",
+        "Confirmation, closed and error states are designed; results use ink tints with the accent on the leading item and printed values",
+        "Reduced-motion respected; transitions 150-200ms at most",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Restyle presenter and moderation views",
+      "description": "As a host, I want the projector view to be readable from the back of a room.",
+      "acceptanceCriteria": [
+        "Presenter view uses oversized Fraunces headings, high contrast in both themes, join code and QR styled to match, charts and word clouds with printed values and no colour-only cues",
+        "/moderate page restyled with clear Approve/Reject/Pin/Delete actions and states",
+        "Verified at 1280px and 1920px wide plus 360px for moderation",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Mobile layout pass",
+      "description": "As a mobile user, I want nothing broken at small sizes.",
+      "acceptanceCriteria": [
+        "Follow docs/antislop/skills/antislop-layoutmobile/SKILL.md: audit every page at 360px, 390px and 768px; no horizontal scroll; no overflow in long words, notes or tables; tap targets >= 44px",
+        "Fix every issue found; list what was checked in docs/mobile-audit.md",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Accessibility and contrast pass",
+      "description": "As a user of assistive tech, I want the app to be operable.",
+      "acceptanceCriteria": [
+        "Follow docs/antislop/skills/antislop-human/SKILL.md: every colour pair in both themes checked with contrast-check.py (update docs/design-contrast.md); full keyboard walkthrough of join, vote, notes, host start/close; visible focus; labels on all controls; live regions for status changes",
+        "Run the existing axe-based tests over all key pages in both themes and fix serious/critical violations",
+        "Charts have text alternatives with values",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Copy pass",
+      "description": "As a user, I want plain, warm wording everywhere.",
+      "acceptanceCriteria": [
+        "Follow docs/antislop/skills/antislop-copywriting/SKILL.md and the Voice section of DESIGN.md: review every user-facing string (buttons, errors, empty states, notices, disclosure text) for clarity and tone; no buzzwords, no exclamation marks, no emoji",
+        "Centralise repeated strings only where it reduces duplication; do not change behaviour",
+        "List of changes recorded in docs/copy-pass.md",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
       "priority": 32,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Final antislop audit and fixes",
+      "description": "As the product owner, I want an independent check that the UI is free of AI-slop patterns.",
+      "acceptanceCriteria": [
+        "Run antislop in mode `after` per docs/antislop/antislop.md: write the numbered findings list to docs/antislop-audit/audit-001.md citing rule ids and priorities; the owner pre-approves fixing every HIGH and MEDIUM finding",
+        "Fix all HIGH and MEDIUM findings, re-run the Delivery Gate, and write the follow-up report to docs/antislop-audit/audit-001-report.md; list any LOW items left",
+        "Code comments pass: remove generic AI-slop comments in files changed during this build (docs/antislop/skills/antislop-code/SKILL.md), never changing code",
+        "`npm run lint`, `typecheck`, `test`, `build` and `test:e2e` all pass; screenshots of key pages in both themes saved under docs/screens/ (committed, small PNG/WebP)",
+        "Typecheck passes",
+        "Tests pass",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
+      ],
+      "priority": 33,
+      "passes": false,
       "notes": ""
     }
   ]
