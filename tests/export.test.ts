@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, interactions, participants, pollVotes, questions, questionVotes, users, wordcloudEntries } from "@/db/schema";
+import { events, interactions, participants, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -150,4 +150,38 @@ test("requires the owner: 401 anonymous, 404 for another host or unknown event",
   expect((await get(otherCookie)).status).toBe(404);
   expect((await get(hostCookie, "00000000-0000-4000-8000-000000000000")).status).toBe(404);
   expect((await get(hostCookie, "nope")).status).toBe(404);
+});
+
+test("shared notes get their own section with status, pinned, upvotes and only a provided author name", async () => {
+  const [board] = await db
+    .insert(interactions)
+    .values({ eventId, type: "sharedNotes", title: "Ideas", position: 2, config: { prompt: "Ideas" } })
+    .returning();
+  const notes = await db
+    .insert(sharedNotes)
+    .values([
+      { interactionId: board.id, participantId: participantIds[0], text: "Named, \"note\"", authorName: "Bea", pinned: true },
+      { interactionId: board.id, participantId: participantIds[1], text: "Anonymous note" },
+      { interactionId: board.id, participantId: participantIds[2], text: "Waiting", status: "pending" },
+    ])
+    .returning();
+  await db.insert(sharedNoteVotes).values([
+    { noteId: notes[1].id, participantId: participantIds[0] },
+    { noteId: notes[1].id, participantId: participantIds[2] },
+    { noteId: notes[0].id, participantId: participantIds[1] },
+  ]);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const at = rows.findIndex((r) => r[0] === "section" && r[2] === "note");
+  expect(rows[at - 1]).toEqual([""]);
+  expect(rows[at]).toEqual(["section", "title", "note", "status", "pinned", "upvotes", "author"]);
+  expect(rows.slice(at + 1)).toEqual([
+    ["sharedNotes", "Ideas", "Anonymous note", "approved", "no", "2", ""],
+    ["sharedNotes", "Ideas", 'Named, "note"', "approved", "yes", "1", "Bea"],
+    ["sharedNotes", "Ideas", "Waiting", "pending", "no", "0", ""],
+  ]);
+  for (const id of participantIds) expect(text).not.toContain(id);
+  expect(text).not.toContain("SecretNick");
+  expect(text).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
 });

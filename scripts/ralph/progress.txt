@@ -88,3 +88,12 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Screenshot script lives at scripts/ralph/screens/us008.mjs (gitignored); API create uses `prompt`, `maxNotes`, `moderation` at the top level of the body.
   - Verified at 360px and 1280px (screens/us008-*.png), no horizontal overflow; styling is pre-restyle by design (US-029).
 ---
+
+## 2026-10-16 - US-009
+- Event CSV now has a shared-notes table after the questions: blank line, then its own header `section,title,note,status,pinned,upvotes,author`, one row per note (all statuses, sorted by upvotes). Author only if the participant gave a name; no ids, tokens or IPs.
+- Files: lib/export.ts, tests/export.test.ts
+- **Learnings for future iterations:**
+  - The old export treated every non-poll type as a word cloud; it now checks `wordcloud` explicitly. US-014 should add openText/rating the same way (own section with its own header if columns differ).
+  - Section tables are separated by an empty row; the test parser returns it as `[""]`.
+  - No UI changed, so no browser check needed.
+---
