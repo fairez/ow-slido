@@ -117,3 +117,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - US-013 rating can follow the same pattern: add `LiveRating`/`PresenterRating` to the unions, a Kind in poll-manager (Edit is hidden only for `rating` now; update that), and a branch in live-view.tsx and presenter-view.tsx.
   - Verified at 360px and 1280px (screens/us011-*.png), no horizontal overflow; styling is pre-restyle by design (US-027/028/029). The fixed join QR corner still overlaps the first presenter row at 1280px.
 ---
+
+## 2026-10-16 - US-012
+- Rating API: `rating_responses` table (migration 0014, UNIQUE(interaction, participant), value 1-10 check, cascades). `lib/rating.ts` has submitRating / computeResults / getResultsForParticipant / getResultsForHost / getPresenterResults. Route `POST|GET /api/interactions/:id/rating`.
+- Files: db/schema.ts, db/migrations/0014*, lib/rating.ts, app/api/interactions/[id]/rating/route.ts, tests/rating-api.test.ts
+- **Learnings for future iterations:**
+  - POST body `{value}`; 201 returns `{value, results}`. Errors: 400 out of range for the scale, 409 repeat or not live, 401 not joined. Duplicates are caught by `onConflictDoNothing` on the unique constraint.
+  - GET returns `{results, mine}`: joined participant (draft is 404, closed readable) or owning host session (any state, `mine` null).
+  - `results` = `{interactionId, scale, total, average (2 decimals, null if none), distribution}`; distribution index 0 is value 1, length 5 or 10.
+  - Realtime event `rating:results` `{results}` is published on every rating. `getPresenterResults(interactionId, config)` is ready for presenter.ts in US-013.
+  - No UI changed, so no browser check needed.
+---

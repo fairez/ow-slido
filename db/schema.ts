@@ -242,3 +242,22 @@ export const openTextResponses = pgTable(
     index("open_text_responses_participant_idx").on(t.interactionId, t.participantId),
   ],
 );
+
+export const ratingResponses = pgTable(
+  "rating_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    value: integer("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("rating_responses_one_per_participant").on(t.interactionId, t.participantId),
+    check("rating_responses_value_range", sql`${t.value} between 1 and 10`),
+  ],
+);
