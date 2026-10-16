@@ -81,7 +81,7 @@ export const interactions = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
-    type: text("type", { enum: ["poll", "wordcloud"] }).notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating"] }).notNull(),
     title: text("title").notNull(),
     state: text("state", { enum: ["draft", "live", "closed"] })
       .notNull()
@@ -91,7 +91,7 @@ export const interactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud')`),
+    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating')`),
     check("interactions_state", sql`${t.state} in ('draft', 'live', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
     uniqueIndex("interactions_one_live_per_event")

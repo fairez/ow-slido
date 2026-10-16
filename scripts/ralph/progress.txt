@@ -1,3 +1,18 @@
 # Ralph Progress Log
 Started: Fri Oct 16 03:26:16 PM CST 2026
 ---
+
+## Codebase Patterns
+- No zod here: config validation is hand-written `parse*Input(body, partial)` returning `{ok, value|error}` (see lib/polls.ts, lib/wordclouds.ts, lib/interaction-config.ts).
+- New tables must cascade from `events`/`interactions` (`onDelete: "cascade"`) and get a cascade test.
+- Full `npm test` takes ~100s; run it in the background and read the output file.
+
+## 2026-10-16 - US-001
+- Added `sharedNotes`, `openText`, `rating` interaction types: schema enum + check (migration 0011), `lib/interaction-config.ts` validators/defaults, wired into create, PATCH and duplicate routes. Start/close/reorder needed no change (type-agnostic).
+- Files: db/schema.ts, db/migrations/0011*, lib/interaction-config.ts, interactions routes (collection, item, duplicate), tests/new-interaction-types.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Create requires only `prompt`; other config fields default (notes 3, moderation open, responses 1, scale stars5).
+  - PATCH merges into existing config. Duplicate copies config only.
+  - Places still switching on type that later stories must extend: lib/live-view.ts, lib/presenter.ts, lib/export.ts, components/poll-manager.tsx, live-view.tsx, presenter-view.tsx.
+  - Run `npm run db:migrate:test` after pulling new migrations.
+---

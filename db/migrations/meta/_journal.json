@@ -78,6 +78,13 @@
       "when": 1792105761935,
       "tag": "0010_handy_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792135610573,
+      "tag": "0011_striped_the_captain",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,10 @@
 - `npm run db:reset:test` — drop and recreate the test DB's schemas, then migrate (refuses to run on the dev DB).
 - Tests that hit the DB: start the file with `// @vitest-environment node`, use `createTestDb()` and `truncateAll(db)` in `beforeEach` from `tests/helpers/db.ts`. Run `db:migrate:test` first after adding migrations.
 
+## Interactions
+- Types: `poll`, `wordcloud`, `sharedNotes`, `openText`, `rating`. Config for the last three is validated in `lib/interaction-config.ts` (hand-written parsers; no zod). Adding a type means updating the `db/schema.ts` enum and check, the create/PATCH/duplicate routes and a migration.
+- Every table that holds event data (responses, notes, analyses...) must reference `interactions` or `events` with `onDelete: "cascade"`, so deleting an event removes it. Add a cascade test for each new table.
+
 ## E2E
 - `npm run test:e2e` (Playwright, `e2e/`) boots its own server on :3100 against the test DB with `NEXT_DIST_DIR=.next-e2e`. If Playwright's expected Chromium isn't installed, set `PW_CHROMIUM_PATH` to an existing chrome-headless-shell binary (no browser downloads here).
 
