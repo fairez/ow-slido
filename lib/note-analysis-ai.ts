@@ -2,38 +2,24 @@ import { complete, AiError, type AiMessage, type AiSchema } from "@/lib/ai";
 import type { AiProvider } from "@/lib/ai/types";
 import { getAiConfig } from "@/lib/ai/config";
 import { setAnalysisRunner, type AnalysisNote, type AnalysisOutput, type AnalysisRunner } from "@/lib/note-analysis";
-import { isProfane } from "@/lib/profanity";
+import { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
 
 export const ANALYSIS_PROMPT_VERSION = "notes-v1";
 export const ANALYSIS_BATCH_SIZE = 200;
 export const SUMMARY_MAX_WORDS = 150;
 export const CATEGORIES_MIN = 3;
 export const CATEGORIES_MAX = 8;
-export const KEYWORDS_MAX = 50;
 export const UNCATEGORIZED = "Uncategorized";
+export { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords };
+export type { AnalysisKeyword };
 export const FALLBACK_MODEL = "word-frequency";
 
 export type AnalysisCategory = { name: string; description: string; noteIds: string[] };
-export type AnalysisKeyword = { word: string; weight: number };
 type BatchResult = { summary: string; categories: { name: string; description: string; noteIds: string[] }[]; keywords: AnalysisKeyword[] };
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 const oneLine = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);
-
-/** Lowercases, merges duplicates by summing weights, drops profanity, keeps the heaviest. */
-export function normalizeKeywords(items: AnalysisKeyword[]): AnalysisKeyword[] {
-  const merged = new Map<string, number>();
-  for (const { word, weight } of items) {
-    const w = word.toLowerCase().replace(/\s+/g, " ").trim();
-    if (!w || w.length > 40 || isProfane(w) || !(weight > 0)) continue;
-    merged.set(w, (merged.get(w) ?? 0) + weight);
-  }
-  return [...merged]
-    .map(([word, weight]) => ({ word, weight }))
-    .sort((a, b) => b.weight - a.weight || (a.word < b.word ? -1 : 1))
-    .slice(0, KEYWORDS_MAX);
-}
 
 function batchSchema(noteCount: number): AiSchema<BatchResult> {
   const minCategories = Math.min(CATEGORIES_MIN, noteCount);
@@ -158,23 +144,6 @@ export function mergeCategories(parts: BatchResult["categories"][], allIds: stri
     kept.push({ name: UNCATEGORIZED, description: "Notes that did not fit a theme.", noteIds: loose });
   }
   return kept;
-}
-
-const STOP_WORDS = new Set(
-  ("a about above after again all also am an and any are as at be because been before being below between both but by can could did do does doing down during each few for from further had has have having he her here hers him his how i if in into is it its just me more most my no nor not now of off on once only or other our out over own same she should so some such than that the their them then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours really get got like one also still much many lot lots thing things need needs want make makes").split(" "),
-);
-
-/** Word-frequency keywords with stop words, short words, numbers and profanity removed. */
-export function fallbackKeywords(notes: AnalysisNote[]): AnalysisKeyword[] {
-  const counts = new Map<string, number>();
-  for (const n of notes) {
-    for (const w of n.text.toLowerCase().split(/[^\p{L}\p{N}']+/u)) {
-      const word = w.replace(/^'+|'+$/g, "");
-      if (word.length < 3 || /^\d+$/.test(word) || STOP_WORDS.has(word)) continue;
-      counts.set(word, (counts.get(word) ?? 0) + 1);
-    }
-  }
-  return normalizeKeywords([...counts].map(([word, weight]) => ({ word, weight })));
 }
 
 const FALLBACK_NOTICES: Record<string, string> = {

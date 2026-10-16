@@ -196,6 +196,26 @@ export async function getAnalysisPanelState(interactionId: string): Promise<Anal
   };
 }
 
+/**
+ * Publishes or unpublishes the newest finished analysis. At most one analysis per interaction is
+ * published, so publishing a newer run withdraws the older one.
+ */
+export async function setAnalysisPublished(interactionId: string, published: boolean): Promise<AnalysisView | null> {
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(noteAnalyses)
+      .where(and(eq(noteAnalyses.interactionId, interactionId), eq(noteAnalyses.status, "done")))
+      .orderBy(desc(noteAnalyses.createdAt))
+      .limit(1);
+    if (!target) return null;
+    await tx.update(noteAnalyses).set({ published: false }).where(eq(noteAnalyses.interactionId, interactionId));
+    const [row] = await tx.update(noteAnalyses).set({ published }).where(eq(noteAnalyses.id, target.id)).returning();
+    return view(row, hashNotes(await approvedNotes(tx as unknown as Db, interactionId)));
+  });
+}
+
 export async function findNotesInteractionEvent(interactionId: string) {
   const [row] = await getDb()
     .select({ eventId: interactions.eventId, type: interactions.type })

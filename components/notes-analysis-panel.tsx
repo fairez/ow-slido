@@ -8,6 +8,7 @@ type Analysis = {
   noteCount: number;
   summary: string | null;
   edited: boolean;
+  published: boolean;
   model: string | null;
   error: string | null;
   createdAt: string;
@@ -74,6 +75,21 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
     }
   }
 
+  async function setPublished(published: boolean) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/interactions/${interactionId}/analysis`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ published }),
+      });
+      if (!res.ok) setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.");
+      await load();
+    } catch {
+      setError("Network error. Please try again.");
+    }
+  }
+
   if (!state) return error ? <p role="alert" style={errorStyle}>{error}</p> : null;
 
   const { analysis, lastDone, approvedNoteCount, noticeAccepted } = state;
@@ -103,6 +119,16 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
           <span style={{ border: "1px solid currentColor", borderRadius: 4, padding: "2px 8px" }}>Outdated: notes have changed since this run</span>
         )}
       </div>
+      {shown && shown.status === "done" && (
+        <div style={{ margin: "8px 0" }}>
+          <button type="button" aria-pressed={shown.published} onClick={() => void setPublished(!shown.published)} style={buttonStyle}>
+            {shown.published ? "Unpublish from participants" : "Publish to participants"}
+          </button>
+          <p style={mutedStyle}>
+            {shown.published ? "Participants can see this analysis." : "Participants cannot see the analysis until you publish it."}
+          </p>
+        </div>
+      )}
       {running && <p role="status" style={mutedStyle}>Analyzing {analysis?.noteCount} notes. This usually takes under a minute.</p>}
       {analysis?.status === "failed" && <p role="alert" style={errorStyle}>The last run failed: {analysis.error ?? "unknown error"}</p>}
       {noNotes && <p style={mutedStyle}>Approve at least one note to run an analysis.</p>}

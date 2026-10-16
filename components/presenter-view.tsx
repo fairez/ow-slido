@@ -235,7 +235,7 @@ export function PresenterView({
         <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
           {poll.title}
         </h1>
-        <PresenterNotes notes={poll.notes} closed={poll.state === "closed"} />
+        <PresenterNotes interactionId={poll.id} notes={poll.notes} closed={poll.state === "closed"} />
       </section>
     );
   }

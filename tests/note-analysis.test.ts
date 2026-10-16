@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { events, interactions, noteAnalyses, participants, sharedNotes } from "@/db/schema";
+import {
+  events,
+  interactions,
+  noteAnalyses,
+  participants,
+  sharedNotes,
+} from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -11,8 +17,13 @@ type Handler = (req: Request, ctx: Ctx) => Promise<Response>;
 let eventsRoute: { POST: (req: Request) => Promise<Response> };
 let collection: { POST: Handler };
 let analyze: { POST: Handler };
-let analysis: { GET: Handler };
-let closeRoute: { POST: (req: Request, ctx: { params: Promise<{ id: string; interactionId: string }> }) => Promise<Response> };
+let analysis: { GET: Handler; PATCH: Handler };
+let closeRoute: {
+  POST: (
+    req: Request,
+    ctx: { params: Promise<{ id: string; interactionId: string }> },
+  ) => Promise<Response>;
+};
 let signup: (req: Request) => Promise<Response>;
 let lib: typeof import("@/lib/note-analysis");
 let hostCookie: string;
@@ -28,7 +39,8 @@ beforeAll(async () => {
   collection = await import("@/app/api/events/[id]/interactions/route");
   analyze = await import("@/app/api/interactions/[id]/analyze/route");
   analysis = await import("@/app/api/interactions/[id]/analysis/route");
-  closeRoute = await import("@/app/api/events/[id]/interactions/[interactionId]/close/route");
+  closeRoute =
+    await import("@/app/api/events/[id]/interactions/[interactionId]/close/route");
   signup = (await import("@/app/api/auth/signup/route")).POST;
   lib = await import("@/lib/note-analysis");
 });
@@ -36,7 +48,10 @@ beforeAll(async () => {
 const req = (method: string, body?: unknown, c: string | null = hostCookie) =>
   new Request("http://localhost/api", {
     method,
-    headers: { "content-type": "application/json", ...(c ? { cookie: c } : {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(c ? { cookie: c } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 const ctx = (id: string): Ctx => ({ params: Promise.resolve({ id }) });
@@ -51,14 +66,28 @@ const signupAs = async (email: string) => {
   );
   return (res.headers.get("set-cookie") ?? "").split(";")[0];
 };
-const addNote = async (text: string, status: "approved" | "pending" = "approved") => {
-  const [row] = await db.insert(sharedNotes).values({ interactionId: notesId, participantId, text, status }).returning();
+const addNote = async (
+  text: string,
+  status: "approved" | "pending" = "approved",
+) => {
+  const [row] = await db
+    .insert(sharedNotes)
+    .values({ interactionId: notesId, participantId, text, status })
+    .returning();
   return row.id;
 };
-const start = (c: string | null = hostCookie) => analyze.POST(req("POST", { acceptNotice: true }, c), ctx(notesId));
-const latest = async () => (await (await analysis.GET(req("GET"), ctx(notesId))).json()).analysis;
+const start = (c: string | null = hostCookie) =>
+  analyze.POST(req("POST", { acceptNotice: true }, c), ctx(notesId));
+const latest = async () =>
+  (await (await analysis.GET(req("GET"), ctx(notesId))).json()).analysis;
 
-const output = { summary: "S", categories: [{ name: "A", noteIds: [] }], keywords: [{ word: "w", weight: 1 }], model: "m", promptVersion: "v1" };
+const output = {
+  summary: "S",
+  categories: [{ name: "A", noteIds: [] }],
+  keywords: [{ word: "w", weight: 1 }],
+  model: "m",
+  promptVersion: "v1",
+};
 
 beforeEach(async () => {
   await truncateAll(db);
@@ -66,13 +95,26 @@ beforeEach(async () => {
   hostCookie = await signupAs("host@example.com");
   otherCookie = await signupAs("other@example.com");
   const ev = await eventsRoute.POST(
-    req("POST", { name: "E", startsAt: "2026-11-01T09:00:00Z", endsAt: "2026-11-01T10:00:00Z" }),
+    req("POST", {
+      name: "E",
+      startsAt: "2026-11-01T09:00:00Z",
+      endsAt: "2026-11-01T10:00:00Z",
+    }),
   );
   eventId = (await ev.json()).event.id;
-  const res = await collection.POST(req("POST", { type: "sharedNotes", prompt: "Thoughts?" }), ctx(eventId));
+  const res = await collection.POST(
+    req("POST", { type: "sharedNotes", prompt: "Thoughts?" }),
+    ctx(eventId),
+  );
   notesId = (await res.json()).interaction.id;
-  await db.update(interactions).set({ state: "live" }).where(eq(interactions.id, notesId));
-  [{ id: participantId }] = await db.insert(participants).values({ eventId }).returning();
+  await db
+    .update(interactions)
+    .set({ state: "live" })
+    .where(eq(interactions.id, notesId));
+  [{ id: participantId }] = await db
+    .insert(participants)
+    .values({ eventId })
+    .returning();
 });
 afterAll(async () => {
   lib.setAnalysisRunner(null);
@@ -83,7 +125,10 @@ test("only the owner can start or read an analysis", async () => {
   await addNote("one");
   expect((await start(null)).status).toBe(401);
   expect((await start(otherCookie)).status).toBe(404);
-  expect((await analysis.GET(req("GET", undefined, otherCookie), ctx(notesId))).status).toBe(404);
+  expect(
+    (await analysis.GET(req("GET", undefined, otherCookie), ctx(notesId)))
+      .status,
+  ).toBe(404);
   expect(await db.select().from(noteAnalyses)).toHaveLength(0);
 });
 
@@ -106,7 +151,14 @@ test("start returns immediately with a queued job, then it finishes as done", as
   release();
   await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
   const done = await latest();
-  expect(done).toMatchObject({ summary: "S", model: "m", promptVersion: "v1", outdated: false, edited: false, published: false });
+  expect(done).toMatchObject({
+    summary: "S",
+    model: "m",
+    promptVersion: "v1",
+    outdated: false,
+    edited: false,
+    published: false,
+  });
   expect(done.finishedAt).toBeTruthy();
 });
 
@@ -149,7 +201,9 @@ test("a job lost to a restart is failed after the stale window", async () => {
   });
   expect((await start()).status).toBe(202);
   const rows = await db.select().from(noteAnalyses);
-  expect(rows.filter((r) => r.error === "The analysis did not finish.")).toHaveLength(1);
+  expect(
+    rows.filter((r) => r.error === "The analysis did not finish."),
+  ).toHaveLength(1);
 });
 
 test("needs at least one approved note", async () => {
@@ -175,7 +229,10 @@ test("analysis is outdated once the approved notes change", async () => {
   await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
   expect((await latest()).outdated).toBe(false);
 
-  await db.update(sharedNotes).set({ text: "edited" }).where(eq(sharedNotes.id, id));
+  await db
+    .update(sharedNotes)
+    .set({ text: "edited" })
+    .where(eq(sharedNotes.id, id));
   expect((await latest()).outdated).toBe(true);
 });
 
@@ -190,7 +247,9 @@ test("nothing starts automatically on new notes, close or time passing", async (
   try {
     await addNote("one");
     await addNote("two");
-    const closed = await closeRoute.POST(req("POST"), { params: Promise.resolve({ id: eventId, interactionId: notesId }) });
+    const closed = await closeRoute.POST(req("POST"), {
+      params: Promise.resolve({ id: eventId, interactionId: notesId }),
+    });
     expect(closed.status).toBe(200);
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
   } finally {
@@ -219,7 +278,81 @@ test("requires the AI notice once per event, then remembers it", async () => {
   const after = await (await analysis.GET(req("GET"), ctx(notesId))).json();
   expect(after.noticeAccepted).toBe(true);
   expect(after.approvedNoteCount).toBe(1);
-  await vi.waitFor(async () => expect((await latest()).status).not.toBe("queued"));
-  await vi.waitFor(async () => expect(["done", "failed"]).toContain((await latest()).status));
+  await vi.waitFor(async () =>
+    expect((await latest()).status).not.toBe("queued"),
+  );
+  await vi.waitFor(async () =>
+    expect(["done", "failed"]).toContain((await latest()).status),
+  );
   expect((await analyze.POST(req("POST"), ctx(notesId))).status).toBe(202);
+});
+
+test("the owner publishes and unpublishes the latest finished analysis", async () => {
+  await addNote("one");
+  expect(
+    (await analysis.PATCH(req("PATCH", { published: true }), ctx(notesId)))
+      .status,
+  ).toBe(409);
+  await start();
+  await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
+
+  expect(
+    (
+      await analysis.PATCH(
+        req("PATCH", { published: true }, null),
+        ctx(notesId),
+      )
+    ).status,
+  ).toBe(401);
+  expect(
+    (
+      await analysis.PATCH(
+        req("PATCH", { published: true }, otherCookie),
+        ctx(notesId),
+      )
+    ).status,
+  ).toBe(404);
+  expect(
+    (await analysis.PATCH(req("PATCH", { published: "yes" }), ctx(notesId)))
+      .status,
+  ).toBe(400);
+
+  const on = await analysis.PATCH(
+    req("PATCH", { published: true }),
+    ctx(notesId),
+  );
+  expect((await on.json()).analysis.published).toBe(true);
+  expect((await latest()).published).toBe(true);
+
+  // A newer run takes over: publishing it withdraws the old one.
+  await start();
+  await vi.waitFor(async () =>
+    expect(
+      (
+        await db
+          .select()
+          .from(noteAnalyses)
+          .where(eq(noteAnalyses.status, "done"))
+      ).length,
+    ).toBe(2),
+  );
+  await analysis.PATCH(req("PATCH", { published: true }), ctx(notesId));
+  expect(
+    await db
+      .select()
+      .from(noteAnalyses)
+      .where(eq(noteAnalyses.published, true)),
+  ).toHaveLength(1);
+
+  const off = await analysis.PATCH(
+    req("PATCH", { published: false }),
+    ctx(notesId),
+  );
+  expect((await off.json()).analysis.published).toBe(false);
+  expect(
+    await db
+      .select()
+      .from(noteAnalyses)
+      .where(eq(noteAnalyses.published, true)),
+  ).toHaveLength(0);
 });

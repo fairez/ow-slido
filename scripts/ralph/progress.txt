@@ -195,3 +195,17 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Panel uses `var(--token, fallback)` colours since tokens land in US-024; swap the fallbacks out in the restyle stories.
   - Browser check: port 3200 was already held by another dev server on `.next-shot`; I used PORT=3201 with NEXT_DIST_DIR=.next-shot2 and DATABASE_URL=$TEST_DATABASE_URL AI_PROVIDER=mock. Signup is rate limited, so wait ~30s between script runs. Verified at 360px and 1280px (screens/us018-*.png).
 ---
+
+## 2026-10-16 - US-019
+- Presenter view for shared notes gained tabs: Notes, Word cloud, Categories, Top notes by category, Summary (`components/presenter-analysis.tsx`, wired in `presenter-notes.tsx`). Word cloud uses AI keyword weights, else a word-frequency fallback labelled "Not AI-generated". Categories is a bar chart (count and percent printed, leading bar accent, others ink tints) and clicking a row lists its notes by upvotes. Every AI view shows "AI-generated" and an "Outdated" badge when it applies.
+- Publish toggle: `PATCH /api/interactions/:id/analysis {published}` publishes the newest done analysis (clears the flag on older rows); button on the host panel. Participant display of the published analysis is US-021.
+- Keyword helpers moved to client-safe `lib/note-keywords.ts` (re-exported from note-analysis-ai) so the presenter can compute the frequency fallback.
+- Files: components/presenter-analysis.tsx, presenter-notes.tsx, presenter-view.tsx, notes-analysis-panel.tsx, lib/note-keywords.ts, lib/note-analysis.ts, lib/note-analysis-ai.ts, analysis route, tests/note-analysis.test.ts, tests/presenter-analysis.test.ts
+- **Learnings for future iterations:**
+  - Never run `npm test` while a screenshot server points at the test DB: `truncateAll` wipes it mid-script (symptoms: 401s, "Event not found").
+  - A component that stays mounted across tab switches does not refetch; key effects on the view or poll. Presenter fetches `lastDone` from the host analysis GET every 10s.
+  - Bars are not animated, so reduced-motion needs nothing extra. Chart rows stack the bar under label and value so they survive 360px.
+  - Presenter view is still pre-restyle (black/white inline styles); US-029 restyles it. Tab buttons use the same inline style as the Top/Newest toggle.
+  - Don't `pkill -f` with env text; kill by pid from `ss -ltnp`. `.next-shot*` dirs break `npm run lint`: delete them when done.
+  - Verified in Playwright at 360px and 1280px (screens/us019-*.png, script us019.mjs). Host-page publish button not screenshotted; API covered by test.
+---
