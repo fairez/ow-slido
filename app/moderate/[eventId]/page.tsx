@@ -21,7 +21,7 @@ export default async function ModeratePage({
   const valid = isUuid(eventId) && (await verifyModeratorToken(eventId, token));
   if (!valid || !token) {
     return (
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+      <main id="main" className="page">
         <h1>Moderator link not valid</h1>
         <p>This link is invalid or has been revoked. Ask the host for a new one.</p>
       </main>
@@ -29,7 +29,7 @@ export default async function ModeratePage({
   }
   const [event] = await getDb().select().from(events).where(eq(events.id, eventId));
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+    <main id="main" className="page">
       <h1>Moderating: {event.name}</h1>
       <ModerationPanel
         eventId={eventId}

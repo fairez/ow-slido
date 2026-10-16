@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import "@fontsource-variable/fraunces";
 import "@fontsource-variable/public-sans";
 import "./globals.css";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppShell } from "@/components/ui/app-shell";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 export const metadata = { title: "OW Slido" };
@@ -17,11 +16,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
-        <header className="site-header">
-          <Link href="/">OW Slido</Link>
-          <ThemeToggle />
-        </header>
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

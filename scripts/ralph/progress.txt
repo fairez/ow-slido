@@ -258,3 +258,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Never run two `npm test` at once: they share the test DB and fail with FK errors. Also `pkill -f "next dev"` killed my shell; kill by port/PID instead.
   - Verified at 360px and 1280px, light and dark (screens/us024-*.png).
 ---
+
+## 2026-10-16 - US-025
+- Primitives in components/ui: Button (primary/secondary/quiet, busy disables + aria-busy + spinner), TextField/TextArea/Select (label, hint, error wired with aria-describedby/invalid), Toggle, Card, Badge, EmptyState, InlineError (field.tsx, card.tsx), Dialog (Escape, Tab trap, focus returns to opener), ThemeToggle re-export. `AppShell` (skip link, header, nav, theme toggle) wraps the root layout. Styles are `ui-*` classes in app/globals.css, tokens only.
+- Every page `<main>` now has `id="main"` (skip link target); host pages use `className="page"` (45rem max width). Tests: tests/ui-components.test.tsx.
+- **Learnings for future iterations:**
+  - New pages need `<main id="main">`; do not add another `<main>` in the shell.
+  - Nav "Join" points at `/` (the join form is the home page; there is no /join index).
+  - Global rules already style bare input/select/textarea; native `<button>`s are still unstyled until screens adopt `Button` (US-026+).
+  - Dev server on :3200 survives `kill $pid` of the npm wrapper; kill by port via `ss -ltnp | grep :3200`, and `rm -rf .next-shot` before restarting.
+  - Verified skip-link focus at 360/1280 light and dark (screens/us025-*.png); no overflow.
+---

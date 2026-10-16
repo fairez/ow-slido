@@ -43,7 +43,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <main style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
+    <main id="main" style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
       <h1>{copy.title}</h1>
       <form method="post" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
         <label style={{ display: "grid", gap: 4 }}>

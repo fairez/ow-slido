@@ -38,7 +38,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     : null;
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+    <main id="main" className="page">
       <Link href="/dashboard">← Dashboard</Link>
       <h1>{event.name}</h1>
       <p>

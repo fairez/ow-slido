@@ -29,7 +29,7 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+    <main id="main" className="page">
       <h1>Dashboard</h1>
       <p>
         Signed in as <strong>{user.email}</strong>
