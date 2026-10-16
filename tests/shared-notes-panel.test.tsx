@@ -16,6 +16,7 @@ const config = (extra: Partial<LiveNotes> = {}): LiveNotes => ({
   remaining: 2,
   moderation: "open",
   showAuthorNames: false,
+  aiDisclosure: false,
   ...extra,
 });
 
@@ -159,4 +160,29 @@ it("hides the form and own edit actions when closed, but keeps upvoting", async 
   expect(screen.queryByLabelText("Your note")).toBeNull();
   expect(screen.queryByRole("button", { name: /Edit your note/ })).toBeNull();
   expect(screen.getByText(/Notes are closed/)).toBeTruthy();
+});
+
+it("discloses AI processing only when AI is configured", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => json({ notes: [] })));
+  const { unmount } = renderPanel(config());
+  expect(screen.queryByText(/AI service/)).toBeNull();
+  unmount();
+  renderPanel(config({ aiDisclosure: true }));
+  expect(screen.getByText(/AI service summarise these notes/)).toBeTruthy();
+});
+
+it("shows a published analysis, and removes it when the host withdraws it", async () => {
+  const analysis = {
+    summary: "People want shorter talks.",
+    categories: [{ name: "Length", description: "", count: 2 }],
+    keywords: [{ word: "short", weight: 3 }],
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.endsWith("/analysis/published") ? json({ analysis }) : json({ notes: [] }))));
+  renderPanel(config());
+  expect(await screen.findByText("People want shorter talks.")).toBeTruthy();
+  expect(screen.getByText("Length")).toBeTruthy();
+  act(() => {
+    fake.emit("analysis:published", { interactionId: "n1", analysis: null });
+  });
+  await waitFor(() => expect(screen.queryByText("People want shorter talks.")).toBeNull());
 });

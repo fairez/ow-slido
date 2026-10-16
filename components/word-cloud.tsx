@@ -9,13 +9,13 @@ const MAX_REM = 5;
 const srOnly = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" } as const;
 
 /** Font size in rem, scaled linearly between the least and most frequent word. */
-export function wordSize(count: number, min: number, max: number) {
-  if (max === min) return (MIN_REM + MAX_REM) / 2;
-  return MIN_REM + ((count - min) / (max - min)) * (MAX_REM - MIN_REM);
+export function wordSize(count: number, min: number, max: number, minRem = MIN_REM, maxRem = MAX_REM) {
+  if (max === min) return (minRem + maxRem) / 2;
+  return minRem + ((count - min) / (max - min)) * (maxRem - minRem);
 }
 
 /** Words sized by frequency. Size is not the only cue: hovering or focusing a word shows its count, and a text list follows. */
-export function WordCloud({ words }: { words: WordCount[] }) {
+export function WordCloud({ words, sizeRange }: { words: WordCount[]; sizeRange?: [number, number] }) {
   const [active, setActive] = useState<string | null>(null);
   if (words.length === 0) return <p style={{ fontSize: "2rem" }}>No words yet</p>;
   const counts = words.map((w) => w.count);
@@ -36,7 +36,7 @@ export function WordCloud({ words }: { words: WordCount[] }) {
             onMouseLeave={() => setActive(null)}
             onFocus={() => setActive(w.word)}
             onBlur={() => setActive(null)}
-            style={{ fontSize: `${wordSize(w.count, min, max)}rem`, fontWeight: 700, lineHeight: 1.1 }}
+            style={{ fontSize: `${wordSize(w.count, min, max, sizeRange?.[0], sizeRange?.[1])}rem`, fontWeight: 700, lineHeight: 1.1, overflowWrap: "anywhere" }}
           >
             {w.word}
             {active === w.word && <sup style={{ fontSize: "1.25rem", marginLeft: 4 }}>×{w.count}</sup>}

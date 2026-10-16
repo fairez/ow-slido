@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, noteAnalyses, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { publish } from "@/lib/realtime/publisher";
 import { applyEdit, type AnalysisEdit, type EditableCategory, type EditableKeyword } from "@/lib/analysis-edit";
 
 /** A job that has not finished after this long is treated as lost (for example after a restart). */
@@ -205,6 +206,12 @@ export async function getAnalysisPanelState(interactionId: string): Promise<Anal
  * published, so publishing a newer run withdraws the older one.
  */
 export async function setAnalysisPublished(interactionId: string, published: boolean): Promise<AnalysisView | null> {
+  const result = await setPublishedFlag(interactionId, published);
+  if (result) await announcePublishedAnalysis(interactionId);
+  return result;
+}
+
+async function setPublishedFlag(interactionId: string, published: boolean): Promise<AnalysisView | null> {
   const db = getDb();
   return db.transaction(async (tx) => {
     const [target] = await tx
@@ -218,6 +225,42 @@ export async function setAnalysisPublished(interactionId: string, published: boo
     const [row] = await tx.update(noteAnalyses).set({ published }).where(eq(noteAnalyses.id, target.id)).returning();
     return view(row, hashNotes(await approvedNotes(tx as unknown as Db, interactionId)));
   });
+}
+
+export type PublicAnalysis = {
+  summary: string;
+  categories: { name: string; description: string; count: number }[];
+  keywords: { word: string; weight: number }[];
+};
+
+/**
+ * The analysis a participant may see: only the published one, with category counts instead of note ids.
+ * Returns null when nothing is published.
+ */
+export async function getPublishedAnalysis(interactionId: string): Promise<PublicAnalysis | null> {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(noteAnalyses)
+    .where(and(eq(noteAnalyses.interactionId, interactionId), eq(noteAnalyses.status, "done"), eq(noteAnalyses.published, true)))
+    .orderBy(desc(noteAnalyses.createdAt))
+    .limit(1);
+  if (!row) return null;
+  const approved = new Set((await approvedNotes(db, interactionId)).map((n) => n.id));
+  return {
+    summary: row.summary ?? "",
+    categories: storedCategories(row.categories)
+      .map((c) => ({ name: c.name, description: c.description, count: c.noteIds.filter((id) => approved.has(id)).length }))
+      .filter((c) => c.count > 0),
+    keywords: storedKeywords(row.keywords),
+  };
+}
+
+/** Tells participants the published analysis changed (published, withdrawn or edited). */
+export async function announcePublishedAnalysis(interactionId: string) {
+  const found = await findNotesInteractionEvent(interactionId);
+  if (!found) return;
+  publish(found.eventId, "analysis:published", { interactionId, analysis: await getPublishedAnalysis(interactionId) });
 }
 
 export async function findNotesInteractionEvent(interactionId: string) {
@@ -254,6 +297,12 @@ export type EditOutcome = { ok: true; analysis: AnalysisView } | { ok: false; st
 
 /** Applies a host edit to the newest finished analysis and marks it edited. */
 export async function editAnalysis(interactionId: string, edit: AnalysisEdit): Promise<EditOutcome> {
+  const outcome = await editAnalysisRow(interactionId, edit);
+  if (outcome.ok && outcome.analysis.published) await announcePublishedAnalysis(interactionId);
+  return outcome;
+}
+
+async function editAnalysisRow(interactionId: string, edit: AnalysisEdit): Promise<EditOutcome> {
   return getDb().transaction(async (tx): Promise<EditOutcome> => {
     const found = await tx.execute(
       sql`SELECT id FROM note_analyses WHERE interaction_id = ${interactionId} AND status = 'done' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,

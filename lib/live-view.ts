@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { interactions, openTextResponses, ratingResponses, sharedNotes, wordcloudEntries } from "@/db/schema";
+import { isAiConfigured } from "@/lib/ai/config";
 import { getDb } from "@/lib/db";
 import type { OpenTextConfig, RatingConfig, SharedNotesConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
@@ -37,6 +38,8 @@ export type LiveNotes = {
   remaining: number;
   moderation: "open" | "moderated";
   showAuthorNames: boolean;
+  /** True when AI is configured, so the screen discloses that notes may be summarised. */
+  aiDisclosure: boolean;
 };
 
 export type LiveOpenText = {
@@ -102,6 +105,7 @@ export async function getLiveInteraction(
       remaining: Math.max(0, max - used),
       moderation: c.moderation ?? "open",
       showAuthorNames: c.showAuthorNames ?? false,
+      aiDisclosure: isAiConfigured(),
     };
   }
   if (row.type === "openText") {

@@ -220,3 +220,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - `.next-shot` can reappear and break `npm run lint`; remove it before linting.
   - Verified at 360px and 1280px (screens/us020-*.png, us020.mjs); no overflow. Styling is pre-restyle by design.
 ---
+
+## 2026-10-16 - US-021
+- Participant disclosure and published analysis. `LiveNotes.aiDisclosure` (from `isAiConfigured()`) drives a one-line notice on the notes screen. New `GET /api/interactions/:id/analysis/published` (joined participant, started/closed notes interaction) returns `{analysis: {summary, categories:[{name,description,count}], keywords} | null}`: only the published done row, counts instead of note ids. `components/published-analysis.tsx` shows summary, category counts and a word cloud, and listens for the `analysis:published` socket event, which `setAnalysisPublished` and `editAnalysis` (when the edited row is published) now send.
+- Files: lib/note-analysis.ts (getPublishedAnalysis, announcePublishedAnalysis), lib/live-view.ts, app/api/interactions/[id]/analysis/published/route.ts, components/published-analysis.tsx, shared-notes-panel.tsx, word-cloud.tsx (`sizeRange` prop), tests/published-analysis.test.ts, tests/shared-notes-panel.test.tsx
+- **Learnings for future iterations:**
+  - The participant payload must never include note ids or text; the test asserts the raw body. Keep it that way if US-022/US-023 touch it.
+  - `WordCloud` defaults to presenter sizes (1.25-5rem); pass `sizeRange` for phone-sized clouds. Words wrap with `overflowWrap: anywhere`.
+  - Participant page is /e/:eventId. Screenshot script: scripts/ralph/screens/us021.mjs (port 3201, AI_PROVIDER=mock so the disclosure shows). Verified at 360px and 1280px, no overflow, live withdraw works. Pre-restyle styling by design.
+  - A `.next-shot` dir may be recreated by another dev server; lint with `npx eslint . --ignore-pattern ".next-shot/**"` if it is not yours.
+---

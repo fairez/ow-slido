@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import type { LiveNotes } from "@/lib/live-view";
 import type { ParticipantNote } from "@/lib/shared-notes";
+import { PublishedAnalysis } from "@/components/published-analysis";
 import { NOTE_TEXT_MAX } from "@/lib/note-limits";
 import { AUTHOR_NAME_MAX_LENGTH } from "@/lib/question-types";
 
@@ -223,6 +224,12 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      <PublishedAnalysis interactionId={config.id} socket={socket} />
+      {config.aiDisclosure && (
+        <p style={{ margin: 0, fontSize: "0.875rem" }}>
+          The host may have an AI service summarise these notes. Your name is never sent.
+        </p>
+      )}
       {closed ? (
         <p role="status">Notes are closed. You can still upvote.</p>
       ) : (
