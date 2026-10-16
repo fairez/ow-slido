@@ -17,20 +17,13 @@ export function ParticipantView({
   initialQuestions: PublicQuestion[];
 }) {
   const [tab, setTab] = useState<"live" | "qa">("live");
-  const tabStyle = (active: boolean) => ({
-    flex: 1,
-    minHeight: 44,
-    font: "inherit",
-    fontWeight: active ? 700 : 400,
-    borderBottom: active ? "3px solid currentColor" : "3px solid transparent",
-  });
   return (
     <>
-      <div role="tablist" aria-label="Event sections" style={{ display: "flex", marginBottom: 16 }}>
-        <button role="tab" id="tab-live" aria-selected={tab === "live"} aria-controls="panel-live" onClick={() => setTab("live")} style={tabStyle(tab === "live")}>
+      <div role="tablist" aria-label="Event sections" className="tabs">
+        <button role="tab" id="tab-live" aria-selected={tab === "live"} aria-controls="panel-live" onClick={() => setTab("live")} className="tab">
           Live
         </button>
-        <button role="tab" id="tab-qa" aria-selected={tab === "qa"} aria-controls="panel-qa" onClick={() => setTab("qa")} style={tabStyle(tab === "qa")}>
+        <button role="tab" id="tab-qa" aria-selected={tab === "qa"} aria-controls="panel-qa" onClick={() => setTab("qa")} className="tab">
           Q&amp;A
         </button>
       </div>

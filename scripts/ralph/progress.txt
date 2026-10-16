@@ -290,3 +290,16 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Screenshot script needs `set -a; . ./.env.local; set +a` first; `getByLabel` needs `{exact: true}` because "Question"/"Option 1" also match other labels. Tests recreate `.next-shot`; rm it before lint.
   - Verified at 360px and 1280px, light and dark (screens/us027-*.png): no overflow, no console errors.
 ---
+
+## 2026-10-16 - US-028
+- Restyled the participant screens with the ui primitives and tokens: waiting, poll, word cloud, Q&A, shared notes, open text and rating. Designed closed states (`EmptyState` with `role="status"`), a `.confirm` box for confirmations, `InlineError` for errors. Poll results show ink-tint bars with the leading option in an accent tint and printed count plus percent. Tabs, sort buttons, upvote buttons and note actions are `Button`s (44px).
+- Fixed a latent bug: `PollForm` read `body.counts.counts` but the vote route returns `{counts, total}` flat, so showing results after voting crashed the page. Tests updated to the real shape.
+- Files: app/e/[eventId]/page.tsx, app/globals.css, components/{live-view,participant-view,qa-tab,shared-notes-panel,open-text-form,rating-form}.tsx, components/ui/card.tsx, tests/live-view.test.tsx, scripts/ralph/screens/us028.mjs
+- **Learnings for future iterations:**
+  - New classes in globals.css: `.participant`, `.tabs/.tab`, `.live-form`, `.choice-list/.choice(-bar,-value)`, `.confirm`, `.sort-bar`, `.post-list/.post/.post-foot/.post-meta`. `EmptyState` takes an optional `role="status"`.
+  - Interaction routes for scripts: `/api/events/:eid/interactions` (create; poll needs `question`/`options`, wordcloud needs `maxEntriesPerParticipant`) and `.../interactions/:id/start|close`. Only one interaction is live at a time, and a closed one cannot restart, so create fresh ones per screenshot pass.
+  - `.next-shot` is recreated by `npm test`; `rm -rf` it before `npm run lint` or lint reports 100 errors from build output.
+  - `fuser -k 3200/tcp` stops the screenshot server; `pkill -f` killed the shell.
+  - WordCloud and RatingChart are presenter components and still inline-styled: US-029.
+  - Verified at 360px and 1280px, light and dark (screens/us028-*.png): no overflow, no console errors.
+---

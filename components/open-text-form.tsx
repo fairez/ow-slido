@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
+import { InlineError, TextArea } from "@/components/ui/field";
 import { OPEN_TEXT_RESPONSE_MAX } from "@/lib/open-text-limits";
 import type { LiveOpenText } from "@/lib/live-view";
 
@@ -41,34 +44,35 @@ export function OpenTextForm({ question }: { question: LiveOpenText }) {
     }
   };
 
-  if (closed) return <p role="status">Responses closed</p>;
+  if (closed) {
+    return (
+      <EmptyState title="Responses closed" role="status">
+        The host is no longer taking answers.
+      </EmptyState>
+    );
+  }
 
   return (
-    <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-      <label style={{ display: "grid", gap: 4 }}>
-        Your response
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={OPEN_TEXT_RESPONSE_MAX}
-          rows={4}
-          disabled={remaining <= 0 || submitting}
-          style={{ padding: 8, font: "inherit", minHeight: 44, resize: "vertical" }}
-        />
-      </label>
-      <p style={{ margin: 0 }} aria-live="off">
-        {text.length}/{OPEN_TEXT_RESPONSE_MAX}
-      </p>
-      <button type="submit" disabled={remaining <= 0 || submitting || !text.trim()} style={{ minHeight: 44, padding: "0 16px" }}>
-        {submitting ? "Sending…" : "Send"}
-      </button>
-      <p role="status">
+    <form onSubmit={submit} className="live-form">
+      <TextArea
+        label="Your response"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={OPEN_TEXT_RESPONSE_MAX}
+        rows={4}
+        disabled={remaining <= 0 || submitting}
+        hint={`${text.length}/${OPEN_TEXT_RESPONSE_MAX}`}
+      />
+      <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !text.trim()}>
+        {submitting ? "Sending" : "Send"}
+      </Button>
+      <p role="status" className="field-meta">
         {remaining > 0
           ? `${remaining} ${remaining === 1 ? "response" : "responses"} remaining`
           : "You have used all your responses."}
       </p>
-      {sent && !error && <p role="status">Thanks, your response was sent.</p>}
-      {error && <p role="alert">{error}</p>}
+      {sent && !error && <p role="status" className="confirm">Thanks, your response was sent.</p>}
+      {error && <InlineError>{error}</InlineError>}
     </form>
   );
 }

@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
+import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
 
@@ -120,91 +123,64 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
   };
 
   return (
-    <section aria-labelledby="qa-title">
+    <section aria-labelledby="qa-title" className="qa-panel">
       <h2 id="qa-title">Questions</h2>
-      <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 4 }}>
-          Your question
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={QUESTION_MAX_LENGTH}
-            rows={3}
-            disabled={submitting}
-            style={{ padding: 8, font: "inherit" }}
-          />
-        </label>
-        <span>
-          {text.length}/{QUESTION_MAX_LENGTH}
-        </span>
-        <label style={{ display: "grid", gap: 4 }}>
-          Your name (optional)
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={AUTHOR_NAME_MAX_LENGTH}
-            autoComplete="off"
-            disabled={submitting}
-            style={{ minHeight: 44, padding: "0 8px", font: "inherit" }}
-          />
-        </label>
-        <button type="submit" disabled={submitting || !text.trim()} style={{ minHeight: 44, padding: "0 16px" }}>
-          {submitting ? "Sending…" : "Send question"}
-        </button>
-        {notice && <p role="status">{notice}</p>}
-        {error && <p role="alert">{error}</p>}
+      <form onSubmit={submit} className="live-form">
+        <TextArea
+          label="Your question"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={QUESTION_MAX_LENGTH}
+          rows={3}
+          disabled={submitting}
+          hint={`${text.length}/${QUESTION_MAX_LENGTH}`}
+        />
+        <TextField
+          label="Your name (optional)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={AUTHOR_NAME_MAX_LENGTH}
+          autoComplete="off"
+          disabled={submitting}
+        />
+        <Button type="submit" variant="primary" busy={submitting} disabled={!text.trim()}>
+          {submitting ? "Sending" : "Send question"}
+        </Button>
+        {notice && <p role="status" className="confirm">{notice}</p>}
+        {error && <InlineError>{error}</InlineError>}
       </form>
       {questions.length === 0 ? (
-        <p>No questions yet.</p>
+        <div className="after-form">
+          <EmptyState title="No questions yet">Be the first to ask.</EmptyState>
+        </div>
       ) : (
         <>
-          <div role="group" aria-label="Sort questions" style={{ display: "flex", gap: 8, margin: "16px 0 8px" }}>
+          <div role="group" aria-label="Sort questions" className="sort-bar">
             {(["popular", "recent"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={sort === mode}
-                onClick={() => setSort(mode)}
-                style={{
-                  minHeight: 44,
-                  padding: "0 16px",
-                  fontWeight: sort === mode ? 700 : 400,
-                }}
-              >
+              <Button key={mode} aria-pressed={sort === mode} onClick={() => setSort(mode)}>
                 {mode === "popular" ? "Popular" : "Recent"}
-              </button>
+              </Button>
             ))}
           </div>
-          <ul aria-label="Approved questions" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+          <ul aria-label="Approved questions" className="post-list">
             {sortQuestions(questions, sort).map((q) => (
-              <li
-                key={q.id}
-                style={{
-                  border: "1px solid #888",
-                  borderRadius: 8,
-                  padding: 12,
-                }}
-              >
-                <p style={{ margin: 0 }}>{q.text}</p>
-                <button
-                  type="button"
-                  aria-pressed={q.upvoted}
-                  aria-label={`Upvote: ${q.text}`}
-                  onClick={() => void toggleUpvote(q.id)}
-                  style={{
-                    minHeight: 44,
-                    minWidth: 44,
-                    padding: "0 12px",
-                    fontWeight: q.upvoted ? 700 : 400,
-                  }}
-                >
-                  ▲ {q.upvotes}
-                </button>{" "}
-                <small>
-                  {q.authorName ?? "Anonymous"}
-                  {q.pinned ? " · Pinned" : ""}
-                  {q.answered ? " · Answered" : ""}
-                </small>
+              <li key={q.id} className="post" data-pinned={q.pinned}>
+                <p className="post-text">{q.text}</p>
+                <div className="post-foot">
+                  <Button
+                    aria-pressed={q.upvoted}
+                    aria-label={`Upvote: ${q.text}`}
+                    onClick={() => void toggleUpvote(q.id)}
+                    variant={q.upvoted ? "primary" : "secondary"}
+                  >
+                    ▲ <span className="vote-count">{q.upvotes}</span>
+                  </Button>
+                  <span className="post-meta">
+                    {q.authorName ?? "Anonymous"}
+                    {q.pinned ? " · Pinned" : ""}
+                    {q.answered ? " · Answered" : ""}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

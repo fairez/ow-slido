@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
+import { InlineError } from "@/components/ui/field";
 import { RATING_SCALE_MAX } from "@/lib/rating-limits";
 import type { LiveRating } from "@/lib/live-view";
 
@@ -40,17 +43,17 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
 
   if (closed) {
     return (
-      <p role="status">
-        Rating closed{selected !== null ? `. You gave ${selected} out of ${max}.` : ""}
-      </p>
+      <EmptyState title="Rating closed" role="status">
+        {selected !== null ? `You gave ${selected} out of ${max}.` : "The host is no longer taking ratings."}
+      </EmptyState>
     );
   }
 
   const locked = done || submitting;
   return (
-    <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+    <form onSubmit={submit} className="live-form">
       <fieldset className="rating-scale" disabled={locked}>
-        <legend style={{ marginBottom: 8 }}>{stars ? "Your rating, 1 to 5 stars" : "Your rating, 1 to 10"}</legend>
+        <legend>{stars ? "Your rating, 1 to 5 stars" : "Your rating, 1 to 10"}</legend>
         {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
           const on = stars ? selected !== null && n <= selected : selected === n;
           return (
@@ -69,12 +72,12 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
         })}
       </fieldset>
       {!done && (
-        <button type="submit" disabled={submitting || selected === null} style={{ minHeight: 44, padding: "0 16px" }}>
-          {submitting ? "Sending…" : "Send rating"}
-        </button>
+        <Button type="submit" variant="primary" busy={submitting} disabled={selected === null}>
+          {submitting ? "Sending" : "Send rating"}
+        </Button>
       )}
-      {done && !error && <p role="status">Thanks, you rated this {selected} out of {max}.</p>}
-      {error && <p role="alert">{error}</p>}
+      {done && !error && <p role="status" className="confirm">Thanks, you rated this {selected} out of {max}.</p>}
+      {error && <InlineError>{error}</InlineError>}
     </form>
   );
 }

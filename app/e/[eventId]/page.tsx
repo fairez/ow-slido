@@ -22,7 +22,7 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
   if (!participantId) redirect(`/join/${event.joinCode}`);
 
   return (
-    <main id="main" style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
+    <main id="main" className="participant">
       <h1>{event.name}</h1>
       <ParticipantView
         eventId={event.id}

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { WORDCLOUD_WORD_MAX } from "@/lib/wordcloud-limits";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
+import { InlineError, TextField } from "@/components/ui/field";
 import { OpenTextForm } from "@/components/open-text-form";
 import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
@@ -53,10 +56,16 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
     };
   }, [socket, refetch]);
 
-  if (!current) return <p role="status">Waiting for the host…</p>;
+  if (!current) {
+    return (
+      <EmptyState title="Waiting for the host" role="status">
+        The next question will appear here as soon as it starts.
+      </EmptyState>
+    );
+  }
 
   return (
-    <section aria-labelledby="live-title">
+    <section aria-labelledby="live-title" className="live-panel">
       <h2 id="live-title">{current.title}</h2>
       {current.type === "sharedNotes" ? (
         <SharedNotesPanel key={current.id} notes={current} socket={socket} />
@@ -65,7 +74,9 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
       ) : current.type === "rating" ? (
         <RatingForm key={current.id} rating={current} />
       ) : current.state === "closed" ? (
-        <p role="status">{current.type === "wordcloud" ? "Submissions closed" : "Voting closed"}</p>
+        <EmptyState title={current.type === "wordcloud" ? "Submissions closed" : "Voting closed"} role="status">
+          The host has closed this one. Stay here for the next.
+        </EmptyState>
       ) : current.type === "wordcloud" ? (
         <WordForm key={current.id} cloud={current} />
       ) : (
@@ -111,10 +122,10 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ optionIds: selected }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; counts?: Counts };
+      const body = (await res.json().catch(() => ({}))) as { error?: string; counts?: Record<string, number>; total?: number };
       if (res.ok) {
         setVoted(true);
-        if (body.counts) setResults({ counts: body.counts.counts, total: body.counts.total });
+        if (body.counts) setResults({ counts: body.counts, total: body.total ?? 0 });
       } else {
         if (res.status === 409 && body.error === "You have already voted") setVoted(true);
         setError(body.error ?? "Something went wrong. Please try again.");
@@ -128,40 +139,44 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
 
   const locked = voted || submitting;
   const type = poll.multiSelect ? "checkbox" : "radio";
+  const showResults = results !== null && poll.showResultsToParticipants;
+  const top = showResults ? Math.max(0, ...Object.values(results.counts)) : 0;
   return (
-    <form onSubmit={submit}>
-      <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
-        <legend style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
-          {poll.multiSelect ? "Choose one or more options" : "Choose one option"}
-        </legend>
-        {poll.options.map((o) => (
-          <label
-            key={o.id}
-            style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "0 12px", border: "1px solid #888", borderRadius: 8 }}
-          >
-            <input
-              type={type}
-              name="option"
-              value={o.id}
-              checked={selected.includes(o.id)}
-              disabled={locked}
-              onChange={() => toggle(o.id)}
-            />
-            <span>{o.label}</span>
-            {results && poll.showResultsToParticipants && (
-              <span style={{ marginLeft: "auto" }}>{results.counts[o.id] ?? 0}</span>
-            )}
-          </label>
-        ))}
+    <form onSubmit={submit} className="live-form">
+      <fieldset disabled={locked} className="choice-list">
+        <legend className="sr-only">{poll.multiSelect ? "Choose one or more options" : "Choose one option"}</legend>
+        {poll.options.map((o) => {
+          const count = showResults ? (results.counts[o.id] ?? 0) : 0;
+          const share = showResults && results.total > 0 ? Math.round((count / results.total) * 100) : 0;
+          return (
+            <label key={o.id} className="choice" data-locked={locked} data-leading={showResults && top > 0 && count === top}>
+              {showResults && <span className="choice-bar" aria-hidden="true" style={{ width: `${share}%` }} />}
+              <input
+                type={type}
+                name="option"
+                value={o.id}
+                checked={selected.includes(o.id)}
+                disabled={locked}
+                onChange={() => toggle(o.id)}
+              />
+              <span className="choice-label">{o.label}</span>
+              {showResults && (
+                <span className="choice-value">
+                  {count} ({share}%)
+                </span>
+              )}
+            </label>
+          );
+        })}
       </fieldset>
       {!voted && (
-        <button type="submit" disabled={submitting || selected.length === 0} style={{ marginTop: 12, minHeight: 44, padding: "0 16px" }}>
-          {submitting ? "Submitting…" : "Submit"}
-        </button>
+        <Button type="submit" variant="primary" busy={submitting} disabled={selected.length === 0}>
+          {submitting ? "Submitting" : "Submit"}
+        </Button>
       )}
-      {error && <p role="alert">{error}</p>}
-      {voted && !error && <p role="status">Thanks, your vote was recorded.</p>}
-      {results && poll.showResultsToParticipants && <p>{results.total} {results.total === 1 ? "vote" : "votes"} so far</p>}
+      {error && <InlineError>{error}</InlineError>}
+      {voted && !error && <p role="status" className="confirm">Thanks, your vote was recorded.</p>}
+      {showResults && <p className="field-meta">{results.total} {results.total === 1 ? "vote" : "votes"} so far</p>}
     </form>
   );
 }
@@ -202,28 +217,25 @@ function WordForm({ cloud }: { cloud: LiveWordcloud }) {
   };
 
   return (
-    <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-      <label style={{ display: "grid", gap: 4 }}>
-        Your word
-        <input
-          value={word}
-          onChange={(e) => setWord(e.target.value)}
-          maxLength={WORDCLOUD_WORD_MAX}
-          disabled={remaining <= 0 || submitting}
-          autoComplete="off"
-          style={{ minHeight: 44, padding: "0 8px", font: "inherit" }}
-        />
-      </label>
-      <button type="submit" disabled={remaining <= 0 || submitting || !word.trim()} style={{ minHeight: 44, padding: "0 16px" }}>
-        {submitting ? "Submitting…" : "Submit"}
-      </button>
-      <p role="status">
+    <form onSubmit={submit} className="live-form">
+      <TextField
+        label="Your word"
+        value={word}
+        onChange={(e) => setWord(e.target.value)}
+        maxLength={WORDCLOUD_WORD_MAX}
+        disabled={remaining <= 0 || submitting}
+        autoComplete="off"
+      />
+      <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !word.trim()}>
+        {submitting ? "Submitting" : "Submit"}
+      </Button>
+      <p role="status" className="field-meta">
         {remaining > 0
           ? `${remaining} ${remaining === 1 ? "entry" : "entries"} remaining`
           : "You have used all your entries."}
       </p>
-      {sent && !error && <p role="status">Thanks, your word was added.</p>}
-      {error && <p role="alert">{error}</p>}
+      {sent && !error && <p role="status" className="confirm">Thanks, your word was added.</p>}
+      {error && <InlineError>{error}</InlineError>}
     </form>
   );
 }

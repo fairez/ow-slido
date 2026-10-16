@@ -81,7 +81,7 @@ it("resyncs on reconnect", async () => {
 const vote = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
 it("submits a vote, confirms, locks the form and hides results by default", async () => {
-  const fetchMock = vote(201, { ok: true, counts: { counts: { a: 1, b: 0 }, total: 1 } });
+  const fetchMock = vote(201, { ok: true, counts: { a: 1, b: 0 }, total: 1 });
   vi.stubGlobal("fetch", fetchMock);
   render(<LiveView eventId="e1" initial={poll("i1", "Lunch?")} />);
   expect((screen.getByRole("button", { name: "Submit" }) as HTMLButtonElement).disabled).toBe(true);
@@ -98,7 +98,7 @@ it("submits a vote, confirms, locks the form and hides results by default", asyn
 });
 
 it("shows live results after voting when the poll allows it", async () => {
-  vi.stubGlobal("fetch", vote(201, { ok: true, counts: { counts: { a: 1, b: 0 }, total: 1 } }));
+  vi.stubGlobal("fetch", vote(201, { ok: true, counts: { a: 1, b: 0 }, total: 1 }));
   render(<LiveView eventId="e1" initial={poll("i1", "Lunch?", { showResultsToParticipants: true })} />);
   fireEvent.click(screen.getByLabelText("Pizza"));
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
@@ -110,7 +110,7 @@ it("shows live results after voting when the poll allows it", async () => {
 });
 
 it("uses checkboxes for multi-select polls", async () => {
-  const fetchMock = vote(201, { ok: true, counts: { counts: {}, total: 1 } });
+  const fetchMock = vote(201, { ok: true, counts: {}, total: 1 });
   vi.stubGlobal("fetch", fetchMock);
   render(<LiveView eventId="e1" initial={poll("i1", "Lunch?", { multiSelect: true })} />);
   fireEvent.click(screen.getByLabelText("Pizza"));

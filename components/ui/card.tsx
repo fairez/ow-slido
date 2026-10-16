@@ -12,9 +12,9 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "acce
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+export function EmptyState({ title, role, children }: { title: string; role?: "status"; children?: ReactNode }) {
   return (
-    <div className="ui-empty">
+    <div className="ui-empty" role={role}>
       <p className="ui-empty-title">{title}</p>
       {children ? <p>{children}</p> : null}
     </div>

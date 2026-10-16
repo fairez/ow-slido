@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import type { LiveNotes } from "@/lib/live-view";
 import type { ParticipantNote } from "@/lib/shared-notes";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
+import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { PublishedAnalysis } from "@/components/published-analysis";
 import { NOTE_TEXT_MAX } from "@/lib/note-limits";
 import { AUTHOR_NAME_MAX_LENGTH } from "@/lib/question-types";
@@ -20,8 +23,6 @@ const sortNotes = (list: ParticipantNote[], mode: SortMode) =>
   );
 
 const NETWORK_ERROR = "Could not reach the server. Check your connection and try again.";
-const field = { display: "grid", gap: 4 } as const;
-const card = { border: "1px solid var(--border, #8a8178)", borderRadius: 8, padding: 12 } as const;
 
 type Props = { notes: LiveNotes; socket: Socket | null };
 
@@ -223,107 +224,88 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
     remaining > 0 ? `${remaining} ${remaining === 1 ? "note" : "notes"} remaining` : "You have used all your notes.";
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="live-form">
       <PublishedAnalysis interactionId={config.id} socket={socket} />
       {config.aiDisclosure && (
-        <p style={{ margin: 0, fontSize: "0.875rem" }}>
+        <p className="field-meta">
           The host may have an AI service summarise these notes. Your name is never sent.
         </p>
       )}
       {closed ? (
-        <p role="status">Notes are closed. You can still upvote.</p>
+        <EmptyState title="Notes are closed" role="status">
+          You can still upvote.
+        </EmptyState>
       ) : (
-        <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-          <label style={field}>
-            Your note
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={NOTE_TEXT_MAX}
-              rows={4}
-              disabled={remaining <= 0 || submitting}
-              aria-describedby="note-count"
-              style={{ padding: 8 }}
-            />
-          </label>
-          <span id="note-count">
-            {text.length}/{NOTE_TEXT_MAX}
-          </span>
+        <form onSubmit={submit} className="live-form">
+          <TextArea
+            label="Your note"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={NOTE_TEXT_MAX}
+            rows={4}
+            disabled={remaining <= 0 || submitting}
+            hint={`${text.length}/${NOTE_TEXT_MAX}`}
+          />
           {config.showAuthorNames && (
-            <label style={field}>
-              Your name (optional)
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={AUTHOR_NAME_MAX_LENGTH}
-                autoComplete="off"
-                disabled={remaining <= 0 || submitting}
-                style={{ padding: "0 8px" }}
-              />
-            </label>
+            <TextField
+              label="Your name (optional)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={AUTHOR_NAME_MAX_LENGTH}
+              autoComplete="off"
+              disabled={remaining <= 0 || submitting}
+            />
           )}
-          <button type="submit" disabled={remaining <= 0 || submitting || !text.trim()}>
-            {submitting ? "Sending…" : "Send note"}
-          </button>
-          <p role="status" style={{ margin: 0 }}>{remainingText}</p>
+          <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !text.trim()}>
+            {submitting ? "Sending" : "Send note"}
+          </Button>
+          <p role="status" className="field-meta">{remainingText}</p>
         </form>
       )}
-      {notice && <p role="status" style={{ margin: 0 }}>{notice}</p>}
-      {error && <p role="alert" style={{ margin: 0 }}>{error}</p>}
+      {notice && <p role="status" className="confirm">{notice}</p>}
+      {error && <InlineError>{error}</InlineError>}
       {list.length === 0 ? (
-        <p style={{ margin: 0 }}>No notes yet.</p>
+        <EmptyState title="No notes yet">Notes appear here as people post them.</EmptyState>
       ) : (
-        <div style={{ display: "grid", gap: 8 }}>
-          <div role="group" aria-label="Sort notes" style={{ display: "flex", gap: 8 }}>
+        <div>
+          <div role="group" aria-label="Sort notes" className="sort-bar">
             {(["popular", "recent"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={sort === mode}
-                onClick={() => setSort(mode)}
-                style={{ fontWeight: sort === mode ? 700 : 400 }}
-              >
+              <Button key={mode} aria-pressed={sort === mode} onClick={() => setSort(mode)}>
                 {mode === "popular" ? "Popular" : "Recent"}
-              </button>
+              </Button>
             ))}
           </div>
-          <ul aria-label="Notes" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          <ul aria-label="Notes" className="post-list">
             {sortNotes(list, sort).map((n) => (
-              <li key={n.id} style={card}>
+              <li key={n.id} className="post" data-pinned={n.pinned}>
                 {editingId === n.id ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <label style={field}>
-                      Edit your note
-                      <textarea
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        maxLength={NOTE_TEXT_MAX}
-                        rows={4}
-                        disabled={busyId === n.id}
-                        style={{ padding: 8 }}
-                      />
-                    </label>
-                    <span>
-                      {draft.length}/{NOTE_TEXT_MAX}
-                    </span>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button type="button" disabled={busyId === n.id || !draft.trim()} onClick={() => void saveEdit(n.id)}>
+                  <div className="live-form">
+                    <TextArea
+                      label="Edit your note"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      maxLength={NOTE_TEXT_MAX}
+                      rows={4}
+                      disabled={busyId === n.id}
+                      hint={`${draft.length}/${NOTE_TEXT_MAX}`}
+                    />
+                    <div className="post-foot">
+                      <Button variant="primary" disabled={busyId === n.id || !draft.trim()} onClick={() => void saveEdit(n.id)}>
                         Save
-                      </button>
-                      <button type="button" disabled={busyId === n.id} onClick={() => setEditingId(null)}>
+                      </Button>
+                      <Button disabled={busyId === n.id} onClick={() => setEditingId(null)}>
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: "0 0 8px", whiteSpace: "pre-wrap" }}>{n.text}</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                    <p className="post-text">{n.text}</p>
+                    <div className="post-foot">
                       {n.mine ? (
                         !closed && (
                           <>
-                            <button
-                              type="button"
+                            <Button
                               aria-label={`Edit your note: ${n.text}`}
                               disabled={busyId === n.id}
                               onClick={() => {
@@ -332,34 +314,32 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
                               }}
                             >
                               Edit
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
                               aria-label={`Delete your note: ${n.text}`}
                               disabled={busyId === n.id}
                               onClick={() => void remove(n.id)}
                             >
                               Delete
-                            </button>
+                            </Button>
                           </>
                         )
                       ) : (
-                        <button
-                          type="button"
+                        <Button
                           aria-pressed={n.iUpvoted}
                           aria-label={`Upvote: ${n.text}`}
                           onClick={() => void toggleUpvote(n.id)}
-                          style={{ fontWeight: n.iUpvoted ? 700 : 400 }}
+                          variant={n.iUpvoted ? "primary" : "secondary"}
                         >
-                          ▲ {n.upvotes}
-                        </button>
+                          ▲ <span className="vote-count">{n.upvotes}</span>
+                        </Button>
                       )}
-                      {n.mine && <span>▲ {n.upvotes}</span>}
-                      <small>
+                      {n.mine && <span className="vote-count">▲ {n.upvotes}</span>}
+                      <span className="post-meta">
                         {n.authorName ?? "Anonymous"}
                         {n.pinned ? " · Pinned" : ""}
                         {n.mine ? " · You" : ""}
-                      </small>
+                      </span>
                     </div>
                   </>
                 )}
