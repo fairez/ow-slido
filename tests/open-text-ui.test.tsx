@@ -114,7 +114,6 @@ it("host panel highlights, hides and deletes", async () => {
     !init || init.method === undefined ? json({ responses: list }) : json({ ok: true }),
   );
   vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("confirm", () => true);
   render(<OpenTextHostPanel eventId="e" interactionId="q1" live />);
   await screen.findByText("Keep it short");
   fireEvent.click(screen.getByRole("button", { name: "Highlight" }));
@@ -124,5 +123,6 @@ it("host panel highlights, hides and deletes", async () => {
   const bodies = fetchMock.mock.calls.filter((c) => c[1]?.method === "PATCH").map((c) => JSON.parse(c[1]!.body as string));
   expect(bodies).toEqual([{ highlighted: true }, { hidden: true }]);
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete response" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/responses/r1", { method: "DELETE" }));
 });

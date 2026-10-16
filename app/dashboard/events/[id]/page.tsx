@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { Badge } from "@/components/ui/card";
 import { ModeratorLinkManager } from "@/components/moderator-link-manager";
 import { ModerationPanel } from "@/components/moderation-panel";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
@@ -39,19 +40,23 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main id="main" className="page">
-      <Link href="/dashboard">← Dashboard</Link>
-      <h1>{event.name}</h1>
-      <p>
-        Join code: <strong>{event.joinCode}</strong>
-      </p>
-      <p>
-        <Link href={`/present/${event.id}`}>Open presenter view</Link>
-      </p>
-      <p>
-        <a href={`/api/events/${event.id}/export.csv`} download>
-          Export CSV
-        </a>
-      </p>
+      <Link href="/dashboard" className="back-link">Back to events</Link>
+      <header className="page-head">
+        <div>
+          <h1>{event.name}</h1>
+          <p className="row-meta">
+            Join code <Badge>{event.joinCode}</Badge>
+          </p>
+        </div>
+        <div className="row-actions">
+          <Link href={`/present/${event.id}`} className="ui-button" data-variant="primary">
+            Open presenter view
+          </Link>
+          <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
+            Export CSV
+          </a>
+        </div>
+      </header>
       <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} aiEnabled={isAiConfigured()} />
       <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} initialNotes={hostNotes} />
       <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />

@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { InlineError } from "@/components/ui/field";
 import type { HostResponse } from "@/lib/open-text";
-
-const buttonStyle = { padding: "0 12px", font: "inherit", minHeight: 44 } as const;
 
 /** Host-page list of an open-text interaction's responses, with highlight, hide and delete. */
 export function OpenTextHostPanel({ eventId, interactionId, live }: { eventId: string; interactionId: string; live: boolean }) {
   const { socket } = useEventSocket(eventId, "host");
   const [responses, setResponses] = useState<HostResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -57,46 +59,55 @@ export function OpenTextHostPanel({ eventId, interactionId, live }: { eventId: s
     act(id, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) });
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <h3 style={{ fontSize: "1rem" }}>
+    <div className="response-panel">
+      <h4>
         Responses{responses ? ` (${responses.length})` : ""}
         {live ? "" : ", closed"}
-      </h3>
-      {error && <p role="alert" style={{ color: "#b00020" }}>{error}</p>}
-      {responses && responses.length === 0 && <p>No responses yet.</p>}
+      </h4>
+      {error && <InlineError>{error}</InlineError>}
+      {responses && responses.length === 0 && <p className="row-meta">No responses yet. They appear here as people send them.</p>}
       {responses && responses.length > 0 && (
-        <ul aria-label="Responses" style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+        <ul aria-label="Responses" className="row-list">
           {responses.map((r) => (
-            <li key={r.id} style={{ border: "1px solid #ccc", padding: 8 }}>
-              <p style={{ margin: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>{r.text}</p>
-              <p style={{ margin: "4px 0" }}>
-                {r.highlighted ? "Highlighted" : ""}
-                {r.highlighted && r.hidden ? " · " : ""}
-                {r.hidden ? "Hidden from audience" : ""}
-              </p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <li key={r.id} className="response-row">
+              <p className="response-text">{r.text}</p>
+              {(r.highlighted || r.hidden) && (
+                <p className="row-meta">
+                  {r.highlighted ? "Highlighted" : ""}
+                  {r.highlighted && r.hidden ? " · " : ""}
+                  {r.hidden ? "Hidden from audience" : ""}
+                </p>
+              )}
+              <div className="row-actions row-actions-quiet">
                 {!r.hidden && (
-                  <button type="button" aria-pressed={r.highlighted} onClick={() => patch(r.id, { highlighted: !r.highlighted })} style={buttonStyle}>
+                  <Button variant="quiet" aria-pressed={r.highlighted} onClick={() => patch(r.id, { highlighted: !r.highlighted })}>
                     {r.highlighted ? "Remove highlight" : "Highlight"}
-                  </button>
+                  </Button>
                 )}
-                <button type="button" onClick={() => patch(r.id, { hidden: !r.hidden })} style={buttonStyle}>
+                <Button variant="quiet" onClick={() => patch(r.id, { hidden: !r.hidden })}>
                   {r.hidden ? "Show" : "Hide"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm("Delete this response?")) void act(r.id, { method: "DELETE" });
-                  }}
-                  style={buttonStyle}
-                >
-                  Delete
-                </button>
+                </Button>
+                <Button variant="quiet" onClick={() => setDeleting(r.id)}>Delete</Button>
               </div>
             </li>
           ))}
         </ul>
       )}
+      <Dialog open={deleting !== null} title="Delete this response?" onClose={() => setDeleting(null)}>
+        <p>The response is removed for everyone.</p>
+        <div className="row-actions">
+          <Button onClick={() => setDeleting(null)}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (deleting) void act(deleting, { method: "DELETE" });
+              setDeleting(null);
+            }}
+          >
+            Delete response
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

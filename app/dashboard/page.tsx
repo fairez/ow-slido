@@ -30,11 +30,13 @@ export default async function DashboardPage() {
 
   return (
     <main id="main" className="page">
-      <h1>Dashboard</h1>
-      <p>
-        Signed in as <strong>{user.email}</strong>
-      </p>
-      <LogoutButton />
+      <header className="page-head">
+        <div>
+          <h1>Your events</h1>
+          <p className="row-meta">Signed in as {user.email}</p>
+        </div>
+        <LogoutButton />
+      </header>
       <EventManager initialEvents={initialEvents} />
     </main>
   );

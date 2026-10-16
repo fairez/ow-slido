@@ -279,3 +279,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Verified at 360px and 1280px, light and dark (screens/us026-*.png), no overflow or console errors. Tab/Enter work with native controls and the shared focus ring.
   - Header nav still shows "Events" to logged-out visitors; the shell is not part of this story.
 ---
+
+## 2026-10-16 - US-027
+- Restyled the host dashboard and event page with the ui primitives. Dashboard: "Your events" header with Log out, New event card (name, start/end pair, busy primary button), event rows (name, dates, join code badge, live count, Manage as the accent action, quiet Rename/Duplicate/Delete), written empty state. Event page: header with presenter view (accent) and Export CSV, interaction rows with type, state badge and Start/Close as the accent action (live row gets an accent border), one shared form layout for all five types (Question/Prompt, grouped fieldsets, Save/Cancel), written empty state. Delete confirms for events, interactions and open-text responses now use `Dialog` (no `window.confirm`).
+- Files: components/event-manager.tsx, poll-manager.tsx, open-text-host-panel.tsx, logout-button.tsx, app/dashboard/page.tsx, app/dashboard/events/[id]/page.tsx, app/globals.css, tests (event-manager, poll-manager, open-text-ui), scripts/ralph/screens/us027.mjs
+- **Learnings for future iterations:**
+  - New shared classes in globals.css: `.stack`, `.page-head`, `.form-stack`, `.form-group`, `.row-list`, `.row-actions(-quiet)`, `.row-meta`, `.event-row`, `.interaction-row`. Links styled as buttons use `className="ui-button" data-variant=...`.
+  - ModerationPanel and ModeratorLinkManager on the event page are still unstyled: US-029 owns them.
+  - Delete flows now need a second click on the dialog button ("Delete event", "Delete interaction", "Delete response") in tests.
+  - Screenshot script needs `set -a; . ./.env.local; set +a` first; `getByLabel` needs `{exact: true}` because "Question"/"Option 1" also match other labels. Tests recreate `.next-shot`; rm it before lint.
+  - Verified at 360px and 1280px, light and dark (screens/us027-*.png): no overflow, no console errors.
+---

@@ -61,7 +61,6 @@ describe("PollManager", () => {
   });
 
   it("duplicates and deletes drafts", async () => {
-    vi.stubGlobal("confirm", () => true);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
       init?.method === "DELETE" ? Response.json({ ok: true }) : Response.json({ interaction: poll("3", "Copy") }, { status: 201 }),
     );
@@ -70,6 +69,7 @@ describe("PollManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     await screen.findByText("Copy");
     fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete interaction" }));
     await waitFor(() => expect(screen.queryByText("Orig")).toBeNull());
   });
 

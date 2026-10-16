@@ -24,7 +24,7 @@ describe("EventManager", () => {
         initialEvents={[ev("b", "Later", "2030-02-01T00:00:00.000Z"), ev("a", "Sooner", "2030-01-01T00:00:00.000Z")]}
       />,
     );
-    const names = screen.getAllByRole("listitem").map((li) => li.querySelector("strong")?.textContent);
+    const names = screen.getAllByRole("listitem").map((li) => li.querySelector(".event-name")?.textContent);
     expect(names).toEqual(["Sooner", "Later"]);
   });
 
@@ -69,7 +69,7 @@ describe("EventManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
     await waitFor(() => expect(screen.queryByText("Doomed")).toBeNull());
