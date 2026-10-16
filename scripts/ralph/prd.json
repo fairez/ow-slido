@@ -530,7 +530,7 @@
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

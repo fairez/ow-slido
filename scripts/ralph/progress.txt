@@ -346,3 +346,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Browser check was a login-error screenshot at 360 and 1280px (screens/us032-login-*.png); the alert text was captured before the response, so the exact new strings were verified by unit tests, not by eye.
   - `pkill -f` kills your own shell here too; use `fuser -k` or Monitor/TaskStop.
 ---
+
+## 2026-10-16 - US-033
+- Final antislop audit (mode after): 7 findings in docs/antislop-audit/audit-001.md, fixed all HIGH/MEDIUM (4) plus the comment banner; follow-up in audit-001-report.md, two LOW items left. Main fix: the AI analysis panels (notes-analysis-panel, analysis-editor, published-analysis) were still inline-styled with hardcoded colours; now use Button/Toggle and `.analysis*` classes in globals.css. Removed the colored left stripe on pending moderation posts.
+- Screenshots of 7 key pages at 360 and 1280px, light and dark, in docs/screens/ (script: scripts/ralph/screens/us033.mjs).
+- Files: app/globals.css, components/{notes-analysis-panel,analysis-editor,published-analysis}.tsx, tests/questions.test.ts, docs/antislop-audit/*, docs/screens/*
+- Checks: lint (0 errors), typecheck, test (358), build, test:e2e all pass.
+- **Learnings for future iterations:**
+  - AI UI only renders with `AI_PROVIDER=mock` on the dev server; run it that way to screenshot the analysis panels.
+  - notes-ai e2e can time out on the first run (cold route compile, 5s assertion); a rerun passed with no code change.
+---

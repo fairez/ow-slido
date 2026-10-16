@@ -42,21 +42,16 @@ export function PublishedAnalysis({ interactionId, socket }: Props) {
   const words = analysis.keywords.map((k) => ({ word: k.word, count: Math.max(1, Math.round(k.weight)) }));
 
   return (
-    <section
-      aria-labelledby="published-analysis-title"
-      style={{ border: "1px solid var(--border, #8a8178)", borderRadius: 8, padding: 12, display: "grid", gap: 12 }}
-    >
-      <h3 id="published-analysis-title" style={{ margin: 0 }}>
-        Themes from the notes
-      </h3>
-      <p style={{ margin: 0, fontSize: "0.875rem" }}>Written by an AI service and reviewed by the host.</p>
-      {analysis.summary && <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{analysis.summary}</p>}
+    <section aria-labelledby="published-analysis-title" className="analysis-card">
+      <h3 id="published-analysis-title">Themes from the notes</h3>
+      <p className="analysis-muted">Written by an AI service and reviewed by the host.</p>
+      {analysis.summary && <p className="analysis-summary">{analysis.summary}</p>}
       {analysis.categories.length > 0 && (
-        <ul aria-label="Categories" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+        <ul aria-label="Categories" className="analysis-list">
           {analysis.categories.map((c) => (
             <li key={c.name}>
               <strong>{c.name}</strong>: {c.count} {c.count === 1 ? "note" : "notes"}
-              {c.description && <div style={{ fontSize: "0.875rem" }}>{c.description}</div>}
+              {c.description && <div className="analysis-muted">{c.description}</div>}
             </li>
           ))}
         </ul>

@@ -240,7 +240,7 @@ test("upvotes are rate limited per participant", async () => {
   expect(limited.headers.get("retry-after")).toBeTruthy();
 });
 
-// ---- Moderation (US-026) ----
+// Moderation
 type QCtx = { params: Promise<{ id: string; questionId: string }> };
 const qctx = (questionId: string): QCtx => ({ params: Promise.resolve({ id: eventId, questionId }) });
 

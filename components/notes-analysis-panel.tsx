@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AnalysisEditor } from "@/components/analysis-editor";
+import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/field";
 import type { AnalysisEdit } from "@/lib/analysis-edit";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
@@ -22,10 +24,6 @@ type Analysis = {
 };
 
 type State = { analysis: Analysis | null; lastDone: Analysis | null; approvedNoteCount: number; noticeAccepted: boolean; notes: { id: string; text: string }[] };
-
-const buttonStyle = { padding: "0 12px", font: "inherit", minHeight: 44 } as const;
-const mutedStyle = { margin: "4px 0", color: "var(--ink-muted, #5c534b)" } as const;
-const errorStyle = { margin: "4px 0", color: "var(--error, #9b1c1c)" } as const;
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -110,7 +108,7 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
     }
   }
 
-  if (!state) return error ? <p role="alert" style={errorStyle}>{error}</p> : null;
+  if (!state) return error ? <p role="alert" className="analysis-error">{error}</p> : null;
 
   const { analysis, lastDone, approvedNoteCount, noticeAccepted } = state;
   const needsNotice = !noticeAccepted;
@@ -121,47 +119,51 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
   const label = shown ? "Run again" : "Analyze notes";
 
   return (
-    <section aria-label="Analyze notes" style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid var(--border, #e3dacb)" }}>
-      <h3 style={{ fontSize: "1rem", margin: 0 }}>Analysis</h3>
-      <p style={mutedStyle}>
+    <section aria-label="Analyze notes" className="analysis">
+      <h3>Analysis</h3>
+      <p className="analysis-muted">
         {approvedNoteCount} approved {approvedNoteCount === 1 ? "note" : "notes"}
       </p>
       {needsNotice && (
-        <label style={{ display: "block", margin: "8px 0" }}>
-          <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} /> I understand that the text of approved notes is sent to a third-party AI service to be analyzed.
-        </label>
+        <Toggle
+          label="I understand that the text of approved notes is sent to a third-party AI service to be analyzed."
+          checked={accepted}
+          onChange={(e) => setAccepted(e.target.checked)}
+        />
       )}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" onClick={run} disabled={disabled} style={buttonStyle}>
-          {running ? "Analyzing…" : label}
-        </button>
+      <div className="row-actions">
+        <Button variant="primary" onClick={run} disabled={disabled} busy={running || starting}>
+          {running ? "Analyzing" : label}
+        </Button>
         {shown?.outdated && !running && (
-          <span style={{ border: "1px solid currentColor", borderRadius: 4, padding: "2px 8px" }}>Outdated: notes have changed since this run</span>
+          <span className="ui-badge" data-tone="accent">Outdated: notes have changed since this run</span>
         )}
       </div>
       {shown && shown.status === "done" && (
-        <div style={{ margin: "8px 0" }}>
-          <button type="button" aria-pressed={shown.published} onClick={() => void setPublished(!shown.published)} style={buttonStyle}>
-            {shown.published ? "Unpublish from participants" : "Publish to participants"}
-          </button>
-          <p style={mutedStyle}>
+        <div className="analysis-part">
+          <div className="row-actions">
+            <Button aria-pressed={shown.published} onClick={() => void setPublished(!shown.published)}>
+              {shown.published ? "Unpublish from participants" : "Publish to participants"}
+            </Button>
+          </div>
+          <p className="analysis-muted">
             {shown.published ? "Participants can see this analysis." : "Participants cannot see the analysis until you publish it."}
           </p>
         </div>
       )}
-      {running && <p role="status" style={mutedStyle}>Analyzing {analysis?.noteCount} notes. This usually takes under a minute.</p>}
-      {analysis?.status === "failed" && <p role="alert" style={errorStyle}>The last run failed: {analysis.error ?? "unknown error"}</p>}
-      {noNotes && <p style={mutedStyle}>Approve at least one note to run an analysis.</p>}
+      {running && <p role="status" className="analysis-muted">Analyzing {analysis?.noteCount} notes. This usually takes under a minute.</p>}
+      {analysis?.status === "failed" && <p role="alert" className="analysis-error">The last run failed: {analysis.error ?? "unknown error"}</p>}
+      {noNotes && <p className="analysis-muted">Approve at least one note to run an analysis.</p>}
       {shown && shown.finishedAt && (
-        <p style={mutedStyle}>
+        <p className="analysis-muted">
           Last analyzed {formatTime(shown.finishedAt)} from {shown.noteCount} {shown.noteCount === 1 ? "note" : "notes"}
           {shown.edited ? ", edited by you" : ""}.
         </p>
       )}
-      {keywordsOnly && <p style={mutedStyle}>{shown.error ?? "This run produced keywords only."}</p>}
+      {keywordsOnly && <p className="analysis-muted">{shown.error ?? "This run produced keywords only."}</p>}
       {shown && shown.status === "done" && !running && (
-        <details style={{ marginTop: 8 }}>
-          <summary style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer" }}>Review and edit results</summary>
+        <details>
+          <summary>Review and edit results</summary>
           <AnalysisEditor
             summary={shown.summary}
             categories={shown.categories}
@@ -171,7 +173,7 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
           />
         </details>
       )}
-      {error && <p role="alert" style={errorStyle}>{error}</p>}
+      {error && <p role="alert" className="analysis-error">{error}</p>}
     </section>
   );
 }
