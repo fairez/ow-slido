@@ -55,7 +55,7 @@ const addNote = async (text: string, status: "approved" | "pending" = "approved"
   const [row] = await db.insert(sharedNotes).values({ interactionId: notesId, participantId, text, status }).returning();
   return row.id;
 };
-const start = (c: string | null = hostCookie) => analyze.POST(req("POST", undefined, c), ctx(notesId));
+const start = (c: string | null = hostCookie) => analyze.POST(req("POST", { acceptNotice: true }, c), ctx(notesId));
 const latest = async () => (await (await analysis.GET(req("GET"), ctx(notesId))).json()).analysis;
 
 const output = { summary: "S", categories: [{ name: "A", noteIds: [] }], keywords: [{ word: "w", weight: 1 }], model: "m", promptVersion: "v1" };
@@ -206,4 +206,20 @@ test("deleting the event removes its analyses", async () => {
   await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
   await db.delete(events).where(eq(events.id, eventId));
   expect(await db.select().from(noteAnalyses)).toHaveLength(0);
+});
+
+test("requires the AI notice once per event, then remembers it", async () => {
+  await addNote("one");
+  const bare = await analyze.POST(req("POST"), ctx(notesId));
+  expect(bare.status).toBe(409);
+  expect((await bare.json()).code).toBe("notice_required");
+  const state = await (await analysis.GET(req("GET"), ctx(notesId))).json();
+  expect(state.noticeAccepted).toBe(false);
+  expect((await start()).status).toBe(202);
+  const after = await (await analysis.GET(req("GET"), ctx(notesId))).json();
+  expect(after.noticeAccepted).toBe(true);
+  expect(after.approvedNoteCount).toBe(1);
+  await vi.waitFor(async () => expect((await latest()).status).not.toBe("queued"));
+  await vi.waitFor(async () => expect(["done", "failed"]).toContain((await latest()).status));
+  expect((await analyze.POST(req("POST"), ctx(notesId))).status).toBe(202);
 });

@@ -14,6 +14,8 @@ export type AnalysisOutput = {
   keywords: unknown;
   model: string;
   promptVersion: string;
+  /** Plain-language reason shown to the host when the result is a fallback. */
+  notice?: string;
 };
 
 export type AnalysisRunner = (input: {
@@ -146,7 +148,7 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
         keywords: out.keywords,
         model: out.model,
         promptVersion: out.promptVersion,
-        error: null,
+        error: out.notice ?? null,
         finishedAt: new Date(),
       })
       .where(eq(noteAnalyses.id, id));
@@ -158,6 +160,40 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
       .where(eq(noteAnalyses.id, id))
       .catch(() => {});
   }
+}
+
+export type AnalysisPanelState = {
+  /** The newest job, whatever its status. */
+  latest: AnalysisView | null;
+  /** The newest finished job; shown beside a failed latest one so the host keeps the last good result. */
+  lastDone: AnalysisView | null;
+  approvedNoteCount: number;
+};
+
+export async function getAnalysisPanelState(interactionId: string): Promise<AnalysisPanelState> {
+  const db = getDb();
+  const notes = await approvedNotes(db, interactionId);
+  const hash = hashNotes(notes);
+  const [latest] = await db
+    .select()
+    .from(noteAnalyses)
+    .where(eq(noteAnalyses.interactionId, interactionId))
+    .orderBy(desc(noteAnalyses.createdAt))
+    .limit(1);
+  const [lastDone] =
+    latest && latest.status !== "done"
+      ? await db
+          .select()
+          .from(noteAnalyses)
+          .where(and(eq(noteAnalyses.interactionId, interactionId), eq(noteAnalyses.status, "done")))
+          .orderBy(desc(noteAnalyses.createdAt))
+          .limit(1)
+      : [latest];
+  return {
+    latest: latest ? view(latest, hash) : null,
+    lastDone: lastDone ? view(lastDone, hash) : null,
+    approvedNoteCount: notes.length,
+  };
 }
 
 export async function findNotesInteractionEvent(interactionId: string) {

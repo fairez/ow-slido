@@ -177,8 +177,17 @@ export function fallbackKeywords(notes: AnalysisNote[]): AnalysisKeyword[] {
   return normalizeKeywords([...counts].map(([word, weight]) => ({ word, weight })));
 }
 
-function fallback(notes: AnalysisNote[]): AnalysisOutput {
+const FALLBACK_NOTICES: Record<string, string> = {
+  not_configured: "AI is not set up on this server, so this shows keywords only.",
+  event_cap: "This event has used all its AI calls, so this shows keywords only.",
+  daily_cap: "The daily AI limit has been reached, so this shows keywords only. Try again tomorrow.",
+  timeout: "The AI service took too long to answer, so this shows keywords only.",
+  provider: "The AI service could not be reached, so this shows keywords only.",
+};
+
+function fallback(notes: AnalysisNote[], code: string): AnalysisOutput {
   return {
+    notice: FALLBACK_NOTICES[code],
     summary: "",
     categories: [] as AnalysisCategory[],
     keywords: fallbackKeywords(notes),
@@ -238,7 +247,7 @@ export async function analyzeNotes(
       promptVersion: ANALYSIS_PROMPT_VERSION,
     };
   } catch (err) {
-    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes);
+    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes, err.code);
     if (err instanceof AiError) throw new Error("The AI returned a reply that could not be used. Your previous analysis is unchanged.");
     throw err;
   }

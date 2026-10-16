@@ -8,6 +8,7 @@ import { ModerationPanel } from "@/components/moderation-panel";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { createModeratorToken } from "@/lib/moderator-token";
@@ -51,7 +52,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           Export CSV
         </a>
       </p>
-      <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} />
+      <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} aiEnabled={isAiConfigured()} />
       <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} initialNotes={hostNotes} />
       <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />
     </main>

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
 import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN, OPEN_TEXT_MAX, OPEN_TEXT_MIN } from "@/lib/interaction-config";
+import { NotesAnalysisPanel } from "@/components/notes-analysis-panel";
 import { OpenTextHostPanel } from "@/components/open-text-host-panel";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 
@@ -47,7 +48,7 @@ async function errorFrom(response: Response) {
 const inputStyle = { padding: 8, font: "inherit", minHeight: 44 } as const;
 const buttonStyle = { padding: 10, font: "inherit", minHeight: 44 } as const;
 
-export function PollManager({ eventId, initialInteractions }: { eventId: string; initialInteractions: InteractionItem[] }) {
+export function PollManager({ eventId, initialInteractions, aiEnabled = false }: { eventId: string; initialInteractions: InteractionItem[]; aiEnabled?: boolean }) {
   const base = `/api/events/${eventId}/interactions`;
   const [items, setItems] = useState(initialInteractions);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -188,6 +189,7 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
                 {TYPE_LABELS[item.type]} · <span data-testid="state">{item.state}</span>
               </div>
               {item.type === "openText" && item.state !== "draft" && <OpenTextHostPanel eventId={eventId} interactionId={item.id} live={item.state === "live"} />}
+              {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && <NotesAnalysisPanel interactionId={item.id} />}
               {item.state !== "closed" && (
                 <div style={{ marginTop: 8 }}>
                   {item.state === "draft" ? (

@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "ai_notice_accepted_at" timestamp with time zone;

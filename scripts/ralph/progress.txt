@@ -183,3 +183,15 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Tests pass `{provider}` (a scripted AiProvider) to `analyzeNotes`; AI_PROVIDER=mock yields "mock" summary and everything in Uncategorized.
   - No UI changed, so no browser check needed.
 ---
+
+## 2026-10-16 - US-018
+- Host controls for analysis: `components/notes-analysis-panel.tsx` inside each started/closed shared-notes item in poll-manager (rendered only when `isAiConfigured()`, passed as `aiEnabled` from the event page). Shows approved note count, "Analyze notes"/"Run again", progress (polls every 2s while queued/running), failure message, last run time, "Outdated" badge, keywords-only notice. Button is disabled while a job runs or with no approved notes.
+- Per-event AI notice: `events.ai_notice_accepted_at` (migration 0017). POST /analyze returns 409 `{code: "notice_required"}` until the body has `acceptNotice: true`, which stores the timestamp. GET /analysis now returns `{analysis, lastDone, approvedNoteCount, noticeAccepted}`.
+- Cap/provider fallbacks now store a plain-language reason in `note_analyses.error` on the done row (`AnalysisOutput.notice`), which the panel shows as the keywords-only message.
+- Files: db/schema.ts, db/migrations/0017*, lib/note-analysis.ts, lib/note-analysis-ai.ts, analyze/analysis routes, components/notes-analysis-panel.tsx, poll-manager.tsx, event page, tests/note-analysis.test.ts
+- **Learnings for future iterations:**
+  - Tests calling the analyze route must send `{acceptNotice: true}` on the first call.
+  - `getAnalysisPanelState` gives the newest job and the newest done job; US-019/020 should render results from `lastDone`. `edited` on it drives the re-run confirmation.
+  - Panel uses `var(--token, fallback)` colours since tokens land in US-024; swap the fallbacks out in the restyle stories.
+  - Browser check: port 3200 was already held by another dev server on `.next-shot`; I used PORT=3201 with NEXT_DIST_DIR=.next-shot2 and DATABASE_URL=$TEST_DATABASE_URL AI_PROVIDER=mock. Signup is rate limited, so wait ~30s between script runs. Verified at 360px and 1280px (screens/us018-*.png).
+---
