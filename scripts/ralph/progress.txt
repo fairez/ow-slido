@@ -35,3 +35,12 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - No realtime publish yet; US-004 (list API) should add it. Notes outside the author's own are not exposed by these routes.
   - Per-IP rate-limit key `notes:ip:` is shared by POST and PATCH/DELETE; token key `notes:token:` too.
 ---
+
+## 2026-10-16 - US-004
+- Added POST /api/notes/:id/upvote (toggle), GET /api/interactions/:id/notes?sort=popular|recent (approved only, pinned first, `mine`/`iUpvoted`, no participant ids) and realtime publishes from submit/edit/delete/upvote.
+- Files: lib/shared-notes.ts, app/api/notes/[id]/upvote/route.ts, app/api/interactions/[id]/notes/route.ts, tests/shared-notes-votes.test.ts
+- **Learnings for future iterations:**
+  - Events published: `note:added`/`note:updated` (public note payload), `note:removed` {interactionId, noteId} (also sent when an edit sends a note back to pending), `note:votes` {interactionId, noteId, upvotes}, host-only `note:pending`. US-007 moderation (approve/reject/pin/delete) should publish the same events.
+  - Upvote errors: 403 own note, 404 pending/rejected/unknown, 409 draft. Closed interactions still accept upvotes.
+  - List hides draft interactions (404). Sorting is done in JS after fetching approved rows.
+---

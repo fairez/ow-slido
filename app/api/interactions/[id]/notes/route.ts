@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { submitNote } from "@/lib/shared-notes";
+import { listNotes, submitNote, type NoteSort } from "@/lib/shared-notes";
 
 const NOTE_IP_LIMIT = 100;
 const NOTE_TOKEN_LIMIT = 10;
@@ -49,4 +49,30 @@ export async function POST(request: Request, { params }: Context) {
   const result = await submitNote(id, participantId, text);
   if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
   return Response.json({ note: result.note }, { status: 201 });
+}
+
+const LIST_IP_LIMIT = 200;
+
+export async function GET(request: Request, { params }: Context) {
+  const { id } = await params;
+
+  const ip = await rateLimit(`notes:list:ip:${clientIp(request)}`, LIST_IP_LIMIT, NOTE_WINDOW_SECONDS);
+  if (!ip.allowed) return tooMany(ip.retryAfterSeconds);
+
+  const interaction = await findNotesInteraction(id);
+  if (!interaction) return Response.json({ error: "Interaction not found" }, { status: 404 });
+
+  const token = readParticipantToken(request, interaction.eventId);
+  const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;
+  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+
+  const sortParam = new URL(request.url).searchParams.get("sort");
+  if (sortParam !== null && sortParam !== "popular" && sortParam !== "recent") {
+    return Response.json({ error: "sort must be popular or recent" }, { status: 400 });
+  }
+  const sort: NoteSort = sortParam ?? "popular";
+
+  const result = await listNotes(id, participantId, sort);
+  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+  return Response.json({ notes: result.notes });
 }
