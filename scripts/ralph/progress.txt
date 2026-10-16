@@ -314,3 +314,12 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Lint reports 100 errors if `.next-shot` exists; `rm -rf .next-shot` and `git checkout next-env.d.ts tsconfig.json` first.
   - Verified at 360, 1280 and 1920px, light and dark (screens/us029-*.png): no horizontal overflow.
 ---
+
+## 2026-10-16 - US-030
+- Audited every page at 360, 390 and 768px with 140-character unbroken words in all user content. No horizontal overflow or clipping anywhere. Fixed four under-44px targets: header "Join" width, site name height, skip link height, and the inline host links on the home page. Results in docs/mobile-audit.md.
+- Files: app/globals.css, docs/mobile-audit.md, scripts/ralph/screens/us030.mjs
+- **Learnings for future iterations:**
+  - `scripts/ralph/screens/us030.mjs` is a reusable overflow and tap-target probe (reports elements past the viewport and controls under 44px); run it against :3200 with `set -a; . ./.env.local; set +a` first. It takes about 3 minutes, so run it in the background.
+  - Event names are capped (50 chars or so); the API rejects longer names with no `joinCode` in the response.
+  - `npm test` recreates `.next-shot`; `rm -rf` it before lint.
+---
