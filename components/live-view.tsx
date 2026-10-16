@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { WORDCLOUD_WORD_MAX } from "@/lib/wordcloud-limits";
+import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
 
 type StateChanged = { interactionId: string; state: "draft" | "live" | "closed" };
@@ -55,7 +56,9 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
   return (
     <section aria-labelledby="live-title">
       <h2 id="live-title">{current.title}</h2>
-      {current.state === "closed" ? (
+      {current.type === "sharedNotes" ? (
+        <SharedNotesPanel key={current.id} notes={current} socket={socket} />
+      ) : current.state === "closed" ? (
         <p role="status">{current.type === "wordcloud" ? "Submissions closed" : "Voting closed"}</p>
       ) : current.type === "wordcloud" ? (
         <WordForm key={current.id} cloud={current} />

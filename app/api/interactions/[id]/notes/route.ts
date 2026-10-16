@@ -44,9 +44,9 @@ export async function POST(request: Request, { params }: Context) {
   if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);
 
   const body = await request.json().catch(() => null);
-  const text = body && typeof body === "object" ? (body as Record<string, unknown>).text : undefined;
+  const fields = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  const result = await submitNote(id, participantId, text);
+  const result = await submitNote(id, participantId, fields.text, fields.authorName);
   if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
   return Response.json({ note: result.note }, { status: 201 });
 }

@@ -54,3 +54,16 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Screenshot flow: run dev on :3200 with `DATABASE_URL=$TEST_DATABASE_URL` so signups land in the test DB. Don't `pkill -f` with the env string; it kills your own shell.
   - Verified in Playwright at 360px and 1280px (screens/us005-*.png). Styling is pre-restyle by design.
 ---
+
+## 2026-10-16 - US-006
+- Participant notes screen: `components/shared-notes-panel.tsx` rendered by LiveView for `sharedNotes` (prompt, 500-char counter, optional name field when the host enabled author names, remaining count, Popular/Recent, upvote, inline edit/delete on own notes, "waiting for approval" notice in moderated mode, live updates). Closed state hides the form and own edit/delete but keeps upvotes.
+- `getLiveInteraction` now returns a `LiveNotes` (maxNotes, remaining, moderation, showAuthorNames). `POST /api/interactions/:id/notes` accepts optional `authorName` (max 40, profanity-checked, used only when showAuthorNames; falls back to the participant nickname). `NOTE_TEXT_MAX` moved to db-free `lib/note-limits.ts` for client use.
+- Files: lib/live-view.ts, lib/shared-notes.ts, lib/note-limits.ts, app/api/interactions/[id]/notes/route.ts, components/live-view.tsx, components/shared-notes-panel.tsx, tests/shared-notes-panel.test.tsx, tests/shared-notes-api.test.ts
+- **Learnings for future iterations:**
+  - Nothing sets `participants.nickname` at join, so the name field on a note is the only real source of author names.
+  - The participant's own pending notes are not listed (list API is approved-only); the panel shows a notice instead. Editing in moderated mode emits `note:removed`, so the panel drops the note locally.
+  - eslint `react-hooks/set-state-in-effect` flags a direct fetch-then-setState call in an effect body; wrap it in `queueMicrotask`.
+  - The Q&A tab has the same "Your name (optional)" label; scope Playwright locators to `#panel-live`.
+  - Stop your dev server with `kill <pid>` from `ss -ltnp`; `pkill -f` with the port in the pattern kills your own shell.
+  - Verified at 360px and 1280px (screens/us006-*.png); styling is pre-restyle by design (US-028).
+---

@@ -3,9 +3,11 @@ import { interactions, participants, sharedNoteVotes, sharedNotes } from "@/db/s
 import { getDb } from "@/lib/db";
 import type { SharedNotesConfig } from "@/lib/interaction-config";
 import { isProfane } from "@/lib/profanity";
+import { NOTE_TEXT_MAX } from "@/lib/note-limits";
+import { AUTHOR_NAME_MAX_LENGTH } from "@/lib/question-types";
 import { publish } from "@/lib/realtime/publisher";
 
-export const NOTE_TEXT_MAX = 500;
+export { NOTE_TEXT_MAX };
 
 export type NoteView = {
   id: string;
@@ -56,6 +58,18 @@ function validateText(raw: unknown): { ok: true; text: string } | { ok: false; s
   return { ok: true, text };
 }
 
+/** The optional display name sent with a note; empty means "use the participant's nickname, if any". */
+function validateAuthorName(raw: unknown): { ok: true; name: string | null } | { ok: false; status: 400; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, name: null };
+  if (typeof raw !== "string") return { ok: false, status: 400, error: "Invalid name" };
+  const name = raw.trim();
+  if (name.length > AUTHOR_NAME_MAX_LENGTH) {
+    return { ok: false, status: 400, error: `Names must be at most ${AUTHOR_NAME_MAX_LENGTH} characters` };
+  }
+  if (name && isProfane(name)) return { ok: false, status: 400, error: "That name contains language we can't accept" };
+  return { ok: true, name: name || null };
+}
+
 const settings = (config: unknown): SharedNotesConfig => {
   const c = (config ?? {}) as Partial<SharedNotesConfig>;
   return {
@@ -91,6 +105,7 @@ export async function submitNote(
   interactionId: string,
   participantId: string,
   rawText: unknown,
+  rawAuthorName?: unknown,
 ): Promise<NoteResult> {
   return getDb().transaction(async (tx): Promise<NoteResult> => {
     const ctx = await lockContext(tx, interactionId, participantId);
@@ -99,6 +114,8 @@ export async function submitNote(
 
     const checked = validateText(rawText);
     if (!checked.ok) return checked;
+    const name = validateAuthorName(rawAuthorName);
+    if (!name.ok) return name;
 
     const config = settings(ctx.interaction.config);
     const [{ used }] = await tx
@@ -109,7 +126,7 @@ export async function submitNote(
       return { ok: false, status: 409, error: "You have used all your notes" };
     }
 
-    const nickname = ctx.nickname?.trim() || null;
+    const nickname = name.name ?? (ctx.nickname?.trim() || null);
     const [row] = await tx
       .insert(sharedNotes)
       .values({

@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { interactions, wordcloudEntries } from "@/db/schema";
+import { interactions, sharedNotes, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import type { SharedNotesConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
@@ -26,7 +27,19 @@ export type LiveWordcloud = {
   remaining: number;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud;
+export type LiveNotes = {
+  id: string;
+  type: "sharedNotes";
+  title: string;
+  state: "live" | "closed";
+  maxNotes: number;
+  /** Notes this participant may still write; equals maxNotes when the participant is unknown. */
+  remaining: number;
+  moderation: "open" | "moderated";
+  showAuthorNames: boolean;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes;
 
 export async function getLiveInteraction(
   eventId: string,
@@ -48,6 +61,28 @@ export async function getLiveInteraction(
       used = r.used;
     }
     return { id: row.id, type: "wordcloud", title: row.title, state: "live", maxEntries: max, remaining: Math.max(0, max - used) };
+  }
+  if (row.type === "sharedNotes") {
+    const c = row.config as Partial<SharedNotesConfig>;
+    const max = c.maxNotesPerParticipant ?? 3;
+    let used = 0;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ used: sql<number>`count(*)::int` })
+        .from(sharedNotes)
+        .where(and(eq(sharedNotes.interactionId, row.id), eq(sharedNotes.participantId, participantId)));
+      used = r.used;
+    }
+    return {
+      id: row.id,
+      type: "sharedNotes",
+      title: row.title,
+      state: "live",
+      maxNotes: max,
+      remaining: Math.max(0, max - used),
+      moderation: c.moderation ?? "open",
+      showAuthorNames: c.showAuthorNames ?? false,
+    };
   }
   if (row.type !== "poll") return null;
   const config = pollConfig(row.config as Partial<PollConfig>);

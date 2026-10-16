@@ -147,6 +147,19 @@ test("stores the nickname only when supplied and showAuthorNames is on", async (
   expect((await (await post("c", named.cookie)).json()).note.authorName).toBeNull();
 });
 
+test("uses the submitted name when author names are shown, and ignores it otherwise", async () => {
+  const anon = await join();
+  const send = (authorName: unknown) => notes.POST(req("POST", { text: "hi", authorName }, anon.cookie), ctx(notesId));
+  await configure({ showAuthorNames: true, maxNotesPerParticipant: 10 });
+  expect((await (await send("  Robin ")).json()).note.authorName).toBe("Robin");
+  expect((await (await send("")).json()).note.authorName).toBeNull();
+  expect((await send(42)).status).toBe(400);
+  expect((await send("x".repeat(41))).status).toBe(400);
+  expect((await send("fuck")).status).toBe(400);
+  await configure({ showAuthorNames: false, maxNotesPerParticipant: 10 });
+  expect((await (await send("Robin")).json()).note.authorName).toBeNull();
+});
+
 test("blocks profane notes with a clear message", async () => {
   const res = await post("what the fuck");
   expect(res.status).toBe(400);
