@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
 import { getPollCounts } from "@/lib/votes";
 import { listPresenterResponses, type PublicResponse } from "@/lib/open-text";
+import { getPresenterResults, type RatingResults } from "@/lib/rating";
 import { listPresenterNotes, type PublicNote } from "@/lib/shared-notes";
 import { getWordcloudResults, type WordCount } from "@/lib/wordclouds";
 
@@ -35,7 +36,15 @@ export type PresenterOpenText = {
   responses: PublicResponse[];
 };
 
-export type PresenterState = PresenterPoll | PresenterWordcloud | PresenterNotes | PresenterOpenText;
+export type PresenterRating = {
+  type: "rating";
+  id: string;
+  title: string;
+  state: "live" | "closed";
+  results: RatingResults;
+};
+
+export type PresenterState = PresenterPoll | PresenterWordcloud | PresenterNotes | PresenterOpenText | PresenterRating;
 
 /** The live interaction, or the shared-notes or open-text interaction named by `closedNotesId` once it has closed. */
 export async function getPresenterState(eventId: string, closedNotesId?: string): Promise<PresenterState | null> {
@@ -52,7 +61,7 @@ export async function getPresenterState(eventId: string, closedNotesId?: string)
         and(
           eq(interactions.id, closedNotesId),
           eq(interactions.eventId, eventId),
-          inArray(interactions.type, ["sharedNotes", "openText"]),
+          inArray(interactions.type, ["sharedNotes", "openText", "rating"]),
           eq(interactions.state, "closed"),
         ),
       );
@@ -63,6 +72,9 @@ export async function getPresenterState(eventId: string, closedNotesId?: string)
   }
   if (row.type === "openText" && (row.state === "live" || row.state === "closed")) {
     return { type: "openText", id: row.id, title: row.title, state: row.state, responses: await listPresenterResponses(row.id) };
+  }
+  if (row.type === "rating" && (row.state === "live" || row.state === "closed")) {
+    return { type: "rating", id: row.id, title: row.title, state: row.state, results: await getPresenterResults(row.id, row.config) };
   }
   if (row.type === "wordcloud") {
     const { words, total } = await getWordcloudResults(row.id);

@@ -3,8 +3,9 @@ import { events, interactions, participants, ratingResponses } from "@/db/schema
 import { getDb } from "@/lib/db";
 import type { RatingConfig } from "@/lib/interaction-config";
 import { publish } from "@/lib/realtime/publisher";
+import { RATING_SCALE_MAX } from "@/lib/rating-limits";
 
-export const RATING_SCALE_MAX = { stars5: 5, numeric10: 10 } as const;
+export { RATING_SCALE_MAX };
 
 export type RatingResults = {
   interactionId: string;

@@ -128,3 +128,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Realtime event `rating:results` `{results}` is published on every rating. `getPresenterResults(interactionId, config)` is ready for presenter.ts in US-013.
   - No UI changed, so no browser check needed.
 ---
+
+## 2026-10-16 - US-013
+- Rating UI: builder form ("New rating", Stars 1-5 / Numbers 1-10; Edit now works for ratings), participant `RatingForm` (native radio group styled as stars or numbers, so arrow keys work; Send rating, confirmation, locked after submit or when `mine` is set, closed state), `PresenterRating` (average to one decimal, total, `RatingChart` with count and % printed per value; live via `rating:results`).
+- `getLiveInteraction` returns `LiveRating` (scale, mine); `getPresenterState` returns `PresenterRating` and the `?closed=` cursor now covers closed ratings too. `RATING_SCALE_MAX` moved to db-free `lib/rating-limits.ts` (re-exported from lib/rating.ts).
+- Files: components/rating-form.tsx, rating-chart.tsx, presenter-rating.tsx, poll-manager.tsx, live-view.tsx, presenter-view.tsx, app/globals.css (.rating-* classes); lib/live-view.ts, lib/presenter.ts, lib/rating-limits.ts; tests/rating-ui.test.tsx, tests/presenter.test.ts
+- **Learnings for future iterations:**
+  - Inline styles cannot do :focus-visible or :checked, so the rating choices use `.rating-choice` classes in globals.css (fallbacks on `var(--border)`/`var(--ink)` until the tokens land in US-027).
+  - Do not sync props to state in an effect (react-hooks/set-state-in-effect fails lint); LiveView already remounts with `key={current.id}`.
+  - Verified at 360px and 1280px (screens/us013-*.png), no horizontal overflow, keyboard arrows change the choice. Styling is pre-restyle by design.
+---

@@ -4,9 +4,11 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { PresenterOpenText } from "@/components/presenter-open-text";
+import { PresenterRating } from "@/components/presenter-rating";
 import { PresenterNotes } from "@/components/presenter-notes";
 import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import type { RatingResults } from "@/lib/rating";
 import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
@@ -151,6 +153,9 @@ export function PresenterView({
       );
     const onResponseRemoved = (msg: { interactionId: string; responseId: string }) =>
       forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
+    const onRating = (msg: { results: RatingResults }) =>
+      setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
+    socket.on("rating:results", onRating);
     socket.on("response:added", onResponse);
     socket.on("response:updated", onResponse);
     socket.on("response:removed", onResponseRemoved);
@@ -163,6 +168,7 @@ export function PresenterView({
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("rating:results", onRating);
       socket.off("response:added", onResponse);
       socket.off("response:updated", onResponse);
       socket.off("response:removed", onResponseRemoved);
@@ -230,6 +236,18 @@ export function PresenterView({
           {poll.title}
         </h1>
         <PresenterNotes notes={poll.notes} closed={poll.state === "closed"} />
+      </section>
+    );
+  }
+
+  if (poll.type === "rating") {
+    return (
+      <section aria-labelledby="present-title">
+        {extras}
+        <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
+          {poll.title}
+        </h1>
+        <PresenterRating results={poll.results} closed={poll.state === "closed"} />
       </section>
     );
   }

@@ -22,10 +22,11 @@ export type InteractionItem = {
     moderation?: "open" | "moderated";
     showAuthorNames?: boolean;
     maxResponsesPerParticipant?: number;
+    scale?: "stars5" | "numeric10";
   };
 };
 
-type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText";
+type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
 const TYPE_LABELS: Record<InteractionItem["type"], string> = {
   poll: "Poll",
   wordcloud: "Word cloud",
@@ -34,9 +35,9 @@ const TYPE_LABELS: Record<InteractionItem["type"], string> = {
   rating: "Rating",
 };
 
-type Draft = { kind: Kind; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+type Draft = { kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
 
-const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, maxResponses: 1, maxNotes: 3, moderated: false, showAuthors: false, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
+const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: false, showAuthors: false, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
@@ -78,7 +79,9 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
     event.preventDefault();
     if (!draft) return;
     const body =
-      draft.kind === "openText"
+      draft.kind === "rating"
+        ? { type: "rating", prompt: draft.question, scale: draft.scale }
+        : draft.kind === "openText"
         ? { type: "openText", prompt: draft.question, maxResponsesPerParticipant: draft.maxResponses }
         : draft.kind === "sharedNotes"
         ? {
@@ -146,9 +149,9 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
 
   function edit(item: InteractionItem) {
     setError(null);
-    if (item.type === "rating") return;
     setDraft({
       kind: item.type,
+      scale: item.config.scale ?? "stars5",
       maxResponses: item.config.maxResponsesPerParticipant ?? 1,
       maxNotes: item.config.maxNotesPerParticipant ?? 3,
       moderated: item.config.moderation === "moderated",
@@ -196,9 +199,7 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
               )}
               {item.state === "draft" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  {item.type !== "rating" && (
-                    <button type="button" onClick={() => edit(item)} style={buttonStyle}>Edit</button>
-                  )}
+                  <button type="button" onClick={() => edit(item)} style={buttonStyle}>Edit</button>
                   <button type="button" onClick={() => duplicate(item)} style={buttonStyle}>Duplicate</button>
                   <button type="button" onClick={() => remove(item)} style={buttonStyle}>Delete</button>
                   <button type="button" aria-label={`Move ${item.title} up`} disabled={index === 0} onClick={() => move(index, -1)} style={buttonStyle}>↑</button>
@@ -219,7 +220,7 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
               value={draft.question}
               onChange={(e) => setDraft({ ...draft, question: e.target.value })}
               required
-              maxLength={draft.kind === "wordcloud" ? WORDCLOUD_PROMPT_MAX : draft.kind === "sharedNotes" || draft.kind === "openText" ? INTERACTION_PROMPT_MAX : POLL_QUESTION_MAX}
+              maxLength={draft.kind === "wordcloud" ? WORDCLOUD_PROMPT_MAX : draft.kind === "sharedNotes" || draft.kind === "openText" || draft.kind === "rating" ? INTERACTION_PROMPT_MAX : POLL_QUESTION_MAX}
               style={inputStyle}
             />
           </label>
@@ -237,6 +238,17 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
                 style={inputStyle}
               />
             </label>
+          )}
+          {draft.kind === "rating" && (
+            <fieldset style={{ display: "grid", gap: 4, margin: 0 }}>
+              <legend>Scale</legend>
+              <label>
+                <input type="radio" name="scale" checked={draft.scale === "stars5"} onChange={() => setDraft({ ...draft, scale: "stars5" })} /> Stars, 1 to 5
+              </label>
+              <label>
+                <input type="radio" name="scale" checked={draft.scale === "numeric10"} onChange={() => setDraft({ ...draft, scale: "numeric10" })} /> Numbers, 1 to 10
+              </label>
+            </fieldset>
           )}
           {draft.kind === "openText" && (
             <label style={{ display: "grid", gap: 4 }}>
@@ -344,6 +356,9 @@ export function PollManager({ eventId, initialInteractions }: { eventId: string;
           </button>
           <button type="button" onClick={() => setDraft(blank("openText"))} style={buttonStyle}>
             New open text
+          </button>
+          <button type="button" onClick={() => setDraft(blank("rating"))} style={buttonStyle}>
+            New rating
           </button>
         </div>
       )}

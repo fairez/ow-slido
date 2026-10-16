@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { WORDCLOUD_WORD_MAX } from "@/lib/wordcloud-limits";
 import { OpenTextForm } from "@/components/open-text-form";
+import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
 
@@ -61,6 +62,8 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
         <SharedNotesPanel key={current.id} notes={current} socket={socket} />
       ) : current.type === "openText" ? (
         <OpenTextForm key={current.id} question={current} />
+      ) : current.type === "rating" ? (
+        <RatingForm key={current.id} rating={current} />
       ) : current.state === "closed" ? (
         <p role="status">{current.type === "wordcloud" ? "Submissions closed" : "Voting closed"}</p>
       ) : current.type === "wordcloud" ? (

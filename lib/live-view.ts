@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { interactions, openTextResponses, sharedNotes, wordcloudEntries } from "@/db/schema";
+import { interactions, openTextResponses, ratingResponses, sharedNotes, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import type { OpenTextConfig, SharedNotesConfig } from "@/lib/interaction-config";
+import type { OpenTextConfig, RatingConfig, SharedNotesConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
@@ -49,7 +49,17 @@ export type LiveOpenText = {
   remaining: number;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText;
+export type LiveRating = {
+  id: string;
+  type: "rating";
+  title: string;
+  state: "live" | "closed";
+  scale: RatingConfig["scale"];
+  /** This participant's earlier rating, or null; ratings cannot be changed. */
+  mine: number | null;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating;
 
 export async function getLiveInteraction(
   eventId: string,
@@ -105,6 +115,18 @@ export async function getLiveInteraction(
       used = r.used;
     }
     return { id: row.id, type: "openText", title: row.title, state: "live", maxResponses: max, remaining: Math.max(0, max - used) };
+  }
+  if (row.type === "rating") {
+    let mine: number | null = null;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ value: ratingResponses.value })
+        .from(ratingResponses)
+        .where(and(eq(ratingResponses.interactionId, row.id), eq(ratingResponses.participantId, participantId)));
+      mine = r?.value ?? null;
+    }
+    const scale = (row.config as Partial<RatingConfig>).scale === "numeric10" ? "numeric10" : "stars5";
+    return { id: row.id, type: "rating", title: row.title, state: "live", scale, mine };
   }
   if (row.type !== "poll") return null;
   const config = pollConfig(row.config as Partial<PollConfig>);

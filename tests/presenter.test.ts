@@ -79,3 +79,22 @@ test("returns visible responses for a live open-text interaction and a named clo
   expect(await getPresenterState(eventId)).toBeNull();
   expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "openText", state: "closed" });
 });
+
+test("returns rating results for a live rating and a named closed one", async () => {
+  const { ratingResponses, participants } = await import("@/db/schema");
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "rating", title: "Rate it", position: 0, state: "live", config: { prompt: "Rate it", scale: "stars5" } })
+    .returning();
+  const ps = await db.insert(participants).values([{ eventId }, { eventId }]).returning();
+  await db.insert(ratingResponses).values([
+    { interactionId: row.id, participantId: ps[0].id, value: 4 },
+    { interactionId: row.id, participantId: ps[1].id, value: 5 },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "rating", state: "live", results: { total: 2, average: 4.5, distribution: [0, 0, 0, 1, 1] } });
+  expect(JSON.stringify(live)).not.toContain(ps[0].id);
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "rating", state: "closed" });
+});
