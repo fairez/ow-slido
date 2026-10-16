@@ -21,6 +21,12 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     // The app under test runs against the test database, never the dev one.
-    env: { PORT: String(port), NEXT_DIST_DIR: ".next-e2e", DATABASE_URL: process.env.TEST_DATABASE_URL ?? "" },
+    env: {
+      PORT: String(port),
+      NEXT_DIST_DIR: ".next-e2e",
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      // Deterministic fake: the e2e run never reaches a real AI service.
+      AI_PROVIDER: "mock",
+    },
   },
 });

@@ -238,3 +238,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Uses the newest `done` row (failed runs ignored), matching the host panel's `lastDone`.
   - Lint warnings come from scripts/ralph/screens/*.mjs (unused vars), not app code.
 ---
+
+## 2026-10-16 - US-023
+- Added e2e/notes-ai.spec.ts: moderated shared notes (two participants, host approves, upvotes), manual Analyze with the mock provider, presenter Categories, then an open text round and a rating round. Playwright webServer now sets `AI_PROVIDER=mock`. README documents the new interaction types, AI env vars, owner key only in .env.local, manual-only analysis and `AI_PROVIDER=mock`.
+- Files: e2e/notes-ai.spec.ts, playwright.config.ts, README.md
+- **Learnings for future iterations:**
+  - Notes submit button is "Send note". Approve notes one at a time: wait for the pending count to drop before the next click.
+  - The host page loads the analysis panel's approved count on render; `page.reload()` after moderating before clicking Analyze.
+  - Only one interaction is needed live at a time in e2e: close the previous before starting the next.
+  - Full suite: lint 0 errors, typecheck, 349 unit tests, build and 2 e2e specs pass.
+---
