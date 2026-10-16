@@ -59,3 +59,23 @@ test("returns approved notes for a live notes interaction and a named closed one
   expect(await getPresenterState(eventId)).toBeNull();
   expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "sharedNotes", state: "closed" });
 });
+
+test("returns visible responses for a live open-text interaction and a named closed one", async () => {
+  const { openTextResponses, participants } = await import("@/db/schema");
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "openText", title: "Fix?", position: 0, state: "live", config: { prompt: "Fix?", maxResponsesPerParticipant: 2 } })
+    .returning();
+  const [p] = await db.insert(participants).values({ eventId }).returning();
+  await db.insert(openTextResponses).values([
+    { interactionId: row.id, participantId: p.id, text: "shown" },
+    { interactionId: row.id, participantId: p.id, text: "hidden", hidden: true },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "openText", state: "live" });
+  expect(JSON.stringify(live)).not.toContain(p.id);
+  expect((live as { responses: { text: string }[] }).responses.map((r) => r.text)).toEqual(["shown"]);
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "openText", state: "closed" });
+});

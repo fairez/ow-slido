@@ -107,3 +107,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - `listPresenterResponses(interactionId)` is ready for the presenter state; US-011 should wire live-view.ts / presenter.ts / UI.
   - Responses count toward the limit even when hidden. Host and participant UIs are US-011.
 ---
+
+## 2026-10-16 - US-011
+- Open text UI: builder form ("New open text": prompt, responses per participant 1-3; Edit works), participant `OpenTextForm` (textarea, 300-char counter, remaining count, confirmation, closed state), `PresenterOpenText` (newest first, highlighted ones get a yellow border, larger bold text and a label, live via `response:*` events), and `OpenTextHostPanel` under each non-draft open-text item on the host page (Highlight / Hide / Delete).
+- `getLiveInteraction` returns `LiveOpenText` (maxResponses, remaining); `getPresenterState` returns `PresenterOpenText` and the `?closed=<id>` cursor now covers closed openText as well as sharedNotes.
+- Files: components/open-text-form.tsx, open-text-host-panel.tsx, presenter-open-text.tsx, poll-manager.tsx, live-view.tsx, presenter-view.tsx; lib/live-view.ts, lib/presenter.ts; tests/open-text-ui.test.tsx, tests/presenter.test.ts
+- **Learnings for future iterations:**
+  - Host panel fetches GET /api/interactions/:id/responses with the host session and refetches on any `response:*` event. It opens its own socket via `useEventSocket` (one per open-text item).
+  - US-013 rating can follow the same pattern: add `LiveRating`/`PresenterRating` to the unions, a Kind in poll-manager (Edit is hidden only for `rating` now; update that), and a branch in live-view.tsx and presenter-view.tsx.
+  - Verified at 360px and 1280px (screens/us011-*.png), no horizontal overflow; styling is pre-restyle by design (US-027/028/029). The fixed join QR corner still overlaps the first presenter row at 1280px.
+---

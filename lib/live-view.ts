@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { interactions, sharedNotes, wordcloudEntries } from "@/db/schema";
+import { interactions, openTextResponses, sharedNotes, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import type { SharedNotesConfig } from "@/lib/interaction-config";
+import type { OpenTextConfig, SharedNotesConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
@@ -39,7 +39,17 @@ export type LiveNotes = {
   showAuthorNames: boolean;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes;
+export type LiveOpenText = {
+  id: string;
+  type: "openText";
+  title: string;
+  state: "live" | "closed";
+  maxResponses: number;
+  /** Responses this participant may still send; equals maxResponses when the participant is unknown. */
+  remaining: number;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText;
 
 export async function getLiveInteraction(
   eventId: string,
@@ -83,6 +93,18 @@ export async function getLiveInteraction(
       moderation: c.moderation ?? "open",
       showAuthorNames: c.showAuthorNames ?? false,
     };
+  }
+  if (row.type === "openText") {
+    const max = (row.config as Partial<OpenTextConfig>).maxResponsesPerParticipant ?? 1;
+    let used = 0;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ used: sql<number>`count(*)::int` })
+        .from(openTextResponses)
+        .where(and(eq(openTextResponses.interactionId, row.id), eq(openTextResponses.participantId, participantId)));
+      used = r.used;
+    }
+    return { id: row.id, type: "openText", title: row.title, state: "live", maxResponses: max, remaining: Math.max(0, max - used) };
   }
   if (row.type !== "poll") return null;
   const config = pollConfig(row.config as Partial<PollConfig>);

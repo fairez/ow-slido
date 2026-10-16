@@ -3,9 +3,11 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { PresenterOpenText } from "@/components/presenter-open-text";
 import { PresenterNotes } from "@/components/presenter-notes";
 import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
@@ -139,6 +141,19 @@ export function PresenterView({
       forNotes(msg.interactionId, (list) => list.filter((n) => n.id !== msg.noteId));
     const onVotes = (msg: { interactionId: string; noteId: string; upvotes: number }) =>
       forNotes(msg.interactionId, (list) => list.map((n) => (n.id === msg.noteId ? { ...n, upvotes: msg.upvotes } : n)));
+    const forResponses = (id: string, fn: (list: PublicResponse[]) => PublicResponse[]) =>
+      setPoll((cur) => (cur && cur.type === "openText" && cur.id === id ? { ...cur, responses: fn(cur.responses) } : cur));
+    const onResponse = (msg: { response: PublicResponse }) =>
+      forResponses(msg.response.interactionId, (list) =>
+        list.some((r) => r.id === msg.response.id)
+          ? list.map((r) => (r.id === msg.response.id ? msg.response : r))
+          : [...list, msg.response],
+      );
+    const onResponseRemoved = (msg: { interactionId: string; responseId: string }) =>
+      forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
+    socket.on("response:added", onResponse);
+    socket.on("response:updated", onResponse);
+    socket.on("response:removed", onResponseRemoved);
     socket.on("note:added", upsert);
     socket.on("note:updated", upsert);
     socket.on("note:removed", onRemoved);
@@ -148,6 +163,9 @@ export function PresenterView({
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("response:added", onResponse);
+      socket.off("response:updated", onResponse);
+      socket.off("response:removed", onResponseRemoved);
       socket.off("note:added", upsert);
       socket.off("note:updated", upsert);
       socket.off("note:removed", onRemoved);
@@ -212,6 +230,18 @@ export function PresenterView({
           {poll.title}
         </h1>
         <PresenterNotes notes={poll.notes} closed={poll.state === "closed"} />
+      </section>
+    );
+  }
+
+  if (poll.type === "openText") {
+    return (
+      <section aria-labelledby="present-title">
+        {extras}
+        <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
+          {poll.title}
+        </h1>
+        <PresenterOpenText responses={poll.responses} closed={poll.state === "closed"} />
       </section>
     );
   }
