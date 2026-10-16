@@ -24,3 +24,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Mirrors `questions`/`question_votes`; notes are scoped by `interaction_id` (questions by event).
   - `updated_at` has no DB trigger: set it explicitly in the edit API (US-003).
 ---
+
+## 2026-10-16 - US-003
+- Participant notes API: POST /api/interactions/:id/notes, PATCH/DELETE /api/notes/:id. Logic in lib/shared-notes.ts (submitNote, editNote, deleteNote, findNoteEventId).
+- Files: lib/shared-notes.ts, app/api/interactions/[id]/notes/route.ts, app/api/notes/[id]/route.ts, tests/shared-notes-api.test.ts
+- **Learnings for future iterations:**
+  - Same locking as lib/wordclouds.ts: share-lock the interaction, row-lock the participant, then count/insert in one transaction.
+  - Author name comes from `participants.nickname`, stored on the note only when `showAuthorNames` is true.
+  - Editing in moderated mode resets status to pending (even if rejected); in open mode status is kept.
+  - No realtime publish yet; US-004 (list API) should add it. Notes outside the author's own are not exposed by these routes.
+  - Per-IP rate-limit key `notes:ip:` is shared by POST and PATCH/DELETE; token key `notes:token:` too.
+---
