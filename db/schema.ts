@@ -54,6 +54,8 @@ export const events = pgTable(
       .default("open"),
     moderatorNonce: text("moderator_nonce"),
     peakParticipants: integer("peak_participants").notNull().default(0),
+    /** When the host accepted that approved note text is sent to a third-party AI service. */
+    aiNoticeAcceptedAt: timestamp("ai_notice_accepted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -81,9 +83,9 @@ export const interactions = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
-    type: text("type", { enum: ["poll", "wordcloud"] }).notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating"] }).notNull(),
     title: text("title").notNull(),
-    state: text("state", { enum: ["draft", "live", "closed"] })
+    state: text("state", { enum: ["draft", "live", "paused", "closed"] })
       .notNull()
       .default("draft"),
     position: integer("position").notNull(),
@@ -91,8 +93,8 @@ export const interactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud')`),
-    check("interactions_state", sql`${t.state} in ('draft', 'live', 'closed')`),
+    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating')`),
+    check("interactions_state", sql`${t.state} in ('draft', 'live', 'paused', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
     uniqueIndex("interactions_one_live_per_event")
       .on(t.eventId)
@@ -175,4 +177,140 @@ export const questionVotes = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("question_votes_one_per_participant").on(t.questionId, t.participantId)],
+);
+
+export const sharedNotes = pgTable(
+  "shared_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Null for anonymous notes. */
+    authorName: text("author_name"),
+    status: text("status", { enum: ["pending", "approved", "rejected"] })
+      .notNull()
+      .default("approved"),
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("shared_notes_text_length", sql`char_length(${t.text}) between 1 and 5000`),
+    check("shared_notes_status", sql`${t.status} in ('pending', 'approved', 'rejected')`),
+    index("shared_notes_interaction_status_idx").on(t.interactionId, t.status),
+    index("shared_notes_participant_idx").on(t.interactionId, t.participantId),
+  ],
+);
+
+export const sharedNoteVotes = pgTable(
+  "shared_note_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => sharedNotes.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("shared_note_votes_one_per_participant").on(t.noteId, t.participantId)],
+);
+
+export const openTextResponses = pgTable(
+  "open_text_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Hidden by the host: stored, never sent to participants or the presenter. */
+    hidden: boolean("hidden").notNull().default(false),
+    highlighted: boolean("highlighted").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("open_text_responses_text_length", sql`char_length(${t.text}) between 1 and 300`),
+    index("open_text_responses_interaction_idx").on(t.interactionId, t.createdAt),
+    index("open_text_responses_participant_idx").on(t.interactionId, t.participantId),
+  ],
+);
+
+export const ratingResponses = pgTable(
+  "rating_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    value: integer("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("rating_responses_one_per_participant").on(t.interactionId, t.participantId),
+    check("rating_responses_value_range", sql`${t.value} between 1 and 10`),
+  ],
+);
+
+/**
+ * One row per AI `complete()` call, used to enforce the per-event and per-day caps.
+ * Stores no prompt or note text. `event_id` is set null (not cascaded) when an event is
+ * deleted so the daily cap cannot be reset by deleting events.
+ */
+export const aiCalls = pgTable(
+  "ai_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    kind: text("kind").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_calls_event_idx").on(t.eventId),
+    index("ai_calls_created_idx").on(t.createdAt),
+  ],
+);
+
+export const noteAnalyses = pgTable(
+  "note_analyses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["queued", "running", "done", "failed"] })
+      .notNull()
+      .default("queued"),
+    /** Hash of the approved notes the analysis was started from. */
+    notesSnapshotHash: text("notes_snapshot_hash").notNull(),
+    noteCount: integer("note_count").notNull(),
+    summary: text("summary"),
+    categories: jsonb("categories"),
+    keywords: jsonb("keywords"),
+    edited: boolean("edited").notNull().default(false),
+    published: boolean("published").notNull().default(false),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("note_analyses_status", sql`${t.status} in ('queued', 'running', 'done', 'failed')`),
+    index("note_analyses_interaction_idx").on(t.interactionId, t.createdAt),
+  ],
 );

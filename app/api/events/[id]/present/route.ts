@@ -8,5 +8,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.user.id);
   if (!event) return Response.json({ error: "Event not found" }, { status: 404 });
-  return Response.json({ interaction: await getPresenterState(event.id) });
+  const closed = new URL(request.url).searchParams.get("closed") ?? undefined;
+  return Response.json({ interaction: await getPresenterState(event.id, closed) });
 }

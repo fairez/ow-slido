@@ -1,0 +1,2 @@
+ALTER TABLE "interactions" DROP CONSTRAINT "interactions_type";--> statement-breakpoint
+ALTER TABLE "interactions" ADD CONSTRAINT "interactions_type" CHECK ("interactions"."type" in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating'));

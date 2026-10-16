@@ -3,11 +3,18 @@
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { PresenterOpenText } from "@/components/presenter-open-text";
+import { PresenterRating } from "@/components/presenter-rating";
+import { PresenterNotes } from "@/components/presenter-notes";
+import { Button } from "@/components/ui/button";
 import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import type { RatingResults } from "@/lib/rating";
+import type { PublicResponse } from "@/lib/open-text";
+import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
-export type NavItem = { id: string; state: "draft" | "live" | "closed" };
+export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed" };
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 type Words = { interactionId: string; words: WordCount[]; total: number };
@@ -92,9 +99,13 @@ export function PresenterView({
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/present`);
+      // Name the notes board on screen so it stays up after the host closes it.
+      const closed = cursor.current ? `?closed=${encodeURIComponent(cursor.current)}` : "";
+      const res = await fetch(`/api/events/${eventId}/present${closed}`);
       if (!res.ok) return;
-      setPoll(((await res.json()) as { interaction: PresenterState | null }).interaction);
+      const next = ((await res.json()) as { interaction: PresenterState | null }).interaction;
+      if (next) cursor.current = next.id;
+      setPoll(next);
     } catch {
       // Offline: the next reconnect refetches.
     }
@@ -120,11 +131,52 @@ export function PresenterView({
       void refetch();
       void refetchList();
     };
+    const forNotes = (id: string, fn: (notes: PublicNote[]) => PublicNote[]) =>
+      setPoll((cur) => (cur && cur.type === "sharedNotes" && cur.id === id ? { ...cur, notes: fn(cur.notes) } : cur));
+    const upsert = (msg: { note: PublicNote | null }) => {
+      const note = msg.note;
+      if (!note) return;
+      forNotes(note.interactionId, (list) =>
+        list.some((n) => n.id === note.id) ? list.map((n) => (n.id === note.id ? note : n)) : [...list, note],
+      );
+    };
+    const onRemoved = (msg: { interactionId: string; noteId: string }) =>
+      forNotes(msg.interactionId, (list) => list.filter((n) => n.id !== msg.noteId));
+    const onVotes = (msg: { interactionId: string; noteId: string; upvotes: number }) =>
+      forNotes(msg.interactionId, (list) => list.map((n) => (n.id === msg.noteId ? { ...n, upvotes: msg.upvotes } : n)));
+    const forResponses = (id: string, fn: (list: PublicResponse[]) => PublicResponse[]) =>
+      setPoll((cur) => (cur && cur.type === "openText" && cur.id === id ? { ...cur, responses: fn(cur.responses) } : cur));
+    const onResponse = (msg: { response: PublicResponse }) =>
+      forResponses(msg.response.interactionId, (list) =>
+        list.some((r) => r.id === msg.response.id)
+          ? list.map((r) => (r.id === msg.response.id ? msg.response : r))
+          : [...list, msg.response],
+      );
+    const onResponseRemoved = (msg: { interactionId: string; responseId: string }) =>
+      forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
+    const onRating = (msg: { results: RatingResults }) =>
+      setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
+    socket.on("rating:results", onRating);
+    socket.on("response:added", onResponse);
+    socket.on("response:updated", onResponse);
+    socket.on("response:removed", onResponseRemoved);
+    socket.on("note:added", upsert);
+    socket.on("note:updated", upsert);
+    socket.on("note:removed", onRemoved);
+    socket.on("note:votes", onVotes);
     socket.on("poll:counts", onCounts);
     socket.on("wordcloud:words", onWords);
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("rating:results", onRating);
+      socket.off("response:added", onResponse);
+      socket.off("response:updated", onResponse);
+      socket.off("response:removed", onResponseRemoved);
+      socket.off("note:added", upsert);
+      socket.off("note:updated", upsert);
+      socket.off("note:removed", onRemoved);
+      socket.off("note:votes", onVotes);
       socket.off("poll:counts", onCounts);
       socket.off("wordcloud:words", onWords);
       socket.off("state-changed", onChange);
@@ -133,97 +185,124 @@ export function PresenterView({
   }, [socket, refetch, refetchList]);
 
   const corner = (
-    <aside
-      aria-label="How to join"
-      style={{ position: "fixed", top: 16, right: 16, background: "#fff", color: "#000", padding: 12, textAlign: "center" }}
-    >
+    <aside className="present-join" aria-label="How to join">
       {qr && (
+        // Plain img: a data URL needs no optimisation, and the QR keeps a light backing so it scans in dark theme.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={qr} alt={`QR code to join with code ${joinCode}`} width={140} height={140} />
+        <img className="present-qr" src={qr} alt={`QR code to join with code ${joinCode}`} width={140} height={140} />
       )}
-      <p style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>Join code: {joinCode}</p>
+      <p className="present-code">Join code: {joinCode}</p>
     </aside>
   );
-  const fullscreenBtn = (
-    <button
-      type="button"
-      onClick={() => void document.documentElement.requestFullscreen?.()}
-      style={{ position: "fixed", bottom: 16, right: 16, minHeight: 44, padding: "0 16px", fontSize: "1rem" }}
-    >
-      Fullscreen (Esc to exit)
-    </button>
-  );
-  const noticeEl = notice && (
-    <p role="status" style={{ position: "fixed", bottom: 16, left: 16, fontSize: "1.25rem" }}>
-      {notice}
-    </p>
+  const head = (title: string) => (
+    <header className="present-head">
+      <h1 id="present-title" className="present-title">
+        {title}
+      </h1>
+      {corner}
+    </header>
   );
   const extras = (
     <>
-      {corner}
-      {fullscreenBtn}
-      {noticeEl}
+      <Button className="present-fullscreen" onClick={() => void document.documentElement.requestFullscreen?.()}>
+        Fullscreen (Esc to exit)
+      </Button>
+      {notice && (
+        <p role="status" className="present-notice">
+          {notice}
+        </p>
+      )}
     </>
   );
 
   if (!poll) {
     return (
       <>
+        <header className="present-head">
+          <h1 aria-live="polite" className="present-title">
+            No live interaction
+          </h1>
+          {corner}
+        </header>
         {extras}
-        <p role="status" style={{ fontSize: "3rem", fontWeight: 700 }}>
-          No live interaction
-        </p>
       </>
+    );
+  }
+
+  if (poll.type === "sharedNotes") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterNotes interactionId={poll.id} notes={poll.notes} closed={poll.state === "closed"} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (poll.type === "rating") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterRating results={poll.results} closed={poll.state === "closed"} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (poll.type === "openText") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterOpenText responses={poll.responses} closed={poll.state === "closed"} />
+        {extras}
+      </section>
     );
   }
 
   if (poll.type === "wordcloud") {
     return (
       <section aria-labelledby="present-title">
-        {extras}
-        <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
-          {poll.title}
-        </h1>
+        {head(poll.title)}
         <WordCloud words={poll.words} />
-        <p style={{ fontSize: "2rem", marginTop: 24 }}>Total words: {poll.total}</p>
+        <p className="present-total">Total words: {poll.total}</p>
+        {extras}
       </section>
     );
   }
 
+  const lead = Math.max(0, ...Object.values(poll.counts));
   return (
     <section aria-labelledby="present-title">
-      {extras}
-      <h1 id="present-title" style={{ fontSize: "3rem", margin: "0 160px 24px 0" }}>
-        {poll.title}
-      </h1>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 20 }}>
+      {head(poll.title)}
+      <ul className="present-bars">
         {poll.options.map((o) => {
           const count = poll.counts[o.id] ?? 0;
           const percent = poll.total > 0 ? Math.round((count / poll.total) * 100) : 0;
           return (
-            <li key={o.id} style={{ fontSize: "2rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontWeight: 700 }}>
+            <li key={o.id}>
+              <div className="present-bar-head">
                 <span>{o.label}</span>
                 <span>
                   {count} ({percent}%)
                 </span>
               </div>
               <div
+                className="present-track"
                 role="progressbar"
                 aria-label={o.label}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent}
                 aria-valuetext={`${count} ${count === 1 ? "vote" : "votes"}, ${percent}%`}
-                style={{ height: 28, background: "#333", border: "2px solid #fff" }}
               >
-                <div style={{ width: `${percent}%`, height: "100%", background: "#ffd400" }} />
+                <div className="present-fill" data-leading={count > 0 && count === lead} style={{ width: `${percent}%` }} />
               </div>
             </li>
           );
         })}
       </ul>
-      <p style={{ fontSize: "2rem", marginTop: 24 }}>Total votes: {poll.total}</p>
+      <p className="present-total">Total votes: {poll.total}</p>
+      {extras}
     </section>
   );
 }

@@ -29,12 +29,14 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-      <h1>Dashboard</h1>
-      <p>
-        Signed in as <strong>{user.email}</strong>
-      </p>
-      <LogoutButton />
+    <main id="main" className="page">
+      <header className="page-head">
+        <div>
+          <h1>Your events</h1>
+          <p className="row-meta">Signed in as {user.email}</p>
+        </div>
+        <LogoutButton />
+      </header>
       <EventManager initialEvents={initialEvents} />
     </main>
   );

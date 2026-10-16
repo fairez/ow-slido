@@ -2,17 +2,17 @@
 
 > **Depends on:** `prd-slido-clone.md` (MVP). That PRD's features must already exist: host auth (`users` table with `role` = `admin`), events with join codes, participant join (`participants` table), the shared `interactions` base model with polls and word cloud, Q&A with moderation, the presenter view, CSV export, and presence/engagement metrics. This PRD adds the items listed under *Focused scope*; billing, integrations and teams are left for a later phase. Story IDs restart at US-001 so this file can be converted on its own.
 >
-> **Focused scope:** this PRD covers only (1) the new interaction types (including Shared Notes with AI analysis), (2) images in questions and options, (3) the analytics summary with PDF/Excel reports, and (4) basic user management (admin and no-login audience). English only. Billing and plans, integrations (public API, slide add-ins, meeting apps), and teams/branding (workspaces, multiple roles, templates, themes) and localisation are intentionally excluded. The MVP's separate moderator-invite link is retired by this PRD (US-003); admins moderate.
+> **Focused scope:** this PRD covers only (1) the new interaction types (including Shared Notes, which also covers the former ideas board, with AI analysis), (2) images in questions and options, (3) the analytics summary with PDF/Excel reports, and (4) basic user management (admin and no-login audience). English only. Billing and plans, integrations (public API, slide add-ins, meeting apps), and teams/branding (workspaces, multiple roles, templates, themes) and localisation are intentionally excluded. The MVP's separate moderator-invite link is retired by this PRD (US-003); admins moderate.
 >
 > **Assumptions (change if wrong):** commercial product · original name and branding, with no Slido assets or copy · single-host accounts as in the MVP · stack as chosen in the MVP.
 
 ## 1. Introduction/Overview
 
-The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full audience-engagement platform. It adds more interaction types (quiz, rating, open text, ranking, survey, ideas board, shared notes), image support, an analytics summary with PDF/Excel reports, and basic user management with two kinds of users: admins (log in, can do everything) and audience (no login). This lets hosts run richer, more engaging sessions and share results afterwards.
+The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full audience-engagement platform. It adds more interaction types (quiz, rating, open text, ranking, survey, shared notes), image support, an analytics summary with PDF/Excel reports, and basic user management with two kinds of users: admins (log in, can do everything) and audience (no login). This lets hosts run richer, more engaging sessions and share results afterwards.
 
 ## 2. Goals
 
-- Offer at least 7 interaction types beyond the MVP's poll and word cloud.
+- Offer at least 6 interaction types beyond the MVP's poll and word cloud.
 - A host can turn 200 shared notes into an AI summary, categories and a word cloud in under 30 seconds, and the live note stream never waits on the AI provider.
 - A host can run a quiz with a live leaderboard for 500 participants without lag (p95 < 1s).
 - Hosts see a post-event report within 5 seconds of ending an event.
@@ -48,7 +48,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 **Acceptance Criteria:**
 - [ ] All host actions (create/edit/delete events and interactions, start/close, moderation, analytics, exports, user management) require an active admin session; the server returns 401 without a session
 - [ ] Admin can do all actions; there is no other logged-in role
-- [ ] Audience (no login) can only: join an event, view the live interaction, submit answers/questions/ideas, upvote, and view results the admin chose to show
+- [ ] Audience (no login) can only: join an event, view the live interaction, submit answers/questions/notes, upvote, and view results the admin chose to show
 - [ ] Audience requests to admin routes or endpoints are rejected (401) and `/dashboard`, `/present` and other admin pages redirect to `/login`
 - [ ] MVP moderator links stop working after this release; the moderation queue is available to admins only
 - [ ] Automated tests cover one allowed and one denied request per audience capability
@@ -59,7 +59,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 **Description:** As a developer, I need the shared interaction model to accept the new types so that they reuse state, ordering and result handling.
 
 **Acceptance Criteria:**
-- [ ] `interactions.type` (from MVP US-004) accepts `openText`, `rating`, `ranking`, `quiz`, `survey`, `ideas` and `sharedNotes` in addition to `poll` and `wordcloud`
+- [ ] `interactions.type` (from MVP US-004) accepts `openText`, `rating`, `ranking`, `quiz`, `survey` and `sharedNotes` in addition to `poll` and `wordcloud`
 - [ ] Each new type has a validated `config` schema; invalid config is rejected by the server
 - [ ] The one-live-interaction-per-event rule and the `draft`/`live`/`closed` states apply to every type
 - [ ] No data migration is needed for existing polls and word clouds
@@ -153,18 +153,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-013: Ideas board
-**Description:** As a participant, I want to submit ideas and vote on others' ideas so that the best ones surface.
-
-**Acceptance Criteria:**
-- [ ] Host creates an ideas prompt; participants submit ideas (max 200 chars)
-- [ ] Ideas can be moderated like Q&A (Open or Moderated mode)
-- [ ] Participants can upvote each idea once
-- [ ] Presenter view shows ideas sorted by votes
-- [ ] Typecheck/lint passes
-- [ ] **Verify in browser using dev-browser skill**
-
-### US-014: Image upload and storage
+### US-013: Image upload and storage
 **Description:** As a host, I want to upload an image so that I can use it in a question or option.
 
 **Acceptance Criteria:**
@@ -174,7 +163,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-015: Show images in questions and options
+### US-014: Show images in questions and options
 **Description:** As a participant, I want to see images attached to questions and options so that I can answer visual questions.
 
 **Acceptance Criteria:**
@@ -184,7 +173,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-016: Event analytics summary
+### US-015: Event analytics summary
 **Description:** As a host, I want an event summary so that I can see how engaged the audience was.
 
 **Acceptance Criteria:**
@@ -194,7 +183,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-017: Export report as PDF
+### US-016: Export report as PDF
 **Description:** As a host, I want to download a PDF report so that I can share results with stakeholders.
 
 **Acceptance Criteria:**
@@ -204,7 +193,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-018: Export report as Excel
+### US-017: Export report as Excel
 **Description:** As a host, I want to download an Excel file so that I can analyse results further.
 
 **Acceptance Criteria:**
@@ -214,12 +203,12 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-019: Write and upvote shared notes
+### US-018: Write and upvote shared notes
 **Description:** As a participant, I want to write notes about the event and upvote other people's notes so that the most useful takeaways surface.
 
 **Acceptance Criteria:**
 - [ ] Host creates a Shared Notes interaction (type `sharedNotes`) with a prompt, e.g. "What are your key takeaways?"
-- [ ] Participants submit notes (max 500 chars), up to a host-set limit of 1–10 per participant, and can edit or delete their own note while the interaction is `live`
+- [ ] Participants submit notes (max 5000 chars), up to a host-set limit of 1–1000 per participant, and can edit or delete their own note while the interaction is `live`
 - [ ] Notes can be anonymous or show the participant's optional nickname
 - [ ] Each participant can upvote each other participant's note once (tapping again removes it) and cannot upvote their own note; enforced on the server
 - [ ] Host can set Open or Moderated mode, reusing the Q&A moderation queue (approve, reject, pin, delete)
@@ -228,7 +217,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-020: AI provider integration
+### US-019: AI provider integration
 **Description:** As an admin, I want to connect an AI provider so that notes can be summarized and categorized.
 
 **Acceptance Criteria:**
@@ -241,7 +230,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] Tests pass (provider mocked)
 
-### US-021: Analyze notes with AI
+### US-020: Analyze notes with AI
 **Description:** As a host, I want to analyze the notes so that I get a summary, categories and keywords without reading everything.
 
 **Acceptance Criteria:**
@@ -257,7 +246,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] Tests pass (provider mocked)
 
-### US-022: Show analysis as word cloud and charts
+### US-021: Show analysis as word cloud and charts
 **Description:** As a host, I want to show the analyzed notes on the presenter screen so that the audience sees the themes.
 
 **Acceptance Criteria:**
@@ -269,7 +258,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - [ ] Typecheck/lint passes
 - [ ] **Verify in browser using dev-browser skill**
 
-### US-023: Review and edit AI results; include in reports
+### US-022: Review and edit AI results; include in reports
 **Description:** As a host, I want to correct the AI output before sharing it so that mistakes do not reach the audience.
 
 **Acceptance Criteria:**
@@ -282,7 +271,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 
 ## 4. Functional Requirements
 
-- FR-1: The system must support these interaction types: poll, word cloud, open text, rating, ranking, quiz, survey, ideas board and shared notes.
+- FR-1: The system must support these interaction types: poll, word cloud, open text, rating, ranking, quiz, survey and shared notes.
 - FR-2: The system must support images (PNG/JPG/WebP, ≤ 5 MB, required alt text) in questions and options.
 - FR-3: Quiz questions must have a time limit, correct answer(s) and a points value; the server must reject answers after the deadline.
 - FR-4: The system must compute and display a quiz leaderboard, and a final podium.
@@ -352,3 +341,21 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 - Should participants be told their notes may be processed by AI when they submit?
 - Do we need two-factor login for admins? Should password reset move to an email link later (needs an email service)?
 - Should billing, integrations and teams be a separate Phase 3 PRD?
+
+## 10. Build Scope: Phase 2a (current build)
+
+Only this subset is being built now, in this order. Everything else in this PRD (ranking, quiz, survey, images, analytics summary, PDF/Excel reports, admin user management) is deferred.
+
+1. Register the new interaction types in the shared model (US-004, limited to `sharedNotes`, `openText`, `rating`).
+2. Shared Notes without AI (US-018): write, edit own, upvote, moderate, present, export. The former ideas board is merged into this feature.
+3. Open text (US-005) and Rating (US-006).
+4. AI analysis for Shared Notes (US-019 to US-022): provider client, manually triggered analysis, word cloud and category charts, host review. Reports are CSV only; PDF/Excel stay deferred.
+5. UI improvement across the whole app, following `DESIGN.md` (Warm editorial, light and dark theme) and the antislop rules vendored in `docs/antislop/`.
+
+Decisions for this build: AI usage runs on the platform owner's single API key; analysis is manual only; hosts see a notice before the first analysis, and participants see a one-line disclosure on the notes screen that notes may be summarised by an AI service.
+
+## 11. UI Improvement (Anti-Slop)
+
+- Direction: `DESIGN.md` (Warm editorial, ENERGY 2 / RHYTHM 2 / MOTION 1, light and dark with a toggle).
+- Rules: antislop core and the UI, copywriting, human (accessibility), mobile layout and code-comment skills, vendored in `docs/antislop/`. Mode `during` for every story; a final audit story runs mode `after` and fixes all HIGH and MEDIUM findings.
+- Done when: every screen uses the design tokens, passes the Delivery Gate and the contrast checker, works at 360px, is keyboard operable, and the e2e test still passes.

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import {
   eventNotFound,
   findInteraction,
@@ -42,7 +43,12 @@ export async function PATCH(request: Request, context: Context) {
 
   let title: string | undefined;
   let config: Record<string, unknown>;
-  if (current.type === "wordcloud") {
+  if (isNewInteractionType(current.type)) {
+    const parsed = parseNewInteractionInput(current.type, await request.json().catch(() => null), true);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title;
+    config = newInteractionConfig(current.type, { ...current.config, ...parsed.value.config });
+  } else if (current.type === "wordcloud") {
     const parsed = parseWordcloudInput(await request.json().catch(() => null), true);
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
     title = parsed.value.title;

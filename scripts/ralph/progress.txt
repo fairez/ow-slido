@@ -1,314 +1,358 @@
-## Codebase Patterns
-- Dev server is `tsx server.ts` (custom Node server: Next.js + Socket.IO at /socket.io); PORT env overrides 3000.
-- server.ts loads .env.local via dotenv; Next also loads it itself.
-- Vitest tests live in tests/**/*.test.{ts,tsx}; config is vitest.config.mts (.mts avoids a CJS/ESM warning); `@` alias = repo root.
-- DB: Drizzle + pg. `createDb(url)` in db/client.ts; migrations via `npm run db:migrate[:test]`; DB tests use `// @vitest-environment node` + tests/helpers/db.ts (`createTestDb`, `truncateAll`).
-- Route handlers are plain `(request: Request)` functions; tests import and call them directly. App DB comes from `getDb()` in lib/db.ts (reads DATABASE_URL lazily) — DB tests set `process.env.DATABASE_URL = process.env.TEST_DATABASE_URL` in beforeAll before dynamically importing routes.
-- Admin-only endpoints: `const auth = await requireAdmin(request); if (!auth.ok) return auth.response;` (lib/auth/require-admin.ts), then use `auth.user`.
-- Rate limiting: `await rateLimit(key, limit, windowSeconds)` from lib/rate-limit.ts returns `{allowed, remaining, retryAfterSeconds}`; use `clientIp(request)` for IP keys; store is swappable via `setRateLimitStore`. Tests that hit limited routes should `await getRateLimitStore().reset()` in beforeEach.
-
-- Realtime: server code calls `publish(eventId, name, payload, {hostOnly?})` from lib/realtime/publisher.ts (no-op until server.ts attaches Socket.IO; tests can `setPublisher`). Clients use `useEventSocket(eventId, role)` from lib/realtime/use-event-socket.ts.
-
 # Ralph Progress Log
-Started: Fri Oct 16 12:14:30 AM CST 2026
+Started: Fri Oct 16 03:26:16 PM CST 2026
 ---
+
+## Codebase Patterns
+- No zod here: config validation is hand-written `parse*Input(body, partial)` returning `{ok, value|error}` (see lib/polls.ts, lib/wordclouds.ts, lib/interaction-config.ts).
+- New tables must cascade from `events`/`interactions` (`onDelete: "cascade"`) and get a cascade test.
+- Full `npm test` takes ~100s; run it in the background and read the output file.
+
 ## 2026-10-16 - US-001
-- Scaffolded Next.js 16 (App Router) + TS, ESLint flat config, Vitest + Testing Library, custom server with Socket.IO, .env.example, home placeholder + smoke test.
-- Files: package.json, tsconfig.json, next.config.ts, eslint.config.mjs, vitest.config.mts, server.ts, app/, tests/home.test.tsx, .env.example
-- Verified: lint, typecheck, test, build pass; dev server serves / and the Socket.IO polling handshake on /socket.io.
+- Added `sharedNotes`, `openText`, `rating` interaction types: schema enum + check (migration 0011), `lib/interaction-config.ts` validators/defaults, wired into create, PATCH and duplicate routes. Start/close/reorder needed no change (type-agnostic).
+- Files: db/schema.ts, db/migrations/0011*, lib/interaction-config.ts, interactions routes (collection, item, duplicate), tests/new-interaction-types.test.ts, CLAUDE.md
 - **Learnings for future iterations:**
-  - `npm i` can take >2 min here; run it in the background.
-  - Never `pkill -f "tsx server.ts"` in the same shell chain you need afterwards; it killed the shell (exit 144).
-  - Don't print .env.local; `sed 's/=.*/=/'` shows keys only.
+  - Create requires only `prompt`; other config fields default (notes 3, moderation open, responses 1, scale stars5).
+  - PATCH merges into existing config. Duplicate copies config only.
+  - Places still switching on type that later stories must extend: lib/live-view.ts, lib/presenter.ts, lib/export.ts, components/poll-manager.tsx, live-view.tsx, presenter-view.tsx.
+  - Run `npm run db:migrate:test` after pulling new migrations.
 ---
+
 ## 2026-10-16 - US-002
-- Added Drizzle ORM + drizzle-kit + pg, db/schema.ts (trivial app_meta table), db/client.ts, scripts/db.ts (migrate/reset), migration 0000_init, test helper with truncateAll, db test, db:* npm scripts, CLAUDE.md docs.
-- Files: db/, drizzle.config.ts, scripts/db.ts, tests/helpers/db.ts, tests/db.test.ts, package.json, CLAUDE.md
-- Verified: migration applied to dev and test DBs; lint, typecheck, test pass.
+- Added `shared_notes` (text 1-500 check, status check, default approved, pinned, updated_at) and `shared_note_votes` (unique note+participant), both cascading; migration 0012 applied to dev and test DBs.
+- Files: db/schema.ts, db/migrations/0012*, tests/shared-notes-schema.test.ts
 - **Learnings for future iterations:**
-  - DB tests need the test DB migrated first (`npm run db:migrate:test`) after adding migrations.
-  - truncateAll truncates every public table incl. new ones automatically; drizzle's bookkeeping lives in the `drizzle` schema so it is untouched.
-  - `npm i` took ~5 min here.
+  - Mirrors `questions`/`question_votes`; notes are scoped by `interaction_id` (questions by event).
+  - `updated_at` has no DB trigger: set it explicitly in the edit API (US-003).
 ---
+
 ## 2026-10-16 - US-003
-- Added `users` table (uuid id, unique email with lowercase CHECK, password_hash, role CHECK 'admin', active, created_at) and migration 0001; tests/users.test.ts.
-- Files: db/schema.ts, db/migrations/0001_*, tests/users.test.ts
-- Verified: migration applied to dev and test DBs; lint, typecheck, test pass.
+- Participant notes API: POST /api/interactions/:id/notes, PATCH/DELETE /api/notes/:id. Logic in lib/shared-notes.ts (submitNote, editNote, deleteNote, findNoteEventId).
+- Files: lib/shared-notes.ts, app/api/interactions/[id]/notes/route.ts, app/api/notes/[id]/route.ts, tests/shared-notes-api.test.ts
 - **Learnings for future iterations:**
-  - Lowercase/enum rules are DB CHECK constraints, so app code must still lowercase email before insert.
-  - Primary keys are uuid `defaultRandom()`.
+  - Same locking as lib/wordclouds.ts: share-lock the interaction, row-lock the participant, then count/insert in one transaction.
+  - Author name comes from `participants.nickname`, stored on the note only when `showAuthorNames` is true.
+  - Editing in moderated mode resets status to pending (even if rejected); in open mode status is kept.
+  - No realtime publish yet; US-004 (list API) should add it. Notes outside the author's own are not exposed by these routes.
+  - Per-IP rate-limit key `notes:ip:` is shared by POST and PATCH/DELETE; token key `notes:token:` too.
 ---
+
 ## 2026-10-16 - US-004
-- Auth API: POST /api/auth/{signup,login,logout}, GET /api/auth/me; bcryptjs hashing; stateless HMAC-signed session cookie (httpOnly, Secure, SameSite=Lax, 7 days); `requireAdmin` helper.
-- Files: app/api/auth/*, lib/db.ts, lib/auth/{password,session,credentials,require-admin}.ts, tests/auth.test.ts, package.json
-- Verified: lint, typecheck, test pass (9 new tests, written first and seen failing).
+- Added POST /api/notes/:id/upvote (toggle), GET /api/interactions/:id/notes?sort=popular|recent (approved only, pinned first, `mine`/`iUpvoted`, no participant ids) and realtime publishes from submit/edit/delete/upvote.
+- Files: lib/shared-notes.ts, app/api/notes/[id]/upvote/route.ts, app/api/interactions/[id]/notes/route.ts, tests/shared-notes-votes.test.ts
 - **Learnings for future iterations:**
-  - Sessions are not stored in the DB; `getSessionUser` re-checks the user row each request, so deactivating a user ends their session immediately.
-  - Login uses a dummy bcrypt compare for unknown emails (timing) and returns one generic 401 for all failures.
-  - US-005 should add the rate limit inside the login route (per IP and per email) and return 429.
-  - Signup uses `onConflictDoNothing` on email for the 409 case; emails are trimmed and lowercased in `readCredentials`.
+  - Events published: `note:added`/`note:updated` (public note payload), `note:removed` {interactionId, noteId} (also sent when an edit sends a note back to pending), `note:votes` {interactionId, noteId, upvotes}, host-only `note:pending`. US-007 moderation (approve/reject/pin/delete) should publish the same events.
+  - Upvote errors: 403 own note, 404 pending/rejected/unknown, 409 draft. Closed interactions still accept upvotes.
+  - List hides draft interactions (404). Sorting is done in JS after fetching approved rows.
 ---
+
 ## 2026-10-16 - US-005
-- lib/rate-limit.ts: `rateLimit(key, limit, windowSeconds)` fixed-window limiter over an async `RateLimitStore` interface with `MemoryRateLimitStore` default (Redis adapter can implement the same interface); `clientIp` helper. Login limited to 10 / 15 min per IP and per email, returning 429 + Retry-After.
-- Files: lib/rate-limit.ts, app/api/auth/login/route.ts, tests/rate-limit.test.ts, tests/auth.test.ts
-- Verified: lint, typecheck, test pass.
+- Shared notes in the host builder: "New shared notes" form (prompt, notes per participant 1-10, Open/Moderated radios, show author names). Type labels in the list ("Shared notes"), Start/Close/Duplicate/Delete work unchanged. Server validation errors now render inside the open form.
+- Files: components/poll-manager.tsx
 - **Learnings for future iterations:**
-  - Limiter state is module-global in-process; tests must reset the store between cases (done in auth.test.ts).
-  - The login limit counts every attempt (including successes) and runs before the DB lookup; x-forwarded-for is trusted as-is, so a real proxy must overwrite it in deployment.
-  - Next rate-limited endpoints (join, vote, submit, per PRD FR-14) should reuse `rateLimit` with keys like `join:ip:<ip>` / `vote:token:<token>`.
+  - poll-manager.tsx is still inline-styled and hardcodes the error colour; US-027 restyles it. `TYPE_LABELS` and `Kind` there are where US-011/US-013 add openText and rating (Edit button is hidden for those types until then).
+  - The dev server rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them and `rm -rf .next-shot` before running lint, or eslint scans the build output.
+  - Screenshot flow: run dev on :3200 with `DATABASE_URL=$TEST_DATABASE_URL` so signups land in the test DB. Don't `pkill -f` with the env string; it kills your own shell.
+  - Verified in Playwright at 360px and 1280px (screens/us005-*.png). Styling is pre-restyle by design.
 ---
+
 ## 2026-10-16 - US-006
-- /login and /signup pages (shared client `AuthForm`, inline `role="alert"` errors, redirect to /dashboard on success); /dashboard server component shows the host email + `LogoutButton`, redirects to /login when there is no valid session.
-- Files: components/{auth-form,logout-button}.tsx, app/{login,signup,dashboard}/page.tsx, lib/auth/require-admin.ts (new `getUserFromToken`), tests/auth-pages.test.tsx
-- Verified: lint, typecheck, test pass; dev server: /login and /signup 200, /dashboard 307 -> /login, viewport meta present. No browser tool available, so the 360px layout and form flow still need manual browser verification (layout is a single-column, max-width container with fluid inputs).
+- Participant notes screen: `components/shared-notes-panel.tsx` rendered by LiveView for `sharedNotes` (prompt, 500-char counter, optional name field when the host enabled author names, remaining count, Popular/Recent, upvote, inline edit/delete on own notes, "waiting for approval" notice in moderated mode, live updates). Closed state hides the form and own edit/delete but keeps upvotes.
+- `getLiveInteraction` now returns a `LiveNotes` (maxNotes, remaining, moderation, showAuthorNames). `POST /api/interactions/:id/notes` accepts optional `authorName` (max 40, profanity-checked, used only when showAuthorNames; falls back to the participant nickname). `NOTE_TEXT_MAX` moved to db-free `lib/note-limits.ts` for client use.
+- Files: lib/live-view.ts, lib/shared-notes.ts, lib/note-limits.ts, app/api/interactions/[id]/notes/route.ts, components/live-view.tsx, components/shared-notes-panel.tsx, tests/shared-notes-panel.test.tsx, tests/shared-notes-api.test.ts
 - **Learnings for future iterations:**
-  - Server components read the session via `(await cookies()).get(SESSION_COOKIE)?.value` + `getUserFromToken(token)`; `getSessionUser(request)` is the route-handler variant. Use `redirect()` from next/navigation for guards.
-  - Page tests mock `next/headers` and `next/navigation` and call the async page function directly (DB env set in beforeAll before dynamic import).
-  - Session cookie is `Secure`; browsers accept it on http://localhost, but curl won't resend it.
+  - Nothing sets `participants.nickname` at join, so the name field on a note is the only real source of author names.
+  - The participant's own pending notes are not listed (list API is approved-only); the panel shows a notice instead. Editing in moderated mode emits `note:removed`, so the panel drops the note locally.
+  - eslint `react-hooks/set-state-in-effect` flags a direct fetch-then-setState call in an effect body; wrap it in `queueMicrotask`.
+  - The Q&A tab has the same "Your name (optional)" label; scope Playwright locators to `#panel-live`.
+  - Stop your dev server with `kill <pid>` from `ss -ltnp`; `pkill -f` with the port in the pattern kills your own shell.
+  - Verified at 360px and 1280px (screens/us006-*.png); styling is pre-restyle by design (US-028).
 ---
+
 ## 2026-10-16 - US-007
-- `events` table (migration 0002) with CHECKs for name length, 4-6 digit join code, moderation mode and ends_at >= starts_at; owner_id FK ON DELETE CASCADE. API: POST/GET /api/events, GET/PATCH/DELETE /api/events/[id], all admin-only and scoped to the owner (other owners get 404). Validation and join-code generation in lib/events.ts.
-- Files: db/schema.ts, db/migrations/0002_*, lib/events.ts, app/api/events/route.ts, app/api/events/[id]/route.ts, tests/events.test.ts
-- Verified: lint, typecheck, test pass (9 new tests, migrations applied to dev and test DBs).
+- Note moderation: `GET /api/events/:id/moderation` now also returns `notes` (pending + approved, with interaction title and upvotes, no participant ids); `PATCH/DELETE /api/events/:id/notes/:noteId` (approve/reject pending, pin approved, delete any) behind `authorizeModeration`, so the moderator link covers notes and nothing else. `ModerationPanel` gained an `initialNotes` prop and a "Shared notes moderation" section on the host event page and the moderator page.
+- Files: lib/moderation.ts, lib/note-types.ts, app/api/events/[id]/notes/[noteId]/route.ts, app/api/events/[id]/moderation/route.ts, components/moderation-panel.tsx, app/dashboard/events/[id]/page.tsx, app/moderate/[eventId]/page.tsx, tests/shared-notes-moderation.test.ts, tests/moderation-panel.test.tsx
 - **Learnings for future iterations:**
-  - Dynamic route handlers take `(request, { params }: { params: Promise<{ id: string }> })`; tests call them with `{ params: Promise.resolve({ id }) }`. Validate ids with `isUuid` (lib/events.ts) before querying, otherwise Postgres throws on malformed uuids.
-  - Join codes are 6 digits stored as text (leading zeros safe); create checks availability then retries on unique-violation (23505).
-  - Event-owned tables (participants, interactions, questions, ...) must reference `events.id` with `onDelete: "cascade"`.
-  - Dates are `startsAt`/`endsAt` ISO strings in the API, both required; ownership checks use `findOwned` in app/api/events/[id]/route.ts (reuse the pattern for nested routes).
+  - Approve publishes `note:added`, pin publishes `note:updated`, rejecting/deleting a visible note publishes `note:removed`; pending/rejected changes publish nothing to participants. The host panel refetches on `note:pending/added/updated`.
+  - Rejected notes stay in the table (they still count toward the author's limit) and are 404 to moderation.
+  - `sharedNotes.status` defaults to approved in the schema; tests that need a pending note must set it.
+  - Inserting interactions directly in tests needs `position`.
+  - Verified at 360px and 1280px (screens/us007-mod-*.png), no horizontal overflow; styling is pre-restyle by design (US-027).
 ---
+
 ## 2026-10-16 - US-008
-- Event dashboard UI: `EventManager` client component (new-event form, list sorted by start, inline rename, delete behind an alertdialog confirmation). /dashboard loads the host's events server-side and passes them in. After create, a status box shows the join code and join URL (`<origin>/join/<code>`).
-- Files: components/event-manager.tsx, app/dashboard/page.tsx, tests/event-manager.test.tsx
-- Verified: lint, typecheck, test pass. No browser tool available, so the in-browser flow and 360px layout still need manual verification.
+- Presenter view for shared notes: `components/presenter-notes.tsx` (prompt, note count, Top upvoted / Newest toggle, pinned notes first with a yellow border and "Pinned" label, long text wraps). `getPresenterState(eventId, closedNotesId?)` returns a `sharedNotes` state for the live interaction, or for a closed notes interaction when named; GET /api/events/:id/present accepts `?closed=<id>`. PresenterView applies `note:added/updated/removed/votes` live and keeps a closed board on screen.
+- Files: lib/presenter.ts, lib/shared-notes.ts (listPresenterNotes), app/api/events/[id]/present/route.ts, components/presenter-view.tsx, components/presenter-notes.tsx, tests/presenter.test.ts, tests/presenter-view.test.tsx
 - **Learnings for future iterations:**
-  - The join URL path `/join/<code>` is assumed here; US-010 must create that route (or update `joinUrl` in event-manager.tsx).
-  - Client components send dates as ISO strings converted from `datetime-local` values; the API requires both dates.
-  - Component tests stub `fetch` with `vi.stubGlobal`; give inline-edit inputs a distinct aria-label so `getByLabelText` stays unambiguous.
+  - Presenter state is live-only by default; the client passes its cursor as `?closed=` on refetch so a just-closed notes board stays up. A fresh page load of a closed board shows "No live interaction".
+  - Join code and QR come from the shared corner in presenter-view.tsx. At 360px that fixed corner squeezes the title and the fullscreen button overlaps content; US-029/US-030 should fix it in the restyle.
+  - Screenshot script lives at scripts/ralph/screens/us008.mjs (gitignored); API create uses `prompt`, `maxNotes`, `moderation` at the top level of the body.
+  - Verified at 360px and 1280px (screens/us008-*.png), no horizontal overflow; styling is pre-restyle by design (US-029).
 ---
+
 ## 2026-10-16 - US-009
-- `participants` table (migration 0003: id, event_id FK cascade, nickname, joined_at, first_response_at) and POST /api/join {code}. Returns `{event, participant}` and sets an HttpOnly signed cookie; unknown/malformed code gives 404 "Event not found"; rejoining with a valid cookie reuses the row; limited to 30/min per IP (429 + Retry-After).
-- Files: db/schema.ts, db/migrations/0003_*, lib/participant-token.ts, app/api/join/route.ts, tests/join.test.ts
-- Verified: lint, typecheck, test pass (migrations applied to dev and test DBs).
+- Event CSV now has a shared-notes table after the questions: blank line, then its own header `section,title,note,status,pinned,upvotes,author`, one row per note (all statuses, sorted by upvotes). Author only if the participant gave a name; no ids, tokens or IPs.
+- Files: lib/export.ts, tests/export.test.ts
 - **Learnings for future iterations:**
-  - The participant token is `<participantId>.<hmac(eventId.participantId)>` using PARTICIPANT_TOKEN_SECRET, in a per-event cookie `participant_<eventId>`. Use `readParticipantToken(request, eventId)` + `verifyParticipantToken(token, eventId)` to identify a participant in vote/submit routes, then confirm the row exists. No token hash is stored: the participant id is the token id.
-  - Tests set `process.env.PARTICIPANT_TOKEN_SECRET ||= ...` in beforeAll.
-  - The cookie is Secure, same as the session cookie (fine on localhost in browsers).
-  - US-010 join pages should POST to /api/join and route to the participant view; /join/<code> is the URL the dashboard already shows.
+  - The old export treated every non-poll type as a word cloud; it now checks `wordcloud` explicitly. US-014 should add openText/rating the same way (own section with its own header if columns differ).
+  - Section tables are separated by an empty row; the test parser returns it as `[""]`.
+  - No UI changed, so no browser check needed.
 ---
+
 ## 2026-10-16 - US-010
-- Home page now has `JoinForm` (one code input + Join button, inline "Event not found" alert, routes to /e/<eventId>). `/join/[code]` renders `JoinRedirect`, which POSTs /api/join on mount and replaces to the participant view. `/e/[eventId]` is a server component showing the event name and a waiting state; it redirects to `/join/<joinCode>` when the participant cookie is missing/invalid and 404s for unknown or malformed ids.
-- Files: app/page.tsx, app/join/[code]/page.tsx, app/e/[eventId]/page.tsx, components/{join-form,join-redirect}.tsx, lib/join-client.ts, tests/{home,join-pages}.test.tsx
-- Verified: lint, typecheck, test pass; dev server: /, /join/<code> 200, /e/<bad id> 404, POST /api/join unknown code gives "Event not found". No browser tool available, so the 360px layout and the join flow still need manual browser verification (inputs/buttons use min-height 44px).
+- Open text responses API: `open_text_responses` table (migration 0013, text 1-300 check, hidden, highlighted, cascades). `lib/open-text.ts` has submit/list/host-update/delete; routes `POST|GET /api/interactions/:id/responses` and `PATCH|DELETE /api/responses/:id` (owner session only; moderator links do not apply).
+- Files: db/schema.ts, db/migrations/0013*, lib/open-text.ts, lib/open-text-limits.ts, app/api/interactions/[id]/responses/route.ts, app/api/responses/[id]/route.ts, tests/open-text-api.test.ts
 - **Learnings for future iterations:**
-  - Component tests that render more than once per file need an explicit `cleanup()` in afterEach (vitest globals are off, so RTL does not auto-clean).
-  - `joinEvent(code)` in lib/join-client.ts is the shared client helper for /api/join.
-  - The participant page (/e/[eventId]) is the place to mount the live view in US-016; it already verifies the participant cookie.
-  - Killing the dev server with `kill $(lsof -ti:PORT)` in the same command chain can end the shell with exit 144; do it last.
+  - GET serves two callers: a joined participant (visible responses, newest first) or the owning host session (all responses with `hidden`). Hidden responses never reach participants or the presenter.
+  - Events: `response:added` / `response:updated` (payload `{response}`), `response:removed` `{interactionId, responseId}`. Hiding publishes removed, unhiding publishes added; hiding also clears `highlighted`.
+  - `listPresenterResponses(interactionId)` is ready for the presenter state; US-011 should wire live-view.ts / presenter.ts / UI.
+  - Responses count toward the limit even when hidden. Host and participant UIs are US-011.
 ---
+
 ## 2026-10-16 - US-011
-- `interactions` table (migration 0004): event_id FK cascade, type/state CHECKs, position, jsonb config (default {}), partial unique index `interactions_one_live_per_event` on (event_id) WHERE state='live'. Q&A intentionally not an interaction.
-- Files: db/schema.ts, db/migrations/0004_*, tests/interactions.test.ts
-- Verified: migrations applied to dev and test DBs; lint, typecheck, test pass.
+- Open text UI: builder form ("New open text": prompt, responses per participant 1-3; Edit works), participant `OpenTextForm` (textarea, 300-char counter, remaining count, confirmation, closed state), `PresenterOpenText` (newest first, highlighted ones get a yellow border, larger bold text and a label, live via `response:*` events), and `OpenTextHostPanel` under each non-draft open-text item on the host page (Highlight / Hide / Delete).
+- `getLiveInteraction` returns `LiveOpenText` (maxResponses, remaining); `getPresenterState` returns `PresenterOpenText` and the `?closed=<id>` cursor now covers closed openText as well as sharedNotes.
+- Files: components/open-text-form.tsx, open-text-host-panel.tsx, presenter-open-text.tsx, poll-manager.tsx, live-view.tsx, presenter-view.tsx; lib/live-view.ts, lib/presenter.ts; tests/open-text-ui.test.tsx, tests/presenter.test.ts
 - **Learnings for future iterations:**
-  - Starting an interaction must close the current live one in the same transaction BEFORE setting the new one live, or the partial unique index raises 23505.
-  - `config` is typed `Record<string, unknown>`; poll/wordcloud routes should validate and narrow it themselves.
+  - Host panel fetches GET /api/interactions/:id/responses with the host session and refetches on any `response:*` event. It opens its own socket via `useEventSocket` (one per open-text item).
+  - US-013 rating can follow the same pattern: add `LiveRating`/`PresenterRating` to the unions, a Kind in poll-manager (Edit is hidden only for `rating` now; update that), and a branch in live-view.tsx and presenter-view.tsx.
+  - Verified at 360px and 1280px (screens/us011-*.png), no horizontal overflow; styling is pre-restyle by design (US-027/028/029). The fixed join QR corner still overlaps the first presenter row at 1280px.
 ---
+
 ## 2026-10-16 - US-012
-- Poll draft API under /api/events/[id]/interactions: GET list (position order), POST create (type 'poll'), [interactionId] GET/PATCH/DELETE, [interactionId]/duplicate POST, reorder POST `{ids}` (must list every interaction of the event once). Validation + helpers in lib/polls.ts (`parsePollInput`, `pollConfig`, `findOwnedEvent`, `findInteraction`).
-- Files: lib/polls.ts, app/api/events/[id]/interactions/**, tests/polls.test.ts
-- Verified: lint, typecheck, test pass (10 new tests, written first and seen failing).
+- Rating API: `rating_responses` table (migration 0014, UNIQUE(interaction, participant), value 1-10 check, cascades). `lib/rating.ts` has submitRating / computeResults / getResultsForParticipant / getResultsForHost / getPresenterResults. Route `POST|GET /api/interactions/:id/rating`.
+- Files: db/schema.ts, db/migrations/0014*, lib/rating.ts, app/api/interactions/[id]/rating/route.ts, tests/rating-api.test.ts
 - **Learnings for future iterations:**
-  - Request body uses `question`, `options` (strings or `{id?, label}`), `multiSelect`, `showResultsToParticipants`; stored as `title` + `config`. PATCH keeps ids of options sent back with their id, so existing ids stay stable.
-  - Non-draft edit/delete returns 409; wrong-event or other-owner access returns 404. New and duplicated interactions get `max(position)+1` via SQL subquery.
-  - US-021 (wordcloud) should extend `POST` type check in interactions/route.ts and PATCH parsing, which currently only accept 'poll'.
+  - POST body `{value}`; 201 returns `{value, results}`. Errors: 400 out of range for the scale, 409 repeat or not live, 401 not joined. Duplicates are caught by `onConflictDoNothing` on the unique constraint.
+  - GET returns `{results, mine}`: joined participant (draft is 404, closed readable) or owning host session (any state, `mine` null).
+  - `results` = `{interactionId, scale, total, average (2 decimals, null if none), distribution}`; distribution index 0 is value 1, length 5 or 10.
+  - Realtime event `rating:results` `{results}` is published on every rating. `getPresenterResults(interactionId, config)` is ready for presenter.ts in US-013.
+  - No UI changed, so no browser check needed.
 ---
+
 ## 2026-10-16 - US-013
-- Poll builder UI: `/dashboard/events/[id]` (server component, owner-checked, 404 otherwise) renders `PollManager`, which lists interactions with state and offers new/edit poll form (question, 2-10 options add/remove, multi-select and show-results checkboxes), plus duplicate, delete (window.confirm) and up/down reorder for drafts. Event list has a "Manage" link. Option limits moved to lib/poll-limits.ts (client-safe), re-exported from lib/polls.ts.
-- Files: app/dashboard/events/[id]/page.tsx, components/poll-manager.tsx, components/event-manager.tsx, lib/poll-limits.ts, lib/polls.ts, tests/poll-manager.test.tsx, tests/auth.test.ts
-- Verified: lint, typecheck, test pass. No browser tool available, so in-browser verification (and 360px layout) still needs a manual check.
+- Rating UI: builder form ("New rating", Stars 1-5 / Numbers 1-10; Edit now works for ratings), participant `RatingForm` (native radio group styled as stars or numbers, so arrow keys work; Send rating, confirmation, locked after submit or when `mine` is set, closed state), `PresenterRating` (average to one decimal, total, `RatingChart` with count and % printed per value; live via `rating:results`).
+- `getLiveInteraction` returns `LiveRating` (scale, mine); `getPresenterState` returns `PresenterRating` and the `?closed=` cursor now covers closed ratings too. `RATING_SCALE_MAX` moved to db-free `lib/rating-limits.ts` (re-exported from lib/rating.ts).
+- Files: components/rating-form.tsx, rating-chart.tsx, presenter-rating.tsx, poll-manager.tsx, live-view.tsx, presenter-view.tsx, app/globals.css (.rating-* classes); lib/live-view.ts, lib/presenter.ts, lib/rating-limits.ts; tests/rating-ui.test.tsx, tests/presenter.test.ts
 - **Learnings for future iterations:**
-  - Client components must not import lib/polls.ts (pulls in the DB); put shared constants in a db-free module like lib/poll-limits.ts.
-  - bcrypt is slow on this machine: the two login rate-limit tests (10 compares each) exceeded vitest's 5s default, so they now have a 30s timeout.
-  - Reorder sends the full id list of the event, so any new list UI must pass every interaction id, not just drafts.
+  - Inline styles cannot do :focus-visible or :checked, so the rating choices use `.rating-choice` classes in globals.css (fallbacks on `var(--border)`/`var(--ink)` until the tokens land in US-027).
+  - Do not sync props to state in an effect (react-hooks/set-state-in-effect fails lint); LiveView already remounts with `key={current.id}`.
+  - Verified at 360px and 1280px (screens/us013-*.png), no horizontal overflow, keyboard arrows change the choice. Styling is pre-restyle by design.
 ---
+
 ## 2026-10-16 - US-014
-- Realtime infra: `Publisher` interface + global `publish()` (lib/realtime/publisher.ts, held on globalThis so Next route bundles and server.ts share it); `attachSocketServer(httpServer)` (lib/realtime/socket-server.ts) authenticates in a Socket.IO middleware and puts sockets in room `event:<id>` (hosts also in `event:<id>:host`); server.ts now uses it. Client hook `useEventSocket(eventId, role)` starts on polling, upgrades to websocket, auto-reconnects, exposes `{socket, status}`.
-- Files: lib/realtime/*, server.ts, tests/realtime.test.ts, package.json (socket.io-client)
-- Verified: lint, typecheck, test pass (3 new integration tests with real socket.io-client: same-event delivery, other event isolation, hostOnly, unauthorized rejection). The custom server.ts could not be smoke-started because another Next dev instance already holds the .next lock (port 3111); attachSocketServer is only covered by the integration test. Hook has no browser/jsdom test; needs manual browser verification.
+- CSV export now has open text (`section,title,response,highlighted`; hidden rows excluded) and rating (`section,title,scale,average,total,value,count`, one row per scale value) tables after the notes table, each only when the event has that type, separated by a blank row.
+- Files: lib/export.ts, tests/export.test.ts
 - **Learnings for future iterations:**
-  - Clients connect with `auth: {eventId, role}`; identity comes from the httpOnly cookies on the handshake (participant_<eventId> or session), never from the payload. Rejections surface as connect_error "unauthorized".
-  - In socket tests use `transports: ["websocket"]` with `extraHeaders: {cookie}`; browsers send cookies automatically.
-  - eslint react-hooks forbids synchronous setState in effects; defer with queueMicrotask.
-  - Next steps: US-015 should call `publish(eventId, "interaction:changed", ...)`; participants' live view (US-016) should refetch state on reconnect since missed messages are not replayed.
+  - Export sections are appended in order notes, open text, rating; a new section (US-022 analysis) should follow the same "blank row + own header" pattern and only appear when relevant, since tests slice from a header to the end of the file.
+  - Rating rows reuse `computeResults` from lib/rating.ts; average is empty when there are no ratings.
+  - No UI changed, so no browser check needed.
 ---
+
 ## 2026-10-16 - US-015
-- `POST /api/events/:id/interactions/:interactionId/{start,close}` (owner-only; 404 unknown, 409 invalid transition). Logic in lib/interaction-state.ts: start is draft->live only (live/closed give 409; a closed one is re-run via the duplicate endpoint), closing the event's current live interaction in the same transaction; close is live->closed. Both publish `state-changed` `{interactionId, state}` to the event room (one message per changed interaction, closed one first). PollManager shows Start (draft) / Close (live) buttons.
-- Files: lib/interaction-state.ts, app/api/events/[id]/interactions/[interactionId]/{start,close}/route.ts, components/poll-manager.tsx, tests/interaction-state.test.ts, tests/poll-manager.test.tsx
-- Verified: lint, typecheck, test pass; socket test checks delivery < 1s using real socket.io-client. No browser tool available, so in-browser verification of the buttons still needs a manual check. The host page does not yet reflect state changes made elsewhere (it only updates from its own responses).
+- AI provider client in `lib/ai`: `complete(messages, schema, {eventId, kind})` (index.ts), providers openai/openrouter/mock (providers.ts), env config (config.ts), cap bookkeeping (usage.ts), error-to-HTTP mapping (http.ts). Admin-only `GET /api/ai/status` and `POST /api/ai/test`.
+- Files: lib/ai/*, app/api/ai/status|test/route.ts, db/schema.ts (`ai_calls`), migration 0015, tests/ai-client.test.ts
 - **Learnings for future iterations:**
-  - Lock the `events` row (`select ... for update`) at the start of any transaction that changes which interaction is live; locking only the target interaction row let concurrent starts of different interactions hit the one-live unique index (caught by the concurrent-start test).
-  - Payload carries ids and state only; US-016 should fetch the interaction content itself on `state-changed` (and on reconnect).
+  - A schema is `{name, jsonSchema, parse(value) -> {ok,value}|{ok:false,error}}`. The mock provider builds a valid reply from `jsonSchema` (first enum value, "mock" strings, one array item, min number), so write schemas with enums/required fields and the mock output will parse.
+  - One `complete()` = one cap slot, even with HTTP retries and the single repair retry. Caps default to 20 per event and 200 per UTC day; counted in `ai_calls` under an advisory lock.
+  - `ai_calls.event_id` is `ON DELETE SET NULL`, not cascade, so deleting an event cannot reset the daily cap. The table holds no text.
+  - `AiError.code`: not_configured, event_cap, daily_cap, timeout, provider, invalid_output. Use `aiErrorResponse(err)` from lib/ai/http.ts in routes.
+  - Tests: stub `fetch` with `vi.stubGlobal` and pass `{http: {sleep: async () => {}}}` to skip backoff; `{timeoutMs}` shortens the timeout. Join codes in test events must be 4-6 digits.
+  - Use `isAiConfigured()` to hide AI UI; never import lib/ai from client components (it reads the key).
 ---
+
 ## 2026-10-16 - US-016
-- Participant live view: `GET /api/events/:id/live` (participant cookie required, 401 otherwise, 404 unknown event) returns `{interaction}` for the live poll (id, type, title, state, options, multiSelect; showResultsToParticipants is not exposed) or null. `LiveView` client component (components/live-view.tsx) is mounted on /e/[eventId] with the server-fetched initial state; it listens for `state-changed` (live -> refetch, closed for the shown poll -> "Voting closed"), and refetches on every socket `connect`. Options render as read-only 44px rows; voting is US-017/018.
-- Files: lib/live-view.ts, app/api/events/[id]/live/route.ts, components/live-view.tsx, app/e/[eventId]/page.tsx, tests/live.test.ts, tests/live-view.test.tsx
-- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification and the 360px layout still need a manual check.
+- `note_analyses` table (migration 0016, cascades from interactions), `lib/note-analysis.ts` (startAnalysis, getLatestAnalysis, hashNotes, setAnalysisRunner), POST /api/interactions/:id/analyze (202, owner only, 409 when one is queued/running, 400 with no approved notes) and GET /api/interactions/:id/analysis (latest or null, with `outdated`).
+- Files: db/schema.ts, db/migrations/0016*, lib/note-analysis.ts, app/api/interactions/[id]/analyze|analysis/route.ts, tests/note-analysis.test.ts
 - **Learnings for future iterations:**
-  - "Voting closed" is client state only: after a reload with nothing live, the participant sees "Waiting for the host" (no closed_at column to recover it).
-  - Component tests mock `@/lib/realtime/use-event-socket` with an EventEmitter to drive `state-changed`/`connect`.
-  - `getLiveInteraction(eventId)` in lib/live-view.ts is the shared server helper; extend `LiveInteraction` for wordcloud (US-021/022).
+  - The AI step is not wired yet: US-017 must call `setAnalysisRunner(fn)` (fn gets `{eventId, interactionId, notes}` and returns `{summary, categories, keywords, model, promptVersion}`) from a module the analyze route imports. Until then a started job ends as `failed` ("Analysis is not available").
+  - Statuses go queued -> running (runner starts after a setImmediate) -> done|failed. Jobs older than `ANALYSIS_STALE_MS` (5 min) count as lost and are failed on the next start.
+  - The API view omits `notesSnapshotHash`; `outdated` is computed from the hash of current approved notes (id + text), so edits, approvals and deletes all flag it.
+  - Single-job guard is a `FOR UPDATE` on the interaction row inside the start transaction.
+  - A leftover `.next-shot` dir makes `npm run lint` fail with hundreds of errors; delete it first.
 ---
+
 ## 2026-10-16 - US-017
-- `poll_votes` table (migration 0005, UNIQUE(interaction_id, participant_id), cascade FKs) and `POST /api/interactions/:id/vote` body `{optionIds: string[]}`. Returns 201 `{ok, counts, total}`; 400 invalid/duplicate-in-list options or several options on single-select; 401 no valid participant cookie; 404 unknown interaction; 409 not live or already voted. Sets `participants.first_response_at` (coalesce, first response only) and publishes `poll:counts` `{interactionId, counts: {optionId: n}, total}` to the event room. Logic in lib/votes.ts (`castVote`, `getPollCounts`). Rate limits: 100/min per IP, 20/min per participant.
-- Files: db/schema.ts, db/migrations/0005_*, lib/votes.ts, app/api/interactions/[id]/vote/route.ts, tests/votes.test.ts
-- Verified: lint, typecheck, test pass (9 new tests); migrations applied to dev and test DBs.
+- `lib/note-analysis-ai.ts`: `analyzeNotes` builds the versioned prompt (`notes-v1`), sends approved note text only as `<note id="n1">` data (angle brackets escaped, instruction to ignore instructions inside notes), validates summary (<=150 words), 3-8 categories (fewer only when under 3 notes), up to 50 keywords. It registers itself with `setAnalysisRunner`, and the analyze route imports it.
+- Batches of 200 notes are merged: categories by lowercase name, one extra `complete()` call merges summaries, keywords sum weights. Unknown ids are dropped, a note appears in one category only, leftovers (and categories beyond 8) go to "Uncategorized".
+- Fallback (word frequency, stop words, no summary/categories, model `word-frequency`) is returned on not_configured, event_cap, daily_cap, timeout, provider errors. `invalid_output` throws a readable error and fails the job.
+- Files: lib/note-analysis-ai.ts, app/api/interactions/[id]/analyze/route.ts, tests/note-analysis-ai.test.ts
 - **Learnings for future iterations:**
-  - The participant cookie is per event, so routes keyed only by interaction id read `eventId` from the interaction row first, then verify the cookie for that event.
-  - Vote tx takes `FOR SHARE` on the interaction row so a concurrent close (UPDATE) waits; duplicates are caught with `onConflictDoNothing` on the unique constraint (no 23505 handling needed).
-  - `poll:counts` goes to the whole event room, including participants, even when `showResultsToParticipants` is false; US-018 must not display it unless that flag is set (the live endpoint intentionally hides the flag today, so expose it there if needed). US-019 presenter can subscribe to it, and should seed from `getPollCounts`.
-  - The rate limit counts every attempt (including rejected ones).
+  - A failed job is a new row; the earlier `done` row is untouched, but `getLatestAnalysis` returns the newest row (failed). US-018/020 should show the last `done` analysis alongside a failed latest one if the UI needs "keeps the previous good analysis" visible.
+  - Fallback results have an empty summary and `categories: []`; UI must handle that and show it as "keywords only".
+  - Stored category shape: `{name, description, noteIds[]}` with real note ids; keywords `{word, weight}`.
+  - Tests pass `{provider}` (a scripted AiProvider) to `analyzeNotes`; AI_PROVIDER=mock yields "mock" summary and everything in Uncategorized.
+  - No UI changed, so no browser check needed.
 ---
+
 ## 2026-10-16 - US-018
-- Vote UI in components/live-view.tsx (`PollForm`, keyed by interaction id): radio (single) / checkbox (multi) options with real `<label>`s, 44px rows, Submit disabled until a selection; on success shows "Thanks, your vote was recorded." and locks all inputs. Server errors render in `role="alert"`; "You have already voted" also locks the form, other 4xx (e.g. "Voting is not open") leave it open. Counts (from the vote response, then live `poll:counts`) are rendered only when `showResultsToParticipants` is true; `LiveInteraction` and the live endpoint now expose that flag.
-- Files: components/live-view.tsx, lib/live-view.ts, tests/live-view.test.tsx, tests/live.test.ts
-- Verified: lint, typecheck, test pass (5 new component tests). No browser tool available (dev-browser skill not present), so real-browser verification, focus ring appearance and 360px layout still need a manual check.
+- Host controls for analysis: `components/notes-analysis-panel.tsx` inside each started/closed shared-notes item in poll-manager (rendered only when `isAiConfigured()`, passed as `aiEnabled` from the event page). Shows approved note count, "Analyze notes"/"Run again", progress (polls every 2s while queued/running), failure message, last run time, "Outdated" badge, keywords-only notice. Button is disabled while a job runs or with no approved notes.
+- Per-event AI notice: `events.ai_notice_accepted_at` (migration 0017). POST /analyze returns 409 `{code: "notice_required"}` until the body has `acceptNotice: true`, which stores the timestamp. GET /analysis now returns `{analysis, lastDone, approvedNoteCount, noticeAccepted}`.
+- Cap/provider fallbacks now store a plain-language reason in `note_analyses.error` on the done row (`AnalysisOutput.notice`), which the panel shows as the keywords-only message.
+- Files: db/schema.ts, db/migrations/0017*, lib/note-analysis.ts, lib/note-analysis-ai.ts, analyze/analysis routes, components/notes-analysis-panel.tsx, poll-manager.tsx, event page, tests/note-analysis.test.ts
 - **Learnings for future iterations:**
-  - jsdom does not propagate `<fieldset disabled>` to `input.disabled`; set `disabled` on each input too so tests (and clarity) hold.
-  - Voted state is client-only: after a reload the form reappears and the server's 409 "already voted" locks it. No endpoint reports a participant's own vote yet.
-  - The live endpoint now leaks nothing host-only except the intentional results flag; the client must still gate counts on it (the `poll:counts` broadcast reaches everyone).
+  - Tests calling the analyze route must send `{acceptNotice: true}` on the first call.
+  - `getAnalysisPanelState` gives the newest job and the newest done job; US-019/020 should render results from `lastDone`. `edited` on it drives the re-run confirmation.
+  - Panel uses `var(--token, fallback)` colours since tokens land in US-024; swap the fallbacks out in the restyle stories.
+  - Browser check: port 3200 was already held by another dev server on `.next-shot`; I used PORT=3201 with NEXT_DIST_DIR=.next-shot2 and DATABASE_URL=$TEST_DATABASE_URL AI_PROVIDER=mock. Signup is rate limited, so wait ~30s between script runs. Verified at 360px and 1280px (screens/us018-*.png).
 ---
+
 ## 2026-10-16 - US-019
-- Presenter view: `/present/[eventId]` (login redirect, owner-only 404) renders `PresenterView` (components/presenter-view.tsx): live poll title, per-option bar with label, count, percent (role=progressbar), total votes, large high-contrast type; "No live interaction" otherwise. Seeds from `getPresenterState` (lib/presenter.ts, live poll + `getPollCounts`); `GET /api/events/:id/present` (owner-only) serves refetches. Updates from `poll:counts` directly, refetches on `state-changed` and socket `connect`. Event dashboard page links to it.
-- Files: lib/presenter.ts, app/api/events/[id]/present/route.ts, app/present/[eventId]/page.tsx, components/presenter-view.tsx, app/dashboard/events/[id]/page.tsx, tests/presenter{,-view}.test.ts(x)
-- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification still needs a manual check. The present API route has no dedicated auth test (it reuses requireAdmin/findOwnedEvent).
+- Presenter view for shared notes gained tabs: Notes, Word cloud, Categories, Top notes by category, Summary (`components/presenter-analysis.tsx`, wired in `presenter-notes.tsx`). Word cloud uses AI keyword weights, else a word-frequency fallback labelled "Not AI-generated". Categories is a bar chart (count and percent printed, leading bar accent, others ink tints) and clicking a row lists its notes by upvotes. Every AI view shows "AI-generated" and an "Outdated" badge when it applies.
+- Publish toggle: `PATCH /api/interactions/:id/analysis {published}` publishes the newest done analysis (clears the flag on older rows); button on the host panel. Participant display of the published analysis is US-021.
+- Keyword helpers moved to client-safe `lib/note-keywords.ts` (re-exported from note-analysis-ai) so the presenter can compute the frequency fallback.
+- Files: components/presenter-analysis.tsx, presenter-notes.tsx, presenter-view.tsx, notes-analysis-panel.tsx, lib/note-keywords.ts, lib/note-analysis.ts, lib/note-analysis-ai.ts, analysis route, tests/note-analysis.test.ts, tests/presenter-analysis.test.ts
 - **Learnings for future iterations:**
-  - Presenter connects with role "host" so it is in the host room too; a closed poll shows "No live interaction" (no final-results screen).
-  - Inserting interactions directly in tests requires `position` (not null, no default).
-  - US-020 can add join code/QR/navigation to PresenterView/page; the page is a dark full-screen `<main>`.
+  - Never run `npm test` while a screenshot server points at the test DB: `truncateAll` wipes it mid-script (symptoms: 401s, "Event not found").
+  - A component that stays mounted across tab switches does not refetch; key effects on the view or poll. Presenter fetches `lastDone` from the host analysis GET every 10s.
+  - Bars are not animated, so reduced-motion needs nothing extra. Chart rows stack the bar under label and value so they survive 360px.
+  - Presenter view is still pre-restyle (black/white inline styles); US-029 restyles it. Tab buttons use the same inline style as the Top/Newest toggle.
+  - Don't `pkill -f` with env text; kill by pid from `ss -ltnp`. `.next-shot*` dirs break `npm run lint`: delete them when done.
+  - Verified in Playwright at 360px and 1280px (screens/us019-*.png, script us019.mjs). Host-page publish button not screenshotted; API covered by test.
 ---
+
 ## 2026-10-16 - US-020
-- Presenter view now shows a fixed top-right corner with the join code and a QR code (client-side `qrcode` data URL of `<origin>/join/<code>`), a Fullscreen button (Esc exits via document.exitFullscreen), and ArrowLeft/ArrowRight navigation: moves to the neighbouring interaction in position order and starts it (the start transaction closes the current live one). Page passes `joinCode` and the interaction list (`items`); the list refreshes on `state-changed`/`connect` via the interactions API.
-- Files: components/presenter-view.tsx, app/present/[eventId]/page.tsx, tests/presenter-view.test.tsx, package.json, package-lock.json
-- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification (QR scan, fullscreen, arrow keys) still needs a manual check.
+- Host can review and edit the newest done analysis: rename, merge, delete category (notes go to Uncategorized), move a note, edit summary, remove keyword. Every edit sets `edited`. Rules are pure in `lib/analysis-edit.ts` (`applyEdit`, `parseEdit`); `editAnalysis` in lib/note-analysis.ts applies them under a row lock. API: `PATCH /api/interactions/:id/analysis` with `{op, ...}` (the same route still takes `{published}`). UI: `components/analysis-editor.tsx` in a "Review and edit results" details block of the host panel; analysis GET now also returns approved `notes` {id,text}.
+- Files: lib/analysis-edit.ts, lib/note-analysis.ts, analysis route, components/analysis-editor.tsx, notes-analysis-panel.tsx, app/globals.css (.sr-only), tests/note-analysis.test.ts
 - **Learnings for future iterations:**
-  - Only draft interactions can be started, so arrowing onto an already-closed interaction shows a notice instead of restarting it; with nothing live, the cursor is the last interaction started from this screen.
-  - Added deps: `qrcode` and `@types/qrcode`.
+  - Presenter and participants read the same stored row, so edits show up with no extra work (presenter polls every 10s).
+  - Emptied categories are dropped on move/delete; Uncategorized is created on demand and cannot be deleted.
+  - In tests, `start()` returns a Response, not the job promise: use `vi.waitFor` on the row status before editing.
+  - `.next-shot` can reappear and break `npm run lint`; remove it before linting.
+  - Verified at 360px and 1280px (screens/us020-*.png, us020.mjs); no overflow. Styling is pre-restyle by design.
 ---
+
 ## 2026-10-16 - US-021
-- Word cloud API: `wordcloud_entries` table (migration 0006, with `hidden` flag for profanity). Interaction endpoints (POST/PATCH/duplicate) now handle type 'wordcloud' with body `{prompt, maxEntriesPerParticipant (1-5)}` (stored as title + config). `POST /api/interactions/:id/words` `{word}` (trim, lowercase, collapse spaces, max 25 chars, per-participant limit 409, not-live 409, rate limit 100/min IP + 20/min participant) returns 201 `{ok, remaining}`; `GET` returns merged `{words:[{word,count}], total}` for event participants or the owner. Visible changes publish `wordcloud:words` `{interactionId, words, total}`; profane words are stored hidden, return 201, publish nothing and never appear in results.
-- Files: db/schema.ts, db/migrations/0006_*, lib/{wordclouds,wordcloud-limits,profanity}.ts, app/api/interactions/[id]/words/route.ts, app/api/events/[id]/interactions/**, tests/wordclouds.test.ts
-- Verified: lint, typecheck, test pass (11 new tests); migration applied to dev and test DBs.
+- Participant disclosure and published analysis. `LiveNotes.aiDisclosure` (from `isAiConfigured()`) drives a one-line notice on the notes screen. New `GET /api/interactions/:id/analysis/published` (joined participant, started/closed notes interaction) returns `{analysis: {summary, categories:[{name,description,count}], keywords} | null}`: only the published done row, counts instead of note ids. `components/published-analysis.tsx` shows summary, category counts and a word cloud, and listens for the `analysis:published` socket event, which `setAnalysisPublished` and `editAnalysis` (when the edited row is published) now send.
+- Files: lib/note-analysis.ts (getPublishedAnalysis, announcePublishedAnalysis), lib/live-view.ts, app/api/interactions/[id]/analysis/published/route.ts, components/published-analysis.tsx, shared-notes-panel.tsx, word-cloud.tsx (`sizeRange` prop), tests/published-analysis.test.ts, tests/shared-notes-panel.test.tsx
 - **Learnings for future iterations:**
-  - Lock the participant row `FOR UPDATE` inside the submit transaction so the per-participant limit can't be raced; interaction row is locked `FOR SHARE` like votes.
-  - Client code should import limits from lib/wordcloud-limits.ts (db-free), not lib/wordclouds.ts.
-  - `getLiveInteraction` (lib/live-view.ts) and `getPresenterState` still return null for non-poll types; US-022 must extend them and PollManager (which only builds polls) for wordcloud.
-  - Profanity list in lib/profanity.ts is a small built-in blocklist; extend there.
+  - The participant payload must never include note ids or text; the test asserts the raw body. Keep it that way if US-022/US-023 touch it.
+  - `WordCloud` defaults to presenter sizes (1.25-5rem); pass `sizeRange` for phone-sized clouds. Words wrap with `overflowWrap: anywhere`.
+  - Participant page is /e/:eventId. Screenshot script: scripts/ralph/screens/us021.mjs (port 3201, AI_PROVIDER=mock so the disclosure shows). Verified at 360px and 1280px, no overflow, live withdraw works. Pre-restyle styling by design.
+  - A `.next-shot` dir may be recreated by another dev server; lint with `npx eslint . --ignore-pattern ".next-shot/**"` if it is not yours.
 ---
+
 ## 2026-10-16 - US-022
-- Word cloud UI. Host: PollManager has a "New word cloud" form (prompt + entries per participant 1-5) and edits existing word clouds. Participant: `WordForm` in components/live-view.tsx (input, "N entries remaining", errors in `role="alert"`, locks at 0). Presenter: components/word-cloud.tsx renders words sized by frequency (linear 1.25-5rem), count shown on hover/focus, plus a visually hidden text list; PresenterView updates from `wordcloud:words`.
-- `LiveInteraction` and `PresenterState` are now discriminated unions on `type` ("poll" | "wordcloud"). `getLiveInteraction(eventId, participantId?)` returns the participant's `remaining` entries for word clouds (live route and /e page pass the participant id).
-- Files: components/{word-cloud,live-view,presenter-view,poll-manager}.tsx, lib/{live-view,presenter}.ts, app/api/events/[id]/live/route.ts, app/e/[eventId]/page.tsx, tests/{live-view,presenter-view,poll-manager}.test.tsx
-- Verified: lint, typecheck, test pass. No browser tool available (dev-browser skill not present), so real-browser verification (cloud layout, hover/focus count, 360px) still needs a manual check.
+- CSV export gains an analysis table (after ratings) for each sharedNotes interaction with a done run: header `section,title,kind,item,count,weight,model,run_at,ai_generated,edited`; rows for summary, each category (count = note ids in it) and each keyword (weight). Model, finish time, `ai_generated=yes` and `edited` repeat on every row, so edited results export as edited. No analysis, no section; note ids and text never appear.
+- Files: lib/export.ts, tests/export.test.ts
 - **Learnings for future iterations:**
-  - Narrow on `.type` before touching poll-only fields (`options`, `counts`) on LiveInteraction/PresenterState.
-  - Participants don't see the cloud itself, only the input; "Submissions closed" is client state like "Voting closed".
-  - The remaining count can drift if the same participant submits from two tabs; the server 409 resets it to 0.
+  - Uses the newest `done` row (failed runs ignored), matching the host panel's `lastDone`.
+  - Lint warnings come from scripts/ralph/screens/*.mjs (unused vars), not app code.
 ---
+
 ## 2026-10-16 - US-023
-- `questions` table (migration 0007: text CHECK 1-300, status CHECK, pinned/answered defaults, cascade FKs, index on (event_id, status)). `POST /api/events/:id/questions` `{text, authorName?}`: participant cookie required (401), anonymous unless a non-empty name (max 40) is given, profanity in text or name gives 400, status is 'pending' in moderated events and 'approved' in open ones; returns 201 `{ok, status, question}`. Limits: 100/min per IP, 5/min per participant. `GET` returns `{questions}` approved only (pinned first, then newest) for event participants or the owner. Logic in lib/questions.ts.
-- Realtime: approved questions publish `question:added` `{question}` to the event room; pending ones publish `question:pending` `{question}` with `hostOnly: true`.
-- Files: db/schema.ts, db/migrations/0007_*, lib/questions.ts, app/api/events/[id]/questions/route.ts, tests/questions.test.ts
-- Verified: lint, typecheck, test pass (10 new tests); migration applied to dev and test DBs.
+- Added e2e/notes-ai.spec.ts: moderated shared notes (two participants, host approves, upvotes), manual Analyze with the mock provider, presenter Categories, then an open text round and a rating round. Playwright webServer now sets `AI_PROVIDER=mock`. README documents the new interaction types, AI env vars, owner key only in .env.local, manual-only analysis and `AI_PROVIDER=mock`.
+- Files: e2e/notes-ai.spec.ts, playwright.config.ts, README.md
 - **Learnings for future iterations:**
-  - `PublicQuestion` (lib/questions.ts) is the only shape to send to participants: it omits participant id and status. Moderation endpoints (US-026) need their own host-side shape and should publish `question:added` when approving.
-  - Unlike word clouds, profane questions are rejected with 400 rather than stored hidden.
-  - Moderation mode is read at submit time, so switching an event to 'moderated' doesn't hide already approved questions.
-  - Tests making more than 5 question POSTs must reset the rate-limit store.
+  - Notes submit button is "Send note". Approve notes one at a time: wait for the pending count to drop before the next click.
+  - The host page loads the analysis panel's approved count on render; `page.reload()` after moderating before clicking Analyze.
+  - Only one interaction is needed live at a time in e2e: close the previous before starting the next.
+  - Full suite: lint 0 errors, typecheck, 349 unit tests, build and 2 e2e specs pass.
 ---
+
 ## 2026-10-16 - US-024
-- Q&A participant UI. `/e/[eventId]` now renders `ParticipantView` (components/participant-view.tsx): "Live" and "Q&A" tabs (role=tablist), both panels stay mounted (`hidden`) so the live view keeps its socket listeners. `QaTab` (components/qa-tab.tsx): textarea (max 300, `n/300` counter), optional name (max 40), "Your question is waiting for approval" when the POST returns status 'pending', own approved questions appended immediately, approved list updates from `question:added` (deduped by id) and resyncs via GET on socket connect. Shows pinned/answered markers and "Anonymous" for no name.
-- Moved question limits and `PublicQuestion` into db-free lib/question-types.ts (re-exported from lib/questions.ts) for client import.
-- Files: components/{qa-tab,participant-view}.tsx, lib/{question-types,questions}.ts, app/e/[eventId]/page.tsx, tests/qa-tab.test.tsx
-- Verified: lint, typecheck, test pass (4 new tests). No browser tool available (dev-browser skill not present), so real-browser verification (tab switching, 360px layout, live updates) still needs a manual check.
+- DESIGN.md tokens as CSS variables in app/globals.css (colours, status colours, spacing, radii, type scale, focus ring); dark via prefers-color-scheme unless `data-theme` is set. Fraunces and Public Sans via @fontsource-variable, imported in app/layout.tsx. Header with `ThemeToggle` (components/theme-toggle.tsx, helpers in lib/theme.ts); an inline head script applies the stored theme before paint. Contrast ratios in docs/design-contrast.md.
+- Files: app/globals.css, app/layout.tsx, components/theme-toggle.tsx, lib/theme.ts, tests/theme-toggle.test.tsx, docs/design-contrast.md, package.json
 - **Learnings for future iterations:**
-  - Keep the char counter outside the `<label>`, or `getByLabelText("Your question")` also matches the counter text.
-  - QaTab and LiveView each open their own socket via useEventSocket; share one if this becomes a problem.
-  - Question likes/ordering updates (later stories) should add events to QaTab's socket effect; list order is pinned first, then newest (`sortQuestions`).
+  - Use `var(--ink)`, `var(--surface)`, `var(--accent)`, `var(--error)`, `var(--success)`, `--space-*`, `--radius-*`, `--text-*`, `--font-heading`. poll-manager and others still hardcode colours: restyle in US-025+.
+  - Native inputs and buttons are still unstyled (white fields in dark theme): US-025/026 must style them.
+  - Never run two `npm test` at once: they share the test DB and fail with FK errors. Also `pkill -f "next dev"` killed my shell; kill by port/PID instead.
+  - Verified at 360px and 1280px, light and dark (screens/us024-*.png).
 ---
+
 ## 2026-10-16 - US-025
-- `question_votes` table (migration 0008, UNIQUE(question_id, participant_id), cascade FKs). `POST /api/questions/:id/upvote` toggles the caller's upvote (participant cookie, 401 otherwise; 404 for unknown, pending or rejected questions) and returns `{ok, upvoted, upvotes}`; rate limited 100/min IP + 30/min participant. Publishes `question:votes` `{questionId, upvotes}` to the event room. `PublicQuestion` gained `upvotes` and `upvoted` (viewer-specific; false for the host); `listApprovedQuestions(eventId, participantId?)` fills them.
-- QaTab: ▲ button per question (aria-pressed, 44px target), Popular/Recent sort toggle (pinned stay on top; Popular = upvotes desc then newest), live count updates from `question:votes`.
-- Files: db/schema.ts, db/migrations/0008_*, lib/{questions,question-types}.ts, app/api/questions/[id]/upvote/route.ts, app/api/events/[id]/questions/route.ts, app/e/[eventId]/page.tsx, components/qa-tab.tsx, tests/{questions.test.ts,qa-tab.test.tsx}
-- Verified: lint, typecheck, test pass (7 new tests); migration applied to dev and test DBs. No browser tool available (dev-browser skill not present), so real-browser verification (sort toggle, live counts across two tabs, 360px) still needs a manual check.
+- Primitives in components/ui: Button (primary/secondary/quiet, busy disables + aria-busy + spinner), TextField/TextArea/Select (label, hint, error wired with aria-describedby/invalid), Toggle, Card, Badge, EmptyState, InlineError (field.tsx, card.tsx), Dialog (Escape, Tab trap, focus returns to opener), ThemeToggle re-export. `AppShell` (skip link, header, nav, theme toggle) wraps the root layout. Styles are `ui-*` classes in app/globals.css, tokens only.
+- Every page `<main>` now has `id="main"` (skip link target); host pages use `className="page"` (45rem max width). Tests: tests/ui-components.test.tsx.
 - **Learnings for future iterations:**
-  - The `question:votes` broadcast carries only the count; `upvoted` is per-viewer and comes from the toggle response / GET, never from the broadcast.
-  - US-026 moderation that rejects/un-approves a question should keep rows in question_votes (harmless; they're only counted for approved questions in the list).
-  - Prettier isn't configured in the repo; if you format with it use `--print-width 120` to match existing style.
+  - New pages need `<main id="main">`; do not add another `<main>` in the shell.
+  - Nav "Join" points at `/` (the join form is the home page; there is no /join index).
+  - Global rules already style bare input/select/textarea; native `<button>`s are still unstyled until screens adopt `Button` (US-026+).
+  - Dev server on :3200 survives `kill $pid` of the npm wrapper; kill by port via `ss -ltnp | grep :3200`, and `rm -rf .next-shot` before restarting.
+  - Verified skip-link focus at 360/1280 light and dark (screens/us025-*.png); no overflow.
 ---
+
 ## 2026-10-16 - US-026
-- Moderation queue. lib/moderation.ts: `listHostQuestions` (pending + approved, with `status`), `moderateQuestion` (PATCH body `{status: approved|rejected}` for pending only, `{pinned}`/`{answered}` for approved only; 409 otherwise; rejected questions 404 afterwards), `deleteQuestion`. Endpoints (owner-only via requireAdmin + findOwnedEvent, 404 for other owners): `GET /api/events/:id/moderation`, `PATCH|DELETE /api/events/:id/questions/:questionId`. The Open/Moderated switch reuses the existing `PATCH /api/events/:id`.
-- Realtime: approve publishes `question:added` (public shape) to the room; pin/answer publish `question:updated` `{questionId, pinned, answered}`; deleting an approved question publishes `question:removed`; reject and deleting non-approved publish nothing. QaTab handles updated/removed.
-- Host UI: components/moderation-panel.tsx (mode checkbox, Pending list with Approve/Reject, Approved list with Mark answered / Pin / Delete, live via `question:pending`/`question:added`/`question:votes`) rendered on the event dashboard page.
-- Files: lib/{moderation,question-types}.ts, app/api/events/[id]/{moderation,questions/[questionId]}/route.ts, components/{moderation-panel,qa-tab}.tsx, app/dashboard/events/[id]/page.tsx, tests/{questions.test.ts,moderation-panel.test.tsx,qa-tab.test.tsx}
-- Verified: lint, typecheck, test pass (no migration needed). No browser tool available (dev-browser skill not present), so real-browser verification (queue, live approval <1s, 360px) still needs a manual check.
+- Restyled home (join by code), /login, /signup and /join/[code] with `Button`, `TextField`, `InlineError` and new `.entry-page`/`.entry-form`/`.entry-lead`/`.entry-alt` classes. One primary action each; bad code shows the error under the code field, bad login shows an inline error above the button, busy buttons show the spinner. Copy: "Join an event", "Create a host account", "Could not join".
+- Files: app/page.tsx, app/join/[code]/page.tsx, components/auth-form.tsx, join-form.tsx, join-redirect.tsx, app/globals.css, tests/home.test.tsx, scripts/ralph/screens/us026.mjs
 - **Learnings for future iterations:**
-  - A route helper returning `{response} as const | {...}` made TS infer `Response | undefined`; return `Response | data` and narrow with `instanceof Response`.
-  - Rejected questions stay in the table but are invisible everywhere (host list excludes them too).
-  - Switching to 'open' does not auto-approve already pending questions; the host still approves/rejects them.
+  - Button accessible names changed ("Join event"); the signup button is still "Create account" (e2e depends on it).
+  - Next dev injects its own `role=alert` route announcer: wait for `.ui-error` in screenshot scripts, not `[role=alert]`.
+  - Verified at 360px and 1280px, light and dark (screens/us026-*.png), no overflow or console errors. Tab/Enter work with native controls and the shared focus ring.
+  - Header nav still shows "Events" to logged-out visitors; the shell is not part of this story.
 ---
+
 ## 2026-10-16 - US-027
-- Moderator link. `events.moderator_nonce` (migration 0009) holds the current nonce; token = `<nonce>.<HMAC(eventId.nonce)>` (lib/moderator-token.ts), valid only while the nonce matches the row, so revoke (nonce=null) and regenerate (new nonce) take effect immediately. Host-only `GET|POST|DELETE /api/events/:id/moderator-link` return/rotate/revoke the link path `/moderate/:eventId?t=<token>`.
-- `authorizeModeration(request, eventId)` (lib/auth/require-moderation.ts) accepts the owner session or an `x-moderator-token` header; used ONLY by `GET /api/events/:id/moderation` and `PATCH|DELETE /api/events/:id/questions/:questionId`. All other routes still use requireAdmin, so the token gets 401 elsewhere. Socket.IO has a `moderator` role (auth `{eventId, role, token}`) that joins the host room.
-- UI: `/moderate/[eventId]` page renders `ModerationPanel` with `moderatorToken` (no mode switch); `ModeratorLinkManager` on the host event page (generate/regenerate, copy, revoke).
-- Files: db/schema.ts, db/migrations/0009_*, lib/{moderator-token,auth/require-moderation,realtime/*}.ts, app/api/events/[id]/{moderator-link,moderation,questions/[questionId]}/route.ts, app/moderate/[eventId]/page.tsx, components/{moderation-panel,moderator-link-manager}.tsx, app/dashboard/events/[id]/page.tsx, tests/{moderator-link.test.ts,realtime.test.ts,moderation-panel.test.tsx}
-- Verified: lint, typecheck, test pass; migration applied to dev and test DBs. No browser tool available, so real-browser verification of /moderate and the link manager still needs a manual check.
+- Restyled the host dashboard and event page with the ui primitives. Dashboard: "Your events" header with Log out, New event card (name, start/end pair, busy primary button), event rows (name, dates, join code badge, live count, Manage as the accent action, quiet Rename/Duplicate/Delete), written empty state. Event page: header with presenter view (accent) and Export CSV, interaction rows with type, state badge and Start/Close as the accent action (live row gets an accent border), one shared form layout for all five types (Question/Prompt, grouped fieldsets, Save/Cancel), written empty state. Delete confirms for events, interactions and open-text responses now use `Dialog` (no `window.confirm`).
+- Files: components/event-manager.tsx, poll-manager.tsx, open-text-host-panel.tsx, logout-button.tsx, app/dashboard/page.tsx, app/dashboard/events/[id]/page.tsx, app/globals.css, tests (event-manager, poll-manager, open-text-ui), scripts/ralph/screens/us027.mjs
 - **Learnings for future iterations:**
-  - A moderator socket already connected when the link is revoked stays connected (HTTP calls fail immediately, but it keeps receiving broadcasts until it disconnects).
-  - Token is in the URL query; the moderator page does not strip it, since the client needs it for API headers.
-  - Moderators cannot change Open/Moderated mode (that is PATCH /api/events/:id, host-only).
+  - New shared classes in globals.css: `.stack`, `.page-head`, `.form-stack`, `.form-group`, `.row-list`, `.row-actions(-quiet)`, `.row-meta`, `.event-row`, `.interaction-row`. Links styled as buttons use `className="ui-button" data-variant=...`.
+  - ModerationPanel and ModeratorLinkManager on the event page are still unstyled: US-029 owns them.
+  - Delete flows now need a second click on the dialog button ("Delete event", "Delete interaction", "Delete response") in tests.
+  - Screenshot script needs `set -a; . ./.env.local; set +a` first; `getByLabel` needs `{exact: true}` because "Question"/"Option 1" also match other labels. Tests recreate `.next-shot`; rm it before lint.
+  - Verified at 360px and 1280px, light and dark (screens/us027-*.png): no overflow, no console errors.
 ---
+
 ## 2026-10-16 - US-028
-- `POST /api/events/:id/duplicate` (owner-only, 404 otherwise): creates "<name> (copy)" (truncated to 80 chars) with the same dates and moderation mode, a fresh join code (same retry-on-23505 loop as create), and copies interactions as drafts renumbered from position 0 with config copied verbatim, all in one transaction. Votes, entries, participants, questions and the moderator nonce are not copied. Dashboard EventManager has a Duplicate button that adds the copy and shows its join code.
-- Files: app/api/events/[id]/duplicate/route.ts, components/event-manager.tsx, tests/{events.test.ts,event-manager.test.tsx}
-- Verified: lint, typecheck, test pass. No browser tool available, so real-browser verification of the Duplicate button still needs a manual check.
+- Restyled the participant screens with the ui primitives and tokens: waiting, poll, word cloud, Q&A, shared notes, open text and rating. Designed closed states (`EmptyState` with `role="status"`), a `.confirm` box for confirmations, `InlineError` for errors. Poll results show ink-tint bars with the leading option in an accent tint and printed count plus percent. Tabs, sort buttons, upvote buttons and note actions are `Button`s (44px).
+- Fixed a latent bug: `PollForm` read `body.counts.counts` but the vote route returns `{counts, total}` flat, so showing results after voting crashed the page. Tests updated to the real shape.
+- Files: app/e/[eventId]/page.tsx, app/globals.css, components/{live-view,participant-view,qa-tab,shared-notes-panel,open-text-form,rating-form}.tsx, components/ui/card.tsx, tests/live-view.test.tsx, scripts/ralph/screens/us028.mjs
 - **Learnings for future iterations:**
-  - `poll_votes` column is `optionIds` (string[]), not `optionId`; `questions` text column is `text`.
-  - Poll option ids are copied unchanged; they only need to be unique within an interaction, so reuse across events is fine.
+  - New classes in globals.css: `.participant`, `.tabs/.tab`, `.live-form`, `.choice-list/.choice(-bar,-value)`, `.confirm`, `.sort-bar`, `.post-list/.post/.post-foot/.post-meta`. `EmptyState` takes an optional `role="status"`.
+  - Interaction routes for scripts: `/api/events/:eid/interactions` (create; poll needs `question`/`options`, wordcloud needs `maxEntriesPerParticipant`) and `.../interactions/:id/start|close`. Only one interaction is live at a time, and a closed one cannot restart, so create fresh ones per screenshot pass.
+  - `.next-shot` is recreated by `npm test`; `rm -rf` it before `npm run lint` or lint reports 100 errors from build output.
+  - `fuser -k 3200/tcp` stops the screenshot server; `pkill -f` killed the shell.
+  - WordCloud and RatingChart are presenter components and still inline-styled: US-029.
+  - Verified at 360px and 1280px, light and dark (screens/us028-*.png): no overflow, no console errors.
 ---
+
 ## 2026-10-16 - US-029
-- `GET /api/events/:id/export.csv` (owner-only: 401 anonymous, 404 other owner/unknown) returns one flat CSV (`section,title,item,count,author`) as an attachment: poll rows per option with vote counts (zero-vote options included), wordcloud rows with merged counts (hidden/profane excluded), and approved questions with upvote counts (most upvoted first) plus `author` only when the participant gave a name. Pending/rejected questions, participant ids, nicknames and IPs are never selected. Dashboard event page has an "Export CSV" download link.
-- Files: lib/export.ts, app/api/events/[id]/export.csv/route.ts, app/dashboard/events/[id]/page.tsx, tests/export.test.ts
-- Verified: lint, typecheck, test pass (3 new tests parse the CSV). No browser tool available, so real-browser verification of the download link still needs a manual check.
+- Restyled the presenter view and moderation on tokens (no more black/yellow inline styles). Presenter: Fraunces `.present-title` up to 5rem, join code + QR in an in-flow `.present-join` card in the header (no longer fixed, so it cannot overlap results), poll bars with ink-tint fill and the leading bar in the accent (printed count and percent), rating average as a large serif figure, word cloud in Fraunces with the top word in the accent, open-text and notes as `.present-card`s (highlighted/pinned get an accent border and a text label), Notes/Word cloud/... switch as `.present-switch`, AI label uses `Badge`. Moderation (`/moderate` and the event page) uses `Button` (Approve primary, Reject secondary, Delete quiet), `.post` rows, Pinned/Answered badges, a pending accent edge, `Toggle` and `InlineError`; ModeratorLinkManager restyled to match.
+- Files: components/{presenter-view,presenter-rating,presenter-open-text,presenter-notes,presenter-analysis,rating-chart,word-cloud,moderation-panel,moderator-link-manager}.tsx, app/present/[eventId]/page.tsx, app/moderate/[eventId]/page.tsx, app/globals.css, scripts/ralph/screens/us029.mjs
 - **Learnings for future iterations:**
-  - `csvField` prefixes `'` to values starting with `= + - @` (formula injection), so exported question text can differ by that one character.
-  - In Drizzle `sql` subqueries, `${table.col}` renders unqualified (`"id"`) and can bind to the inner table; use a leftJoin + groupBy for per-row counts instead.
+  - Presenter classes in globals.css: `.present`, `.present-head/-title/-join/-qr/-code`, `.present-total/-empty/-figure`, `.present-bars/-track/-fill[data-leading]`, `.present-cards/-card[data-highlight]`, `.present-switch`, `.rating-chart`, `.word-cloud`, `.moderation`. The QR keeps `#fff` backing on purpose so it scans in dark theme.
+  - Participant-side API bodies for scripts: words `{word}`, vote `{optionIds}`, rating `{value}`, responses `{text}`, notes `{text}`; questions POST `/api/events/:id/questions` `{text}`.
+  - The "Encountered a script tag" console error in screenshot runs comes from the theme script in the shell (US-024), not this story.
+  - Lint reports 100 errors if `.next-shot` exists; `rm -rf .next-shot` and `git checkout next-env.d.ts tsconfig.json` first.
+  - Verified at 360, 1280 and 1920px, light and dark (screens/us029-*.png): no horizontal overflow.
 ---
+
 ## 2026-10-16 - US-030
-- Presence + engagement metrics. `lib/realtime/presence.ts` keeps an in-memory map eventId -> participantId -> connection count (several tabs of one participant count once); socket-server calls it on participant connect/disconnect, publishes host-only `presence {count}` and sends the current count to a host/moderator socket on connect. Peak is persisted with `greatest(peak_participants, n)`. Migration 0010 adds `events.peak_participants`, `users.first_login_at` (set via coalesce on login) and `users.first_interaction_live_at` (set via coalesce inside startInteraction for the event owner). participants.joined_at/first_response_at already existed from earlier stories. Dashboard event list shows `LiveParticipantCount` per event.
-- Files: db/schema.ts, db/migrations/0010_*, lib/realtime/{presence,socket-server}.ts, lib/interaction-state.ts, app/api/auth/login/route.ts, components/{live-participant-count,event-manager}.tsx, tests/{realtime,auth,interaction-state,event-manager}.test.*
-- Verified: lint, typecheck, test pass; migration applied to dev and test DBs. No browser tool available, so real-browser verification of the live count on /dashboard still needs a manual check.
+- Audited every page at 360, 390 and 768px with 140-character unbroken words in all user content. No horizontal overflow or clipping anywhere. Fixed four under-44px targets: header "Join" width, site name height, skip link height, and the inline host links on the home page. Results in docs/mobile-audit.md.
+- Files: app/globals.css, docs/mobile-audit.md, scripts/ralph/screens/us030.mjs
 - **Learnings for future iterations:**
-  - Presence is per process (in-memory); a multi-process deploy needs a shared store or Socket.IO adapter aggregation.
-  - Each dashboard event row opens its own host socket; tests rendering EventManager must mock `@/components/live-participant-count`.
-  - `authorize()` in socket-server now returns `{role, participantId?}`.
+  - `scripts/ralph/screens/us030.mjs` is a reusable overflow and tap-target probe (reports elements past the viewport and controls under 44px); run it against :3200 with `set -a; . ./.env.local; set +a` first. It takes about 3 minutes, so run it in the background.
+  - Event names are capped (50 chars or so); the API rejects longer names with no `joinCode` in the response.
+  - `npm test` recreates `.next-shot`; `rm -rf` it before lint.
 ---
+
 ## 2026-10-16 - US-031
-- Accessibility + responsive pass. New `app/globals.css` (imported in layout, plus `viewport` export): border-box, `overflow-wrap: anywhere` (no horizontal scroll at 360px), 44px min height/width on buttons and text inputs, 24px checkboxes/radios, visible `:focus-visible` outline (yellow inside `.present`). Presenter progress bars gained `aria-valuetext` ("3 votes, 75%") so charts have text values; the word cloud already had per-word labels plus a text list.
-- `tests/a11y.test.tsx` runs axe-core (now an explicit devDependency) over participant (poll, word cloud, Q&A, waiting), presenter (poll, word cloud, idle), dashboard (EventManager, PollManager, ModerationPanel), auth and join forms: zero serious/critical violations. Includes a canary test proving the harness flags an unlabeled button.
-- Files: app/globals.css, app/layout.tsx, app/present/[eventId]/page.tsx, components/presenter-view.tsx, tests/a11y.test.tsx, package.json
-- Verified: lint, typecheck, test pass. No browser tool available, so real-browser checks at 360px width and keyboard-only walkthrough still need a manual check.
+- Contrast: every token pair re-checked with contrast-check.py. Control boundaries (inputs, secondary buttons, choices, rating options, theme toggle) used `--border` at 1.3:1, so added `--control-border` (3.76-4.62:1 in both themes); `--border` stays for decorative separators. docs/design-contrast.md now has a non-text table.
+- Real-browser axe (colour-contrast on, WCAG 2 A/AA + best-practice) over all key pages and every interaction type in light and dark: no contrast or serious violations. Fixed the idle presenter state having no `h1` (now an `h1` with `aria-live="polite"`).
+- Keyboard walkthrough (join, vote, notes post, host pages, dialog Escape) works; focus ring visible everywhere. Charts already expose text values (progressbar valuetext, printed counts, sr-only word list).
+- Files: app/globals.css, components/presenter-view.tsx, docs/design-contrast.md, scripts/ralph/screens/us031.mjs, us031-keys.mjs
 - **Learnings for future iterations:**
-  - axe runs in jsdom, so `color-contrast` is disabled (no layout engine); contrast needs a real-browser check.
-  - Most existing components were already labeled; component-level axe tests are cheap — add new UI to tests/a11y.test.tsx.
-  - Global CSS sets min-height on every button/input, so inline `minHeight: 44` styles are now redundant but harmless.
+  - Use `--control-border` for anything the user must find as a control; `--border` is too faint (1.3:1).
+  - `us031.mjs` is a reusable axe-in-browser audit (needs :3200 dev server and `.env.local` sourced); `nextjs-portal` focus stops in `us031-keys.mjs` are the dev overlay, not app bugs.
+  - `/join` without a code is the default Next 404 (no main/h1); not a real page.
+  - The AI analysis panels (notes-analysis-panel, analysis-editor, published-analysis) are still inline-styled and were not in the browser axe run (AI is unconfigured there); they use token vars with fallbacks.
+  - Verified in browser only via axe/keyboard probes; screenshots not retaken since no layout changed.
 ---
+
 ## 2026-10-16 - US-032
-- Playwright smoke test (`npm run test:e2e`): host signs up, creates an event and a poll, starts it; a participant in a separate browser context joins by code and votes; the presenter page shows "1 vote, 100%". Added README.md (env vars, db:migrate, commands, architecture, Redis not used yet).
-- Files: e2e/smoke.spec.ts, playwright.config.ts, README.md, next.config.ts (`NEXT_DIST_DIR`), eslint.config.mjs, .gitignore, package.json
-- Verified: lint, typecheck, test (182), build, test:e2e all pass.
+- Copy pass. No exclamation marks, emoji or buzzwords were found in UI text. Moved the repeated server/network error strings (13 files, three wordings) into `lib/copy.ts` (`SERVER_ERROR`, `NETWORK_ERROR`) and reworded six API messages that gave no next step (Not joined, Too many requests, rate-limit note notice, questions profanity, signup duplicate, login failure). Full list in docs/copy-pass.md.
+- Files: lib/copy.ts, 12 components, lib/join-client.ts, lib/questions.ts, 12 API routes, tests/qa-tab.test.tsx, docs/copy-pass.md
 - **Learnings for future iterations:**
-  - The e2e server runs on port 3100 with DATABASE_URL=TEST_DATABASE_URL and `NEXT_DIST_DIR=.next-e2e`, because Next refuses a second dev server on the same `.next` dir.
-  - Installed Playwright (1.64) expects a newer Chromium than the one cached in ~/.cache/ms-playwright (1208); set `PW_CHROMIUM_PATH` to the cached chrome-headless-shell instead of downloading a browser.
-  - `next dev`/`next build` rewrite `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
-  - Labels like "Question" and "Option 1" match several controls; use `getByRole("textbox", { name })` in e2e.
+  - Use `SERVER_ERROR` / `NETWORK_ERROR` from `@/lib/copy` for fetch failure fallbacks instead of new strings.
+  - Tests assert on error copy (qa-tab); grep tests before rewording an API message.
+  - Browser check was a login-error screenshot at 360 and 1280px (screens/us032-login-*.png); the alert text was captured before the response, so the exact new strings were verified by unit tests, not by eye.
+  - `pkill -f` kills your own shell here too; use `fuser -k` or Monitor/TaskStop.
+---
+
+## 2026-10-16 - US-033
+- Final antislop audit (mode after): 7 findings in docs/antislop-audit/audit-001.md, fixed all HIGH/MEDIUM (4) plus the comment banner; follow-up in audit-001-report.md, two LOW items left. Main fix: the AI analysis panels (notes-analysis-panel, analysis-editor, published-analysis) were still inline-styled with hardcoded colours; now use Button/Toggle and `.analysis*` classes in globals.css. Removed the colored left stripe on pending moderation posts.
+- Screenshots of 7 key pages at 360 and 1280px, light and dark, in docs/screens/ (script: scripts/ralph/screens/us033.mjs).
+- Files: app/globals.css, components/{notes-analysis-panel,analysis-editor,published-analysis}.tsx, tests/questions.test.ts, docs/antislop-audit/*, docs/screens/*
+- Checks: lint (0 errors), typecheck, test (358), build, test:e2e all pass.
+- **Learnings for future iterations:**
+  - AI UI only renders with `AI_PROVIDER=mock` on the dev server; run it that way to screenshot the analysis panels.
+  - notes-ai e2e can time out on the first run (cold route compile, 5s assertion); a rerun passed with no code change.
 ---

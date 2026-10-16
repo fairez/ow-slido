@@ -2,6 +2,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import { eventNotFound, findOwnedEvent, parsePollInput, pollConfig } from "@/lib/polls";
 import { parseWordcloudInput, wordcloudConfig } from "@/lib/wordclouds";
 
@@ -28,8 +29,11 @@ export async function POST(request: Request, { params }: Context) {
 
   const body = await request.json().catch(() => null);
   const type = body && typeof body === "object" ? (body as { type?: unknown }).type : undefined;
-  if (type !== "poll" && type !== "wordcloud") {
-    return Response.json({ error: "Interaction type must be 'poll' or 'wordcloud'" }, { status: 400 });
+  if (type !== "poll" && type !== "wordcloud" && !isNewInteractionType(type)) {
+    return Response.json(
+      { error: "Interaction type must be 'poll', 'wordcloud', 'sharedNotes', 'openText' or 'rating'" },
+      { status: 400 },
+    );
   }
   let title: string;
   let config: Record<string, unknown>;
@@ -38,6 +42,11 @@ export async function POST(request: Request, { params }: Context) {
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
     title = parsed.value.title!;
     config = pollConfig(parsed.value.config);
+  } else if (isNewInteractionType(type)) {
+    const parsed = parseNewInteractionInput(type, body, false);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    title = parsed.value.title!;
+    config = newInteractionConfig(type, parsed.value.config);
   } else {
     const parsed = parseWordcloudInput(body, false);
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });

@@ -44,7 +44,7 @@ export async function submitQuestion(
     authorName = name || null;
   }
   if (isProfane(text) || (authorName && isProfane(authorName))) {
-    return { ok: false, status: 400, error: "Please keep questions respectful" };
+    return { ok: false, status: 400, error: "That question contains language we can't accept" };
   }
 
   const db = getDb();

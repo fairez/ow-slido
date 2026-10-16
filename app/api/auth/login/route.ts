@@ -15,7 +15,7 @@ const tooMany = (retryAfterSeconds: number) =>
     { status: 429, headers: { "retry-after": String(retryAfterSeconds) } },
   );
 
-const invalid = () => Response.json({ error: "Invalid email or password" }, { status: 401 });
+const invalid = () => Response.json({ error: "Email or password is incorrect." }, { status: 401 });
 
 // Compared against when the email is unknown so response time doesn't reveal which emails exist.
 const dummyHash = hashPassword("dummy-password-for-timing");

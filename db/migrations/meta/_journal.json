@@ -78,6 +78,62 @@
       "when": 1792105761935,
       "tag": "0010_handy_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792135610573,
+      "tag": "0011_striped_the_captain",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792135821762,
+      "tag": "0012_cloudy_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792138158178,
+      "tag": "0013_bizarre_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792138758264,
+      "tag": "0014_black_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792139733781,
+      "tag": "0015_certain_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792140016432,
+      "tag": "0016_equal_donald_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792140736526,
+      "tag": "0017_broad_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792163591232,
+      "tag": "0018_same_solo",
+      "breakpoints": true
     }
   ]
 }

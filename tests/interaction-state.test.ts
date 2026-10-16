@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { io as connect, type Socket } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { participants, users } from "@/db/schema";
+import { interactions, participants, users } from "@/db/schema";
 import { createParticipantToken, participantCookieName } from "@/lib/participant-token";
 import { setPublisher } from "@/lib/realtime/publisher";
 import { attachSocketServer } from "@/lib/realtime/socket-server";
@@ -17,6 +17,7 @@ let eventsRoute: { POST: (req: Request) => Promise<Response> };
 let collection: { POST: Handler };
 let start: { POST: Handler };
 let close: { POST: Handler };
+let pause: { POST: Handler };
 let duplicate: { POST: Handler };
 let signup: (req: Request) => Promise<Response>;
 let cookie: string;
@@ -33,6 +34,7 @@ beforeAll(async () => {
   collection = await import("@/app/api/events/[id]/interactions/route");
   start = await import("@/app/api/events/[id]/interactions/[interactionId]/start/route");
   close = await import("@/app/api/events/[id]/interactions/[interactionId]/close/route");
+  pause = await import("@/app/api/events/[id]/interactions/[interactionId]/pause/route");
   duplicate = await import("@/app/api/events/[id]/interactions/[interactionId]/duplicate/route");
   signup = (await import("@/app/api/auth/signup/route")).POST;
   httpServer = createServer();
@@ -48,6 +50,9 @@ const req = (body?: unknown, c: string | null = cookie) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 const ctx = (id: string, interactionId = "") => ({ params: Promise.resolve({ id, interactionId }) });
+
+const stateOf = async (id: string) =>
+  (await db.select({ state: interactions.state }).from(interactions).where(eq(interactions.id, id)))[0]?.state;
 
 async function newHost(email: string) {
   const res = await signup(
@@ -118,11 +123,30 @@ test("only one interaction is live at a time", async () => {
   const b = await newPoll();
   await run(start, eventId, a);
   expect((await run(start, eventId, b)).status).toBe(200);
-  const states = await Promise.all(
-    [a, b].map(async (i) => (await (await run(close, eventId, i)).json()).interaction?.state),
-  );
-  // a was closed by starting b, so only b can still be closed.
-  expect(states).toEqual([undefined, "closed"]);
+  // Starting b pauses a instead of closing it.
+  expect(await stateOf(a)).toBe("paused");
+  expect(await stateOf(b)).toBe("live");
+});
+
+test("a paused interaction can be resumed, which pauses the one that is live", async () => {
+  const a = await newPoll();
+  const b = await newPoll();
+  await run(start, eventId, a);
+  await run(start, eventId, b);
+  expect((await run(start, eventId, a)).status).toBe(200);
+  expect(await stateOf(a)).toBe("live");
+  expect(await stateOf(b)).toBe("paused");
+});
+
+test("pause stops a live interaction without closing it; a paused one can still be closed", async () => {
+  const a = await newPoll();
+  expect((await run(pause, eventId, a)).status).toBe(409);
+  await run(start, eventId, a);
+  expect((await run(pause, eventId, a)).status).toBe(200);
+  expect(await stateOf(a)).toBe("paused");
+  expect((await run(pause, eventId, a)).status).toBe(409);
+  expect((await run(close, eventId, a)).status).toBe(200);
+  expect(await stateOf(a)).toBe("closed");
 });
 
 test("starting a different event's interaction does not close this event's live one", async () => {
@@ -138,8 +162,9 @@ test("concurrent starts leave exactly one live interaction", async () => {
   const ids = await Promise.all([newPoll(), newPoll(), newPoll()]);
   const results = await Promise.all(ids.map((i) => run(start, eventId, i)));
   expect(results.every((r) => r.status === 200)).toBe(true);
-  const closes = await Promise.all(ids.map((i) => run(close, eventId, i)));
-  expect(closes.filter((r) => r.status === 200)).toHaveLength(1);
+  const states = await Promise.all(ids.map((i) => stateOf(i)));
+  expect(states.filter((s) => s === "live")).toHaveLength(1);
+  expect(states.filter((s) => s === "paused")).toHaveLength(2);
 });
 
 test("a closed or live interaction cannot be started; a duplicate can", async () => {
@@ -193,7 +218,7 @@ test("participants in the room receive state-changed", async () => {
   await run(start, eventId, b);
   await expect.poll(() => received.length, { timeout: 1000 }).toBe(3);
   expect(received.slice(1)).toEqual([
-    { interactionId: a, state: "closed" },
+    { interactionId: a, state: "paused" },
     { interactionId: b, state: "live" },
   ]);
 });

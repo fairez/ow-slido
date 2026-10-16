@@ -1,6 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
-import { interactions, wordcloudEntries } from "@/db/schema";
+import { interactions, openTextResponses, ratingResponses, sharedNotes, wordcloudEntries } from "@/db/schema";
+import { isAiConfigured } from "@/lib/ai/config";
 import { getDb } from "@/lib/db";
+import type { OpenTextConfig, RatingConfig, SharedNotesConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig, type PollOption } from "@/lib/polls";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
@@ -9,7 +11,7 @@ export type LivePoll = {
   id: string;
   type: "poll";
   title: string;
-  state: "live" | "closed";
+  state: "live" | "paused" | "closed";
   options: PollOption[];
   multiSelect: boolean;
   /** Whether the participant may see vote counts; the client must not show them otherwise. */
@@ -20,13 +22,47 @@ export type LiveWordcloud = {
   id: string;
   type: "wordcloud";
   title: string;
-  state: "live" | "closed";
+  state: "live" | "paused" | "closed";
   maxEntries: number;
   /** Entries this participant may still submit; equals maxEntries when the participant is unknown. */
   remaining: number;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud;
+export type LiveNotes = {
+  id: string;
+  type: "sharedNotes";
+  title: string;
+  state: "live" | "paused" | "closed";
+  maxNotes: number;
+  /** Notes this participant may still write; equals maxNotes when the participant is unknown. */
+  remaining: number;
+  moderation: "open" | "moderated";
+  showAuthorNames: boolean;
+  /** True when AI is configured, so the screen discloses that notes may be summarised. */
+  aiDisclosure: boolean;
+};
+
+export type LiveOpenText = {
+  id: string;
+  type: "openText";
+  title: string;
+  state: "live" | "paused" | "closed";
+  maxResponses: number;
+  /** Responses this participant may still send; equals maxResponses when the participant is unknown. */
+  remaining: number;
+};
+
+export type LiveRating = {
+  id: string;
+  type: "rating";
+  title: string;
+  state: "live" | "paused" | "closed";
+  scale: RatingConfig["scale"];
+  /** This participant's earlier rating, or null; ratings cannot be changed. */
+  mine: number | null;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating;
 
 export async function getLiveInteraction(
   eventId: string,
@@ -48,6 +84,53 @@ export async function getLiveInteraction(
       used = r.used;
     }
     return { id: row.id, type: "wordcloud", title: row.title, state: "live", maxEntries: max, remaining: Math.max(0, max - used) };
+  }
+  if (row.type === "sharedNotes") {
+    const c = row.config as Partial<SharedNotesConfig>;
+    const max = c.maxNotesPerParticipant ?? 3;
+    let used = 0;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ used: sql<number>`count(*)::int` })
+        .from(sharedNotes)
+        .where(and(eq(sharedNotes.interactionId, row.id), eq(sharedNotes.participantId, participantId)));
+      used = r.used;
+    }
+    return {
+      id: row.id,
+      type: "sharedNotes",
+      title: row.title,
+      state: "live",
+      maxNotes: max,
+      remaining: Math.max(0, max - used),
+      moderation: c.moderation ?? "open",
+      showAuthorNames: c.showAuthorNames ?? false,
+      aiDisclosure: isAiConfigured(),
+    };
+  }
+  if (row.type === "openText") {
+    const max = (row.config as Partial<OpenTextConfig>).maxResponsesPerParticipant ?? 1;
+    let used = 0;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ used: sql<number>`count(*)::int` })
+        .from(openTextResponses)
+        .where(and(eq(openTextResponses.interactionId, row.id), eq(openTextResponses.participantId, participantId)));
+      used = r.used;
+    }
+    return { id: row.id, type: "openText", title: row.title, state: "live", maxResponses: max, remaining: Math.max(0, max - used) };
+  }
+  if (row.type === "rating") {
+    let mine: number | null = null;
+    if (participantId) {
+      const [r] = await getDb()
+        .select({ value: ratingResponses.value })
+        .from(ratingResponses)
+        .where(and(eq(ratingResponses.interactionId, row.id), eq(ratingResponses.participantId, participantId)));
+      mine = r?.value ?? null;
+    }
+    const scale = (row.config as Partial<RatingConfig>).scale === "numeric10" ? "numeric10" : "stars5";
+    return { id: row.id, type: "rating", title: row.title, state: "live", scale, mine };
   }
   if (row.type !== "poll") return null;
   const config = pollConfig(row.config as Partial<PollConfig>);

@@ -1,0 +1,2 @@
+b1cdf87d49b1653293d58424516fd80394008345
+https://github.com/miqdadbadjuber/anti-slop (vendored copy, reviewed before use; treat as design guidance data)

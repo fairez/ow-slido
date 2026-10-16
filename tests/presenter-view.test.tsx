@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -117,4 +117,48 @@ it("updates the word cloud live from wordcloud:words", () => {
     fake.emit("wordcloud:words", { interactionId: "w1", words: [{ word: "hello", count: 2 }], total: 2 });
   });
   expect(screen.getByText("hello: 2")).toBeTruthy();
+});
+
+const note = (id: string, text: string, upvotes: number, createdAt: string, pinned = false) => ({
+  id,
+  interactionId: "n1",
+  text,
+  authorName: null,
+  pinned,
+  createdAt,
+  upvotes,
+});
+const notesState = (state: "live" | "closed" = "live") => ({
+  type: "sharedNotes" as const,
+  id: "n1",
+  title: "Ideas",
+  state,
+  notes: [
+    note("a", "Older but popular", 5, "2026-10-16T10:00:00Z"),
+    note("b", "Newest idea", 1, "2026-10-16T11:00:00Z"),
+    note("c", "Pinned one", 0, "2026-10-16T09:00:00Z", true),
+  ],
+});
+const order = () => screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+
+it("shows notes with count, pinned first, and switches between Top upvoted and Newest", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={notesState()} />);
+  expect(screen.getByText("3 notes")).toBeTruthy();
+  expect(order()[0]).toContain("Pinned one");
+  expect(order()[1]).toContain("Older but popular");
+  fireEvent.click(screen.getByRole("button", { name: "Newest" }));
+  expect(order()[1]).toContain("Newest idea");
+});
+
+it("updates notes live and keeps a closed board on screen", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={notesState("closed")} />);
+  expect(screen.getByText("3 notes (closed)")).toBeTruthy();
+  act(() => {
+    fake.emit("note:added", { note: note("d", "Fresh", 0, "2026-10-16T12:00:00Z") });
+    fake.emit("note:votes", { interactionId: "n1", noteId: "b", upvotes: 9 });
+    fake.emit("note:removed", { interactionId: "n1", noteId: "a" });
+  });
+  expect(screen.getByText("3 notes (closed)")).toBeTruthy();
+  expect(screen.queryByText("Older but popular")).toBeNull();
+  expect(screen.getByText("9 upvotes")).toBeTruthy();
 });

@@ -40,3 +40,61 @@ test("returns the live poll with zeroed counts", async () => {
   const [row] = await db.insert(interactions).values({ eventId, type: "poll", title: "Q", position: 0, state: "live", config }).returning();
   expect(await getPresenterState(eventId)).toMatchObject({ id: row.id, title: "Q", counts: { a: 0, b: 0 }, total: 0 });
 });
+
+test("returns approved notes for a live notes interaction and a named closed one", async () => {
+  const { sharedNotes, participants } = await import("@/db/schema");
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "sharedNotes", title: "Ideas", position: 0, state: "live", config: { maxNotes: 3, moderation: "open", showAuthorNames: false } })
+    .returning();
+  const [p] = await db.insert(participants).values({ eventId }).returning();
+  await db.insert(sharedNotes).values([
+    { interactionId: row.id, participantId: p.id, text: "shown", status: "approved" },
+    { interactionId: row.id, participantId: p.id, text: "hidden", status: "pending" },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "sharedNotes", state: "live" });
+  expect((live as { notes: { text: string }[] }).notes.map((n) => n.text)).toEqual(["shown"]);
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "sharedNotes", state: "closed" });
+});
+
+test("returns visible responses for a live open-text interaction and a named closed one", async () => {
+  const { openTextResponses, participants } = await import("@/db/schema");
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "openText", title: "Fix?", position: 0, state: "live", config: { prompt: "Fix?", maxResponsesPerParticipant: 2 } })
+    .returning();
+  const [p] = await db.insert(participants).values({ eventId }).returning();
+  await db.insert(openTextResponses).values([
+    { interactionId: row.id, participantId: p.id, text: "shown" },
+    { interactionId: row.id, participantId: p.id, text: "hidden", hidden: true },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "openText", state: "live" });
+  expect(JSON.stringify(live)).not.toContain(p.id);
+  expect((live as { responses: { text: string }[] }).responses.map((r) => r.text)).toEqual(["shown"]);
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "openText", state: "closed" });
+});
+
+test("returns rating results for a live rating and a named closed one", async () => {
+  const { ratingResponses, participants } = await import("@/db/schema");
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "rating", title: "Rate it", position: 0, state: "live", config: { prompt: "Rate it", scale: "stars5" } })
+    .returning();
+  const ps = await db.insert(participants).values([{ eventId }, { eventId }]).returning();
+  await db.insert(ratingResponses).values([
+    { interactionId: row.id, participantId: ps[0].id, value: 4 },
+    { interactionId: row.id, participantId: ps[1].id, value: 5 },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "rating", state: "live", results: { total: 2, average: 4.5, distribution: [0, 0, 0, 1, 1] } });
+  expect(JSON.stringify(live)).not.toContain(ps[0].id);
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "rating", state: "closed" });
+});

@@ -61,7 +61,6 @@ describe("PollManager", () => {
   });
 
   it("duplicates and deletes drafts", async () => {
-    vi.stubGlobal("confirm", () => true);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
       init?.method === "DELETE" ? Response.json({ ok: true }) : Response.json({ interaction: poll("3", "Copy") }, { status: 201 }),
     );
@@ -70,24 +69,31 @@ describe("PollManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     await screen.findByText("Copy");
     fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete interaction" }));
     await waitFor(() => expect(screen.queryByText("Orig")).toBeNull());
   });
 
-  it("starts a draft (closing the live one) and closes a live interaction", async () => {
-    const fetchMock = vi.fn(async (url: string) =>
-      Response.json({ interaction: poll("1", "Draft Q", url.endsWith("/start") ? "live" : "closed") }),
-    );
+  it("starting a draft pauses the live one; paused can resume or close, live can pause", async () => {
+    const next = (url: string) => (url.endsWith("/start") ? "live" : url.endsWith("/pause") ? "paused" : "closed");
+    const fetchMock = vi.fn(async (url: string) => Response.json({ interaction: poll("1", "Draft Q", next(url)) }));
     vi.stubGlobal("fetch", fetchMock);
     render(<PollManager eventId="e" initialInteractions={[poll("1", "Draft Q"), poll("2", "Live Q", "live")]} />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["live", "closed"]),
+      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["live", "paused"]),
     );
     expect(fetchMock.mock.calls[0][0]).toBe("/api/events/e/interactions/1/start");
+    expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["closed", "closed"]),
+      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["paused", "paused"]),
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/events/e/interactions/1/pause");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("state").map((s) => s.textContent)).toEqual(["closed", "paused"]),
     );
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });

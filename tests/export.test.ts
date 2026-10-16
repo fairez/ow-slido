@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, interactions, participants, pollVotes, questions, questionVotes, users, wordcloudEntries } from "@/db/schema";
+import { events, interactions, noteAnalyses, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -150,4 +150,123 @@ test("requires the owner: 401 anonymous, 404 for another host or unknown event",
   expect((await get(otherCookie)).status).toBe(404);
   expect((await get(hostCookie, "00000000-0000-4000-8000-000000000000")).status).toBe(404);
   expect((await get(hostCookie, "nope")).status).toBe(404);
+});
+
+test("shared notes get their own section with status, pinned, upvotes and only a provided author name", async () => {
+  const [board] = await db
+    .insert(interactions)
+    .values({ eventId, type: "sharedNotes", title: "Ideas", position: 2, config: { prompt: "Ideas" } })
+    .returning();
+  const notes = await db
+    .insert(sharedNotes)
+    .values([
+      { interactionId: board.id, participantId: participantIds[0], text: "Named, \"note\"", authorName: "Bea", pinned: true },
+      { interactionId: board.id, participantId: participantIds[1], text: "Anonymous note" },
+      { interactionId: board.id, participantId: participantIds[2], text: "Waiting", status: "pending" },
+    ])
+    .returning();
+  await db.insert(sharedNoteVotes).values([
+    { noteId: notes[1].id, participantId: participantIds[0] },
+    { noteId: notes[1].id, participantId: participantIds[2] },
+    { noteId: notes[0].id, participantId: participantIds[1] },
+  ]);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const at = rows.findIndex((r) => r[0] === "section" && r[2] === "note");
+  expect(rows[at - 1]).toEqual([""]);
+  expect(rows[at]).toEqual(["section", "title", "note", "status", "pinned", "upvotes", "author"]);
+  expect(rows.slice(at + 1)).toEqual([
+    ["sharedNotes", "Ideas", "Anonymous note", "approved", "no", "2", ""],
+    ["sharedNotes", "Ideas", 'Named, "note"', "approved", "yes", "1", "Bea"],
+    ["sharedNotes", "Ideas", "Waiting", "pending", "no", "0", ""],
+  ]);
+  for (const id of participantIds) expect(text).not.toContain(id);
+  expect(text).not.toContain("SecretNick");
+  expect(text).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+});
+
+test("open text and rating get their own sections; hidden responses and participant ids stay out", async () => {
+  const [ot] = await db
+    .insert(interactions)
+    .values({ eventId, type: "openText", title: "One word", position: 3, config: { prompt: "One word" } })
+    .returning();
+  await db.insert(openTextResponses).values([
+    { interactionId: ot.id, participantId: participantIds[0], text: "Calm, \"quiet\"", highlighted: true },
+    { interactionId: ot.id, participantId: participantIds[1], text: "Plain" },
+    { interactionId: ot.id, participantId: participantIds[2], text: "Secret hidden", hidden: true },
+  ]);
+  const [rt] = await db
+    .insert(interactions)
+    .values({ eventId, type: "rating", title: "Session", position: 4, config: { prompt: "Rate", scale: "stars5" } })
+    .returning();
+  await db.insert(ratingResponses).values([
+    { interactionId: rt.id, participantId: participantIds[0], value: 5 },
+    { interactionId: rt.id, participantId: participantIds[1], value: 4 },
+    { interactionId: rt.id, participantId: participantIds[2], value: 4 },
+  ]);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const t = rows.findIndex((r) => r[0] === "section" && r[2] === "response");
+  expect(rows[t - 1]).toEqual([""]);
+  expect(rows[t]).toEqual(["section", "title", "response", "highlighted"]);
+  expect(rows.slice(t + 1, t + 3)).toEqual([
+    ["openText", "One word", 'Calm, "quiet"', "yes"],
+    ["openText", "One word", "Plain", "no"],
+  ]);
+  expect(text).not.toContain("Secret hidden");
+
+  const r = rows.findIndex((x) => x[0] === "section" && x[2] === "scale");
+  expect(rows[r - 1]).toEqual([""]);
+  expect(rows[r]).toEqual(["section", "title", "scale", "average", "total", "value", "count"]);
+  expect(rows.slice(r + 1)).toEqual([
+    ["rating", "Session", "stars5", "4.33", "3", "1", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "2", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "3", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "4", "2"],
+    ["rating", "Session", "stars5", "4.33", "3", "5", "1"],
+  ]);
+  for (const id of participantIds) expect(text).not.toContain(id);
+});
+
+test("analysis section: summary, categories with counts, keywords, model, run time, AI and edited markers; no ids", async () => {
+  const [board] = await db
+    .insert(interactions)
+    .values({ eventId, type: "sharedNotes", title: "Ideas", position: 2, config: { prompt: "Ideas" } })
+    .returning();
+  const [note] = await db
+    .insert(sharedNotes)
+    .values({ interactionId: board.id, participantId: participantIds[0], text: "Plain note" })
+    .returning();
+  expect(parseCsv(await (await get(hostCookie)).text()).some((r) => r[0] === "analysis")).toBe(false);
+
+  const finishedAt = new Date("2026-10-16T10:00:00Z");
+  await db.insert(noteAnalyses).values({
+    interactionId: board.id,
+    status: "done",
+    noteCount: 1,
+    notesSnapshotHash: "h",
+    summary: "People want, more time",
+    categories: [{ name: "Time", description: "d", noteIds: [note.id, "x"] }],
+    keywords: [{ word: "time", weight: 5 }],
+    edited: true,
+    model: "mock-1",
+    finishedAt,
+  } as never);
+  await db.insert(noteAnalyses).values({ interactionId: board.id, status: "failed", noteCount: 1, notesSnapshotHash: "h" } as never);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const at = rows.findIndex((r) => r[0] === "section" && r[2] === "kind");
+  expect(rows[at - 1]).toEqual([""]);
+  expect(rows[at]).toEqual(["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"]);
+  const tail = ["mock-1", finishedAt.toISOString(), "yes", "yes"];
+  expect(rows.slice(at + 1)).toEqual([
+    ["analysis", "Ideas", "summary", "People want, more time", "", "", ...tail],
+    ["analysis", "Ideas", "category", "Time", "2", "", ...tail],
+    ["analysis", "Ideas", "keyword", "time", "", "5", ...tail],
+  ]);
+  expect(text).not.toContain(note.id);
+  for (const id of participantIds) expect(text).not.toContain(id);
 });

@@ -14,7 +14,7 @@ type Context = { params: Promise<{ id: string }> };
 const notFound = () => Response.json({ error: "Event not found" }, { status: 404 });
 const tooMany = (retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests" },
+    { error: "Too many requests. Wait a moment, then try again." },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Context) {
   if (!ip.allowed) return tooMany(ip.retryAfterSeconds);
 
   const participantId = participantFor(request, id);
-  if (!participantId) return Response.json({ error: "Not joined" }, { status: 401 });
+  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
 
   const byToken = await rateLimit(
     `question:token:${participantId}`,

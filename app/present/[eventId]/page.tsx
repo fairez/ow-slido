@@ -25,9 +25,9 @@ export default async function PresentPage({ params }: { params: Promise<{ eventI
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
 
   return (
-    <main className="present" style={{ minHeight: "100vh", padding: 32, background: "#000", color: "#fff" }}>
+    <main id="main" className="present">
       <PresenterView
-        eventId={event.id} 
+        eventId={event.id}
         initial={await getPresenterState(event.id)}
         joinCode={event.joinCode}
         items={items}

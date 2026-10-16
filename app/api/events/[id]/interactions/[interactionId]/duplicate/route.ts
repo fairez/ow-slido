@@ -12,6 +12,7 @@ import {
   type PollConfig,
 } from "@/lib/polls";
 
+import { isNewInteractionType, newInteractionConfig } from "@/lib/interaction-config";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
 type Context = { params: Promise<{ id: string; interactionId: string }> };
@@ -25,8 +26,9 @@ export async function POST(request: Request, { params }: Context) {
   const source = await findInteraction(event.id, interactionId);
   if (!source) return interactionNotFound();
 
-  const config =
-    source.type === "wordcloud"
+  const config = isNewInteractionType(source.type)
+    ? newInteractionConfig(source.type, source.config)
+    : source.type === "wordcloud"
       ? wordcloudConfig(source.config as Partial<WordcloudConfig>, source.title)
       : (() => {
           const poll = pollConfig(source.config as Partial<PollConfig>);

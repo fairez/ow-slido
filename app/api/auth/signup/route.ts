@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     .onConflictDoNothing({ target: users.email })
     .returning({ id: users.id, email: users.email });
   if (!user) {
-    return Response.json({ error: "Email already registered" }, { status: 409 });
+    return Response.json({ error: "That email already has an account. Log in instead." }, { status: 409 });
   }
 
   return Response.json(

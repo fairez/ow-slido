@@ -3,13 +3,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { Badge } from "@/components/ui/card";
 import { ModeratorLinkManager } from "@/components/moderator-link-manager";
 import { ModerationPanel } from "@/components/moderation-panel";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
-import { listHostQuestions } from "@/lib/moderation";
+import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { createModeratorToken } from "@/lib/moderator-token";
 import { findOwnedEvent } from "@/lib/polls";
 
@@ -30,28 +32,33 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
 
   const hostQuestions = await listHostQuestions(event.id);
+  const hostNotes = await listHostNotes(event.id);
 
   const moderatorLink = event.moderatorNonce
     ? `/moderate/${event.id}?t=${encodeURIComponent(createModeratorToken(event.id, event.moderatorNonce))}`
     : null;
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-      <Link href="/dashboard">← Dashboard</Link>
-      <h1>{event.name}</h1>
-      <p>
-        Join code: <strong>{event.joinCode}</strong>
-      </p>
-      <p>
-        <Link href={`/present/${event.id}`}>Open presenter view</Link>
-      </p>
-      <p>
-        <a href={`/api/events/${event.id}/export.csv`} download>
-          Export CSV
-        </a>
-      </p>
-      <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} />
-      <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} />
+    <main id="main" className="page">
+      <Link href="/dashboard" className="back-link">Back to events</Link>
+      <header className="page-head">
+        <div>
+          <h1>{event.name}</h1>
+          <p className="row-meta">
+            Join code <Badge>{event.joinCode}</Badge>
+          </p>
+        </div>
+        <div className="row-actions">
+          <Link href={`/present/${event.id}`} className="ui-button" data-variant="primary">
+            Open presenter view
+          </Link>
+          <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
+            Export CSV
+          </a>
+        </div>
+      </header>
+      <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} aiEnabled={isAiConfigured()} />
+      <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} initialNotes={hostNotes} />
       <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />
     </main>
   );
