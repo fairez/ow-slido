@@ -1,11 +1,15 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { interactions, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes } from "@/db/schema";
+import { interactions, openTextResponses, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { PollConfig } from "@/lib/polls";
+import type { RatingConfig } from "@/lib/interaction-config";
+import { computeResults } from "@/lib/rating";
 import { getWordcloudResults } from "@/lib/wordclouds";
 
 export const EXPORT_HEADER = ["section", "title", "item", "count", "author"] as const;
 export const NOTES_EXPORT_HEADER = ["section", "title", "note", "status", "pinned", "upvotes", "author"] as const;
+export const OPEN_TEXT_EXPORT_HEADER = ["section", "title", "response", "highlighted"] as const;
+export const RATING_EXPORT_HEADER = ["section", "title", "scale", "average", "total", "value", "count"] as const;
 
 /** Quotes a field for CSV; a leading formula character is neutralised so spreadsheets don't evaluate user text. */
 export function csvField(value: string | number) {
@@ -16,7 +20,7 @@ export function csvField(value: string | number) {
 
 /**
  * One flat table: poll option votes, word counts and approved questions with upvotes,
- * followed by a separate shared-notes table.
+ * followed by separate shared-notes, open-text and rating tables.
  * Only aggregates, question text and an optional author name are included, never participant ids.
  */
 export async function buildEventCsv(eventId: string) {
@@ -78,6 +82,34 @@ export async function buildEventCsv(eventId: string) {
       }
     }
     rows.push([], ...noteRows);
+  }
+
+  const openTextInteractions = list.filter((i) => i.type === "openText");
+  if (openTextInteractions.length > 0) {
+    const textRows: (string | number)[][] = [[...OPEN_TEXT_EXPORT_HEADER]];
+    for (const interaction of openTextInteractions) {
+      // Hidden responses are the host's moderation; they stay out of the file.
+      const responses = await db
+        .select({ text: openTextResponses.text, highlighted: openTextResponses.highlighted })
+        .from(openTextResponses)
+        .where(and(eq(openTextResponses.interactionId, interaction.id), eq(openTextResponses.hidden, false)))
+        .orderBy(desc(openTextResponses.highlighted), desc(openTextResponses.createdAt));
+      for (const r of responses) textRows.push(["openText", interaction.title, r.text, r.highlighted ? "yes" : "no"]);
+    }
+    rows.push([], ...textRows);
+  }
+
+  const ratingInteractions = list.filter((i) => i.type === "rating");
+  if (ratingInteractions.length > 0) {
+    const ratingRows: (string | number)[][] = [[...RATING_EXPORT_HEADER]];
+    for (const interaction of ratingInteractions) {
+      const scale = (interaction.config as Partial<RatingConfig>).scale === "numeric10" ? "numeric10" : "stars5";
+      const results = await computeResults(db, interaction.id, scale);
+      results.distribution.forEach((count, i) => {
+        ratingRows.push(["rating", interaction.title, scale, results.average ?? "", results.total, i + 1, count]);
+      });
+    }
+    rows.push([], ...ratingRows);
   }
 
   return rows.map((r) => r.map(csvField).join(",")).join("\r\n") + "\r\n";

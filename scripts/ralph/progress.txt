@@ -138,3 +138,12 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Do not sync props to state in an effect (react-hooks/set-state-in-effect fails lint); LiveView already remounts with `key={current.id}`.
   - Verified at 360px and 1280px (screens/us013-*.png), no horizontal overflow, keyboard arrows change the choice. Styling is pre-restyle by design.
 ---
+
+## 2026-10-16 - US-014
+- CSV export now has open text (`section,title,response,highlighted`; hidden rows excluded) and rating (`section,title,scale,average,total,value,count`, one row per scale value) tables after the notes table, each only when the event has that type, separated by a blank row.
+- Files: lib/export.ts, tests/export.test.ts
+- **Learnings for future iterations:**
+  - Export sections are appended in order notes, open text, rating; a new section (US-022 analysis) should follow the same "blank row + own header" pattern and only appear when relevant, since tests slice from a header to the end of the file.
+  - Rating rows reuse `computeResults` from lib/rating.ts; average is empty when there are no ratings.
+  - No UI changed, so no browser check needed.
+---

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, interactions, participants, pollVotes, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
+import { events, interactions, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -184,4 +184,48 @@ test("shared notes get their own section with status, pinned, upvotes and only a
   for (const id of participantIds) expect(text).not.toContain(id);
   expect(text).not.toContain("SecretNick");
   expect(text).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+});
+
+test("open text and rating get their own sections; hidden responses and participant ids stay out", async () => {
+  const [ot] = await db
+    .insert(interactions)
+    .values({ eventId, type: "openText", title: "One word", position: 3, config: { prompt: "One word" } })
+    .returning();
+  await db.insert(openTextResponses).values([
+    { interactionId: ot.id, participantId: participantIds[0], text: "Calm, \"quiet\"", highlighted: true },
+    { interactionId: ot.id, participantId: participantIds[1], text: "Plain" },
+    { interactionId: ot.id, participantId: participantIds[2], text: "Secret hidden", hidden: true },
+  ]);
+  const [rt] = await db
+    .insert(interactions)
+    .values({ eventId, type: "rating", title: "Session", position: 4, config: { prompt: "Rate", scale: "stars5" } })
+    .returning();
+  await db.insert(ratingResponses).values([
+    { interactionId: rt.id, participantId: participantIds[0], value: 5 },
+    { interactionId: rt.id, participantId: participantIds[1], value: 4 },
+    { interactionId: rt.id, participantId: participantIds[2], value: 4 },
+  ]);
+
+  const text = await (await get(hostCookie)).text();
+  const rows = parseCsv(text);
+  const t = rows.findIndex((r) => r[0] === "section" && r[2] === "response");
+  expect(rows[t - 1]).toEqual([""]);
+  expect(rows[t]).toEqual(["section", "title", "response", "highlighted"]);
+  expect(rows.slice(t + 1, t + 3)).toEqual([
+    ["openText", "One word", 'Calm, "quiet"', "yes"],
+    ["openText", "One word", "Plain", "no"],
+  ]);
+  expect(text).not.toContain("Secret hidden");
+
+  const r = rows.findIndex((x) => x[0] === "section" && x[2] === "scale");
+  expect(rows[r - 1]).toEqual([""]);
+  expect(rows[r]).toEqual(["section", "title", "scale", "average", "total", "value", "count"]);
+  expect(rows.slice(r + 1)).toEqual([
+    ["rating", "Session", "stars5", "4.33", "3", "1", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "2", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "3", "0"],
+    ["rating", "Session", "stars5", "4.33", "3", "4", "2"],
+    ["rating", "Session", "stars5", "4.33", "3", "5", "1"],
+  ]);
+  for (const id of participantIds) expect(text).not.toContain(id);
 });
