@@ -3,7 +3,7 @@ export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
 export const INTERACTION_PROMPT_MAX = 200;
 export const NOTES_MIN = 1;
-export const NOTES_MAX = 10;
+export const NOTES_MAX = 1000;
 export const OPEN_TEXT_MIN = 1;
 export const OPEN_TEXT_MAX = 3;
 

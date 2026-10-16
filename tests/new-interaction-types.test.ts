@@ -87,7 +87,7 @@ test.each([
   ["sharedNotes", { prompt: "" }],
   ["sharedNotes", { prompt: "x".repeat(201) }],
   ["sharedNotes", { prompt: "p", maxNotesPerParticipant: 0 }],
-  ["sharedNotes", { prompt: "p", maxNotesPerParticipant: 11 }],
+  ["sharedNotes", { prompt: "p", maxNotesPerParticipant: 1001 }],
   ["sharedNotes", { prompt: "p", maxNotesPerParticipant: 1.5 }],
   ["sharedNotes", { prompt: "p", moderation: "strict" }],
   ["sharedNotes", { prompt: "p", showAuthorNames: "yes" }],
@@ -103,7 +103,7 @@ test.each([
 test("PATCH validates and merges config on a draft", async () => {
   const { json } = await create(VALID.sharedNotes);
   const id = json.interaction.id;
-  const bad = await item.PATCH(req("PATCH", { maxNotesPerParticipant: 99 }), ctx(eventId, id));
+  const bad = await item.PATCH(req("PATCH", { maxNotesPerParticipant: 1001 }), ctx(eventId, id));
   expect(bad.status).toBe(400);
   const ok = await item.PATCH(req("PATCH", { moderation: "open" }), ctx(eventId, id));
   expect(ok.status).toBe(200);
@@ -123,7 +123,7 @@ test.each(Object.values(VALID))("start and close work for $type, one live per ev
   expect((await start.POST(req("POST"), ctx(eventId, id))).status).toBe(200);
   expect((await start.POST(req("POST"), ctx(eventId, otherId))).status).toBe(200);
   const rows = await db.query.interactions.findMany();
-  expect(rows.find((r) => r.id === id)?.state).toBe("closed");
+  expect(rows.find((r) => r.id === id)?.state).toBe("paused");
   expect(rows.find((r) => r.id === otherId)?.state).toBe("live");
   expect((await close.POST(req("POST"), ctx(eventId, otherId))).status).toBe(200);
 });

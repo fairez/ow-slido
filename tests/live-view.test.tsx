@@ -68,6 +68,22 @@ it("shows 'Voting closed' when the live poll closes, then the next poll when sta
   expect(screen.queryByText("Voting closed")).toBeNull();
 });
 
+it("shows 'Paused' when the host pauses, and the interaction returns when resumed", async () => {
+  render(<LiveView eventId="e1" initial={poll("i1", "Lunch?")} />);
+  act(() => {
+    fake.emit("state-changed", { interactionId: "i1", state: "paused" });
+  });
+  expect(screen.getByText("Paused")).toBeTruthy();
+  expect(screen.queryByText("Pizza")).toBeNull();
+
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ interaction: poll("i1", "Lunch?") }))));
+  act(() => {
+    fake.emit("state-changed", { interactionId: "i1", state: "live" });
+  });
+  await waitFor(() => expect(screen.getByText("Pizza")).toBeTruthy());
+  expect(screen.queryByText("Paused")).toBeNull();
+});
+
 it("resyncs on reconnect", async () => {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ interaction: poll("i1", "Lunch?") })));
   vi.stubGlobal("fetch", fetchMock);

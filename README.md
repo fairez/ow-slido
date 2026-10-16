@@ -49,7 +49,8 @@ Playwright needs a Chromium build: `npx playwright install chromium`. If a diffe
 
 - **Poll**: single or multiple choice, with live results.
 - **Word cloud**: each participant submits a limited number of short entries.
-- **Shared notes**: participants post notes (up to 500 characters) and upvote each other's. Hosts choose open or moderated mode (moderated notes wait for approval), the notes allowed per participant, and whether author names show. Notes can be pinned, rejected or deleted, and exported in CSV.
+- **Interaction states**: draft, live, paused, closed. Starting a new interaction pauses the live one instead of closing it (one live per event); a paused interaction stops taking answers and can be resumed or closed. Closed ones cannot be restarted; duplicate them.
+- **Shared notes**: participants post notes (up to 5000 characters) and upvote each other's. Hosts choose open or moderated mode (moderated notes wait for approval), the notes allowed per participant, and whether author names show. Notes can be pinned, rejected or deleted, and exported in CSV.
 - **Open text**: free-text responses that the host can highlight or hide; the presenter page lists them.
 - **Rating**: a 1 to 5 star or 1 to 10 scale, shown as a distribution with the average.
 

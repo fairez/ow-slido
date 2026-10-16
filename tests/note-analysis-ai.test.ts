@@ -129,6 +129,28 @@ test("more than 200 notes are batched and merged into one result", async () => {
   expect(out.keywords).toEqual([{ word: "x", weight: 4 }]);
 });
 
+test("long notes are split into batches by total text, not only by count", async () => {
+  const { provider, requests } = scripted((req, call) => {
+    if (req.messages.some((m) => m.content.includes("partial summaries"))) return { summary: "Combined." };
+    return {
+      summary: `Part ${call}`,
+      categories: [
+        { name: "All", description: "d", noteIds: refsIn(req) },
+        { name: "B", description: "d", noteIds: [] },
+        { name: "C", description: "d", noteIds: [] },
+      ],
+      keywords: [{ word: "x", weight: 1 }],
+    };
+  });
+  // 30 notes of 5000 characters is 150k characters: more than one 60k batch, far below 200 notes.
+  const out = await lib.analyzeNotes({ eventId, notes: notes(30, () => "x".repeat(5000)) }, { provider });
+  const sizes = requests.filter((r) => !r.messages.some((m) => m.content.includes("partial summaries"))).map((r) => refsIn(r).length);
+  expect(sizes.length).toBeGreaterThan(1);
+  expect(sizes.every((n) => n <= 12)).toBe(true);
+  expect(sizes.reduce((a, b) => a + b, 0)).toBe(30);
+  expect(out.summary).toBe("Combined.");
+});
+
 test("invalid output fails with a readable error", async () => {
   const { provider } = scripted(() => ({ summary: "S", categories: [], keywords: [] }));
   await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider })).rejects.toThrow(/could not be used/);

@@ -104,8 +104,8 @@ test("rejects empty, whitespace-only and over-long text", async () => {
   expect((await post("")).status).toBe(400);
   expect((await post("   ")).status).toBe(400);
   expect((await post(42)).status).toBe(400);
-  expect((await post("x".repeat(501))).status).toBe(400);
-  expect((await post("x".repeat(500))).status).toBe(201);
+  expect((await post("x".repeat(5001))).status).toBe(400);
+  expect((await post("x".repeat(5000))).status).toBe(201);
 });
 
 test("enforces the per-participant limit", async () => {

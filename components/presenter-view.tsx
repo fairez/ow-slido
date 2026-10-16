@@ -14,7 +14,7 @@ import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
-export type NavItem = { id: string; state: "draft" | "live" | "closed" };
+export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed" };
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 type Words = { interactionId: string; words: WordCount[]; total: number };

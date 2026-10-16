@@ -16,7 +16,7 @@ export type InteractionItem = {
   id: string;
   type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
   title: string;
-  state: "draft" | "live" | "closed";
+  state: "draft" | "live" | "paused" | "closed";
   position: number;
   config: {
     options?: { id: string; label: string }[];
@@ -50,7 +50,7 @@ async function errorFrom(response: Response) {
   return body?.error ?? SERVER_ERROR;
 }
 
-const STATE_LABELS: Record<InteractionItem["state"], string> = { draft: "Draft", live: "Live", closed: "Closed" };
+const STATE_LABELS: Record<InteractionItem["state"], string> = { draft: "Draft", live: "Live", paused: "Paused", closed: "Closed" };
 
 export function PollManager({ eventId, initialInteractions, aiEnabled = false }: { eventId: string; initialInteractions: InteractionItem[]; aiEnabled?: boolean }) {
   const base = `/api/events/${eventId}/interactions`;
@@ -126,14 +126,14 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
     setItems((list) => [...list, interaction]);
   }
 
-  async function transition(item: InteractionItem, action: "start" | "close") {
+  async function transition(item: InteractionItem, action: "start" | "pause" | "close") {
     const response = await call(`${base}/${item.id}/${action}`, { method: "POST" });
     if (!response) return;
     const { interaction } = (await response.json()) as { interaction: InteractionItem };
-    // Starting closes the previously live interaction on the server.
+    // Starting pauses the previously live interaction on the server; it can be resumed.
     setItems((list) =>
       list.map((i) =>
-        i.id === interaction.id ? interaction : action === "start" && i.state === "live" ? { ...i, state: "closed" } : i,
+        i.id === interaction.id ? interaction : action === "start" && i.state === "live" ? { ...i, state: "paused" } : i,
       ),
     );
   }
@@ -209,10 +209,17 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
                 </div>
                 {item.state !== "closed" && (
                   <div className="row-actions">
-                    {item.state === "draft" ? (
+                    {item.state === "draft" && (
                       <Button variant="primary" onClick={() => transition(item, "start")}>Start</Button>
-                    ) : (
-                      <Button variant="primary" onClick={() => transition(item, "close")}>Close</Button>
+                    )}
+                    {item.state === "paused" && (
+                      <Button variant="primary" onClick={() => transition(item, "start")}>Resume</Button>
+                    )}
+                    {item.state === "live" && (
+                      <Button variant="secondary" onClick={() => transition(item, "pause")}>Pause</Button>
+                    )}
+                    {item.state !== "draft" && (
+                      <Button variant={item.state === "live" ? "primary" : "secondary"} onClick={() => transition(item, "close")}>Close</Button>
                     )}
                   </div>
                 )}

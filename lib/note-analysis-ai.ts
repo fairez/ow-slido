@@ -6,6 +6,8 @@ import { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords, type AnalysisKeyword
 
 export const ANALYSIS_PROMPT_VERSION = "notes-v1";
 export const ANALYSIS_BATCH_SIZE = 200;
+/** Notes can be 5000 characters, so a batch is also capped by total text (about 15k tokens). */
+export const ANALYSIS_BATCH_CHARS = 60_000;
 export const SUMMARY_MAX_WORDS = 150;
 export const CATEGORIES_MIN = 3;
 export const CATEGORIES_MAX = 8;
@@ -167,6 +169,23 @@ function fallback(notes: AnalysisNote[], code: string): AnalysisOutput {
 
 const FALLBACK_CODES = new Set(["not_configured", "event_cap", "daily_cap", "timeout", "provider"]);
 
+function splitBatches<T extends { text: string }>(items: T[], maxCount: number, maxChars: number): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let chars = 0;
+  for (const item of items) {
+    if (current.length > 0 && (current.length >= maxCount || chars + item.text.length > maxChars)) {
+      batches.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(item);
+    chars += item.text.length;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
 export type AnalyzeOptions = { provider?: AiProvider; batchSize?: number };
 
 /**
@@ -184,8 +203,7 @@ export async function analyzeNotes(
     const refs = notes.map((n, i) => ({ ref: `n${i + 1}`, id: n.id, text: n.text }));
     const toReal = new Map(refs.map((r) => [r.ref, r.id]));
     const results: BatchResult[] = [];
-    for (let i = 0; i < refs.length; i += size) {
-      const batch = refs.slice(i, i + size);
+    for (const batch of splitBatches(refs, size, ANALYSIS_BATCH_CHARS)) {
       results.push(
         await complete(batchMessages(batch), batchSchema(batch.length), {
           eventId: input.eventId,

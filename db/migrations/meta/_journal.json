@@ -127,6 +127,13 @@
       "when": 1792140736526,
       "tag": "0017_broad_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792163591232,
+      "tag": "0018_same_solo",
+      "breakpoints": true
     }
   ]
 }

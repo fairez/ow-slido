@@ -12,7 +12,7 @@ import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
-type StateChanged = { interactionId: string; state: "draft" | "live" | "closed" };
+type StateChanged = { interactionId: string; state: "draft" | "live" | "paused" | "closed" };
 
 /** Participant's live area: shows the live poll, "Waiting for the host", or "Voting closed". */
 export function LiveView({ eventId, initial }: { eventId: string; initial: LiveInteraction | null }) {
@@ -30,8 +30,8 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
       const res = await fetch(`/api/events/${eventId}/live`);
       if (!res.ok) return;
       const body = (await res.json()) as { interaction: LiveInteraction | null };
-      // A closed poll stays on screen as "Voting closed" until the host starts another one.
-      if (body.interaction === null) setCurrent((cur) => (cur?.state === "closed" ? cur : null));
+      // A closed or paused interaction stays on screen until the host starts another one.
+      if (body.interaction === null) setCurrent((cur) => (cur?.state === "closed" || cur?.state === "paused" ? cur : null));
       else apply(body.interaction);
     } catch {
       // Offline: the next reconnect refetches.
@@ -41,8 +41,9 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
   useEffect(() => {
     if (!socket) return;
     const onChange = (msg: StateChanged) => {
-      if (msg.state === "closed" && msg.interactionId === currentId.current) {
-        setCurrent((cur) => (cur ? { ...cur, state: "closed" } : cur));
+      if ((msg.state === "closed" || msg.state === "paused") && msg.interactionId === currentId.current) {
+        const next = msg.state;
+        setCurrent((cur) => (cur ? { ...cur, state: next } : cur));
       } else if (msg.state === "live") {
         void refetch();
       }
@@ -68,7 +69,11 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
   return (
     <section aria-labelledby="live-title" className="live-panel">
       <h2 id="live-title">{current.title}</h2>
-      {current.type === "sharedNotes" ? (
+      {current.state === "paused" ? (
+        <EmptyState title="Paused" role="status">
+          The host has paused this one. It will come back here if they resume it.
+        </EmptyState>
+      ) : current.type === "sharedNotes" ? (
         <SharedNotesPanel key={current.id} notes={current} socket={socket} />
       ) : current.type === "openText" ? (
         <OpenTextForm key={current.id} question={current} />

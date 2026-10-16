@@ -48,15 +48,15 @@ test("notes default to approved, unpinned and anonymous", async () => {
   expect(n.updatedAt).toBeInstanceOf(Date);
 });
 
-test("rejects empty text, text over 500 chars and unknown status", async () => {
+test("rejects empty text, text over 5000 chars and unknown status", async () => {
   const { i, p } = await setup();
   const base = { interactionId: i.id, participantId: p.id };
   await expect(db.insert(sharedNotes).values({ ...base, text: "" })).rejects.toThrow();
-  await expect(db.insert(sharedNotes).values({ ...base, text: "x".repeat(501) })).rejects.toThrow();
+  await expect(db.insert(sharedNotes).values({ ...base, text: "x".repeat(5001) })).rejects.toThrow();
   await expect(
     db.insert(sharedNotes).values({ ...base, text: "ok", status: "bogus" as "pending" }),
   ).rejects.toThrow();
-  await db.insert(sharedNotes).values({ ...base, text: "x".repeat(500) });
+  await db.insert(sharedNotes).values({ ...base, text: "x".repeat(5000) });
 });
 
 test("a participant can upvote a note only once", async () => {

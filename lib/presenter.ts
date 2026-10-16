@@ -24,7 +24,7 @@ export type PresenterNotes = {
   type: "sharedNotes";
   id: string;
   title: string;
-  state: "live" | "closed";
+  state: "live" | "paused" | "closed";
   notes: PublicNote[];
 };
 
@@ -32,7 +32,7 @@ export type PresenterOpenText = {
   type: "openText";
   id: string;
   title: string;
-  state: "live" | "closed";
+  state: "live" | "paused" | "closed";
   responses: PublicResponse[];
 };
 
@@ -40,7 +40,7 @@ export type PresenterRating = {
   type: "rating";
   id: string;
   title: string;
-  state: "live" | "closed";
+  state: "live" | "paused" | "closed";
   results: RatingResults;
 };
 

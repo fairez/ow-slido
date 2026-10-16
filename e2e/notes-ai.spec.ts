@@ -63,8 +63,11 @@ test("shared notes with moderation and AI analysis, then open text and rating", 
   await page.reload();
   const pending = page.getByRole("list", { name: "Pending notes" });
   await expect(pending.getByRole("listitem")).toHaveCount(2);
-  await pending.getByRole("listitem").first().getByRole("button", { name: "Approve" }).click();
-  await expect(pending.getByRole("listitem")).toHaveCount(1);
+  // After a reload the server-rendered button can be clicked before React hydrates; retry until it works.
+  await expect(async () => {
+    await pending.getByRole("listitem").first().getByRole("button", { name: "Approve" }).click();
+    await expect(pending.getByRole("listitem")).toHaveCount(1, { timeout: 3000 });
+  }).toPass({ timeout: 20_000 });
   await pending.getByRole("listitem").first().getByRole("button", { name: "Approve" }).click();
   await expect(page.getByRole("list", { name: "Approved notes" }).getByRole("listitem")).toHaveCount(2);
 

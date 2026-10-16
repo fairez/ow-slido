@@ -208,7 +208,7 @@ The MVP lets a host run polls, word clouds and Q&A. Phase 2 turns it into a full
 
 **Acceptance Criteria:**
 - [ ] Host creates a Shared Notes interaction (type `sharedNotes`) with a prompt, e.g. "What are your key takeaways?"
-- [ ] Participants submit notes (max 500 chars), up to a host-set limit of 1–10 per participant, and can edit or delete their own note while the interaction is `live`
+- [ ] Participants submit notes (max 5000 chars), up to a host-set limit of 1–1000 per participant, and can edit or delete their own note while the interaction is `live`
 - [ ] Notes can be anonymous or show the participant's optional nickname
 - [ ] Each participant can upvote each other participant's note once (tapping again removes it) and cannot upvote their own note; enforced on the server
 - [ ] Host can set Open or Moderated mode, reusing the Q&A moderation queue (approve, reject, pin, delete)

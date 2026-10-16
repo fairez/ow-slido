@@ -85,7 +85,7 @@ export const interactions = pgTable(
       .references(() => events.id, { onDelete: "cascade" }),
     type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating"] }).notNull(),
     title: text("title").notNull(),
-    state: text("state", { enum: ["draft", "live", "closed"] })
+    state: text("state", { enum: ["draft", "live", "paused", "closed"] })
       .notNull()
       .default("draft"),
     position: integer("position").notNull(),
@@ -94,7 +94,7 @@ export const interactions = pgTable(
   },
   (t) => [
     check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating')`),
-    check("interactions_state", sql`${t.state} in ('draft', 'live', 'closed')`),
+    check("interactions_state", sql`${t.state} in ('draft', 'live', 'paused', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
     uniqueIndex("interactions_one_live_per_event")
       .on(t.eventId)
@@ -200,7 +200,7 @@ export const sharedNotes = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("shared_notes_text_length", sql`char_length(${t.text}) between 1 and 500`),
+    check("shared_notes_text_length", sql`char_length(${t.text}) between 1 and 5000`),
     check("shared_notes_status", sql`${t.status} in ('pending', 'approved', 'rejected')`),
     index("shared_notes_interaction_status_idx").on(t.interactionId, t.status),
     index("shared_notes_participant_idx").on(t.interactionId, t.participantId),

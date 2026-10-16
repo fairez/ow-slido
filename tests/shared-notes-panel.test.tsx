@@ -54,11 +54,11 @@ it("lists notes with upvote buttons, and edit/delete on your own", async () => {
 it("shows the character counter, remaining count and the name field only when enabled", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json({ notes: [] })));
   const { unmount } = renderPanel(config());
-  expect(screen.getByText("0/500")).toBeTruthy();
+  expect(screen.getByText("0/5000")).toBeTruthy();
   expect(screen.getByText("2 notes remaining")).toBeTruthy();
   expect(screen.queryByLabelText("Your name (optional)")).toBeNull();
   fireEvent.change(screen.getByLabelText("Your note"), { target: { value: "hello" } });
-  expect(screen.getByText("5/500")).toBeTruthy();
+  expect(screen.getByText("5/5000")).toBeTruthy();
   unmount();
   renderPanel(config({ showAuthorNames: true }));
   expect(screen.getByLabelText("Your name (optional)")).toBeTruthy();
