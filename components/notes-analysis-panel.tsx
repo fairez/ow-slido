@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AnalysisEditor } from "@/components/analysis-editor";
+import type { AnalysisEdit } from "@/lib/analysis-edit";
 
 type Analysis = {
   id: string;
   status: "queued" | "running" | "done" | "failed";
   noteCount: number;
   summary: string | null;
+  categories: unknown;
+  keywords: unknown;
   edited: boolean;
   published: boolean;
   model: string | null;
@@ -16,7 +20,7 @@ type Analysis = {
   outdated: boolean;
 };
 
-type State = { analysis: Analysis | null; lastDone: Analysis | null; approvedNoteCount: number; noticeAccepted: boolean };
+type State = { analysis: Analysis | null; lastDone: Analysis | null; approvedNoteCount: number; noticeAccepted: boolean; notes: { id: string; text: string }[] };
 
 const buttonStyle = { padding: "0 12px", font: "inherit", minHeight: 44 } as const;
 const mutedStyle = { margin: "4px 0", color: "var(--ink-muted, #5c534b)" } as const;
@@ -90,6 +94,21 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
     }
   }
 
+  async function edit(change: AnalysisEdit): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/interactions/${interactionId}/analysis`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(change),
+      });
+      if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.";
+      await load();
+      return null;
+    } catch {
+      return "Network error. Please try again.";
+    }
+  }
+
   if (!state) return error ? <p role="alert" style={errorStyle}>{error}</p> : null;
 
   const { analysis, lastDone, approvedNoteCount, noticeAccepted } = state;
@@ -139,6 +158,18 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
         </p>
       )}
       {keywordsOnly && <p style={mutedStyle}>{shown.error ?? "This run produced keywords only."}</p>}
+      {shown && shown.status === "done" && !running && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer" }}>Review and edit results</summary>
+          <AnalysisEditor
+            summary={shown.summary}
+            categories={shown.categories}
+            keywords={shown.keywords}
+            notes={state.notes}
+            onEdit={edit}
+          />
+        </details>
+      )}
       {error && <p role="alert" style={errorStyle}>{error}</p>}
     </section>
   );

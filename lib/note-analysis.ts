@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, noteAnalyses, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { applyEdit, type AnalysisEdit, type EditableCategory, type EditableKeyword } from "@/lib/analysis-edit";
 
 /** A job that has not finished after this long is treated as lost (for example after a restart). */
 export const ANALYSIS_STALE_MS = 5 * 60_000;
@@ -168,6 +169,8 @@ export type AnalysisPanelState = {
   /** The newest finished job; shown beside a failed latest one so the host keeps the last good result. */
   lastDone: AnalysisView | null;
   approvedNoteCount: number;
+  /** Approved note text, so the host can review which notes sit in which category. */
+  notes: AnalysisNote[];
 };
 
 export async function getAnalysisPanelState(interactionId: string): Promise<AnalysisPanelState> {
@@ -193,6 +196,7 @@ export async function getAnalysisPanelState(interactionId: string): Promise<Anal
     latest: latest ? view(latest, hash) : null,
     lastDone: lastDone ? view(lastDone, hash) : null,
     approvedNoteCount: notes.length,
+    notes,
   };
 }
 
@@ -222,4 +226,60 @@ export async function findNotesInteractionEvent(interactionId: string) {
     .from(interactions)
     .where(eq(interactions.id, interactionId));
   return row && row.type === "sharedNotes" ? row : null;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+
+function storedCategories(raw: unknown): EditableCategory[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((c) =>
+    isRecord(c) && typeof c.name === "string" && Array.isArray(c.noteIds)
+      ? [
+          {
+            name: c.name,
+            description: typeof c.description === "string" ? c.description : "",
+            noteIds: c.noteIds.filter((x): x is string => typeof x === "string"),
+          },
+        ]
+      : [],
+  );
+}
+
+function storedKeywords(raw: unknown): EditableKeyword[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((k) => (isRecord(k) && typeof k.word === "string" && typeof k.weight === "number" ? [{ word: k.word, weight: k.weight }] : []));
+}
+
+export type EditOutcome = { ok: true; analysis: AnalysisView } | { ok: false; status: 400 | 409; error: string };
+
+/** Applies a host edit to the newest finished analysis and marks it edited. */
+export async function editAnalysis(interactionId: string, edit: AnalysisEdit): Promise<EditOutcome> {
+  return getDb().transaction(async (tx): Promise<EditOutcome> => {
+    const found = await tx.execute(
+      sql`SELECT id FROM note_analyses WHERE interaction_id = ${interactionId} AND status = 'done' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+    );
+    const target = (found.rows[0] as { id: string } | undefined)?.id;
+    if (!target) return { ok: false, status: 409, error: "There is no finished analysis to edit" };
+    const [row] = await tx.select().from(noteAnalyses).where(eq(noteAnalyses.id, target));
+    const notes = await approvedNotes(tx as unknown as Db, interactionId);
+    if (edit.op === "moveNote" && !notes.some((n) => n.id === edit.noteId)) {
+      return { ok: false, status: 400, error: "That note is no longer approved." };
+    }
+    const result = applyEdit(
+      { summary: row.summary, categories: storedCategories(row.categories), keywords: storedKeywords(row.keywords) },
+      edit,
+    );
+    if (!result.ok) return { ok: false, status: 400, error: result.error };
+    const [saved] = await tx
+      .update(noteAnalyses)
+      .set({
+        summary: result.value.summary,
+        categories: result.value.categories,
+        keywords: result.value.keywords,
+        edited: true,
+      })
+      .where(eq(noteAnalyses.id, target))
+      .returning();
+    return { ok: true, analysis: view(saved, hashNotes(notes)) };
+  });
 }

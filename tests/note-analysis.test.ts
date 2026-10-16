@@ -356,3 +356,82 @@ test("the owner publishes and unpublishes the latest finished analysis", async (
       .where(eq(noteAnalyses.published, true)),
   ).toHaveLength(0);
 });
+
+const edit = (body: unknown, c: string | null = hostCookie) => analysis.PATCH(req("PATCH", body, c), ctx(notesId));
+
+async function doneWithCategories() {
+  const a = await addNote("one");
+  const b = await addNote("two");
+  const c = await addNote("three");
+  lib.setAnalysisRunner(async () => ({
+    ...output,
+    categories: [
+      { name: "Fast", description: "", noteIds: [a, b] },
+      { name: "Slow", description: "", noteIds: [c] },
+    ],
+  }));
+  await start();
+  await vi.waitFor(async () => {
+    const [row] = await db.select().from(noteAnalyses);
+    expect(row.status).toBe("done");
+  });
+  const [row] = await db.select().from(noteAnalyses);
+  return { a, b, c, id: row.id };
+}
+const cats = async () => {
+  const [row] = await db.select().from(noteAnalyses);
+  return row.categories as { name: string; noteIds: string[] }[];
+};
+
+test("editing needs the owner and a valid edit, and does not touch a run without edits", async () => {
+  await doneWithCategories();
+  expect((await edit({ op: "setSummary", summary: "x" }, otherCookie)).status).toBe(404);
+  expect((await edit({ op: "nope" })).status).toBe(400);
+  expect((await edit({ op: "setSummary", summary: "  " })).status).toBe(400);
+  const [row] = await db.select().from(noteAnalyses);
+  expect(row.edited).toBe(false);
+});
+
+test("rename, summary and keyword edits persist and set edited", async () => {
+  await doneWithCategories();
+  expect((await edit({ op: "renameCategory", name: "Fast", to: "Quick" })).status).toBe(200);
+  expect((await edit({ op: "renameCategory", name: "Slow", to: "quick" })).status).toBe(400);
+  expect((await edit({ op: "setSummary", summary: "Better words" })).status).toBe(200);
+  expect((await edit({ op: "removeKeyword", word: "w" })).status).toBe(200);
+  const [row] = await db.select().from(noteAnalyses);
+  expect(row.edited).toBe(true);
+  expect(row.summary).toBe("Better words");
+  expect(row.keywords).toEqual([]);
+  expect((await cats()).map((x) => x.name)).toEqual(["Quick", "Slow"]);
+  const got = (await (await analysis.GET(req("GET"), ctx(notesId))).json()).lastDone;
+  expect(got.summary).toBe("Better words");
+  expect(got.edited).toBe(true);
+});
+
+test("merge moves every note into the target", async () => {
+  const { a, b, c } = await doneWithCategories();
+  expect((await edit({ op: "mergeCategories", from: "Slow", into: "Fast" })).status).toBe(200);
+  expect(await cats()).toEqual([{ name: "Fast", description: "", noteIds: [a, b, c] }]);
+  expect((await edit({ op: "mergeCategories", from: "Fast", into: "Fast" })).status).toBe(400);
+});
+
+test("move puts a note in one category only and drops emptied ones", async () => {
+  const { a, b, c } = await doneWithCategories();
+  expect((await edit({ op: "moveNote", noteId: c, to: "Fast" })).status).toBe(200);
+  expect(await cats()).toEqual([{ name: "Fast", description: "", noteIds: [a, b, c] }]);
+  expect((await edit({ op: "moveNote", noteId: a, to: "Missing" })).status).toBe(400);
+  expect((await edit({ op: "moveNote", noteId: "00000000-0000-4000-8000-000000000000", to: "Fast" })).status).toBe(400);
+});
+
+test("deleting a category keeps its notes as Uncategorized", async () => {
+  const { a, b, c } = await doneWithCategories();
+  expect((await edit({ op: "deleteCategory", name: "Fast" })).status).toBe(200);
+  expect(await cats()).toEqual([
+    { name: "Slow", description: "", noteIds: [c] },
+    { name: "Uncategorized", description: "", noteIds: [a, b] },
+  ]);
+  expect((await edit({ op: "deleteCategory", name: "Uncategorized" })).status).toBe(400);
+  expect((await edit({ op: "deleteCategory", name: "Slow" })).status).toBe(200);
+  const all = (await cats()).flatMap((x) => x.noteIds).sort();
+  expect(all).toEqual([a, b, c].sort());
+});

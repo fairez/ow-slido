@@ -209,3 +209,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Don't `pkill -f` with env text; kill by pid from `ss -ltnp`. `.next-shot*` dirs break `npm run lint`: delete them when done.
   - Verified in Playwright at 360px and 1280px (screens/us019-*.png, script us019.mjs). Host-page publish button not screenshotted; API covered by test.
 ---
+
+## 2026-10-16 - US-020
+- Host can review and edit the newest done analysis: rename, merge, delete category (notes go to Uncategorized), move a note, edit summary, remove keyword. Every edit sets `edited`. Rules are pure in `lib/analysis-edit.ts` (`applyEdit`, `parseEdit`); `editAnalysis` in lib/note-analysis.ts applies them under a row lock. API: `PATCH /api/interactions/:id/analysis` with `{op, ...}` (the same route still takes `{published}`). UI: `components/analysis-editor.tsx` in a "Review and edit results" details block of the host panel; analysis GET now also returns approved `notes` {id,text}.
+- Files: lib/analysis-edit.ts, lib/note-analysis.ts, analysis route, components/analysis-editor.tsx, notes-analysis-panel.tsx, app/globals.css (.sr-only), tests/note-analysis.test.ts
+- **Learnings for future iterations:**
+  - Presenter and participants read the same stored row, so edits show up with no extra work (presenter polls every 10s).
+  - Emptied categories are dropped on move/delete; Uncategorized is created on demand and cannot be deleted.
+  - In tests, `start()` returns a Response, not the job promise: use `vi.waitFor` on the row status before editing.
+  - `.next-shot` can reappear and break `npm run lint`; remove it before linting.
+  - Verified at 360px and 1280px (screens/us020-*.png, us020.mjs); no overflow. Styling is pre-restyle by design.
+---
