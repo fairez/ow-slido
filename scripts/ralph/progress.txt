@@ -269,3 +269,13 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Dev server on :3200 survives `kill $pid` of the npm wrapper; kill by port via `ss -ltnp | grep :3200`, and `rm -rf .next-shot` before restarting.
   - Verified skip-link focus at 360/1280 light and dark (screens/us025-*.png); no overflow.
 ---
+
+## 2026-10-16 - US-026
+- Restyled home (join by code), /login, /signup and /join/[code] with `Button`, `TextField`, `InlineError` and new `.entry-page`/`.entry-form`/`.entry-lead`/`.entry-alt` classes. One primary action each; bad code shows the error under the code field, bad login shows an inline error above the button, busy buttons show the spinner. Copy: "Join an event", "Create a host account", "Could not join".
+- Files: app/page.tsx, app/join/[code]/page.tsx, components/auth-form.tsx, join-form.tsx, join-redirect.tsx, app/globals.css, tests/home.test.tsx, scripts/ralph/screens/us026.mjs
+- **Learnings for future iterations:**
+  - Button accessible names changed ("Join event"); the signup button is still "Create account" (e2e depends on it).
+  - Next dev injects its own `role=alert` route announcer: wait for `.ui-error` in screenshot scripts, not `[role=alert]`.
+  - Verified at 360px and 1280px, light and dark (screens/us026-*.png), no overflow or console errors. Tab/Enter work with native controls and the shared focus ring.
+  - Header nav still shows "Events" to logged-out visitors; the shell is not part of this story.
+---

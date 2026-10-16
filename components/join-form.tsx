@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { TextField } from "@/components/ui/field";
 import { joinEvent } from "@/lib/join-client";
 
 export function JoinForm() {
@@ -24,26 +26,20 @@ export function JoinForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-      <label style={{ display: "grid", gap: 4 }}>
-        Event code
-        <input
-          name="code"
-          inputMode="numeric"
-          autoComplete="off"
-          maxLength={6}
-          required
-          style={{ minHeight: 44, padding: 8, font: "inherit", fontSize: 18 }}
-        />
-      </label>
-      {error && (
-        <p role="alert" style={{ color: "#b00020", margin: 0 }}>
-          {error}
-        </p>
-      )}
-      <button type="submit" disabled={pending} style={{ minHeight: 44, padding: 10, font: "inherit" }}>
-        {pending ? "Joining…" : "Join"}
-      </button>
+    <form onSubmit={onSubmit} className="entry-form">
+      <TextField
+        label="Event code"
+        name="code"
+        className="code-input"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={6}
+        required
+        error={error ?? undefined}
+      />
+      <Button type="submit" variant="primary" busy={pending}>
+        {pending ? "Joining" : "Join event"}
+      </Button>
     </form>
   );
 }

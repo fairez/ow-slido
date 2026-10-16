@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { InlineError } from "@/components/ui/field";
 import { joinEvent } from "@/lib/join-client";
 
 export function JoinRedirect({ code }: { code: string }) {
@@ -21,15 +22,23 @@ export function JoinRedirect({ code }: { code: string }) {
     };
   }, [code, router]);
 
-  if (!error) return <p role="status">Joining…</p>;
+  if (!error) {
+    return (
+      <>
+        <h1>Joining the event</h1>
+        <p role="status" className="entry-lead">
+          Checking code {code}. This takes a moment.
+        </p>
+      </>
+    );
+  }
   return (
     <>
-      <p role="alert" style={{ color: "#b00020" }}>
-        {error}
+      <h1>Could not join</h1>
+      <InlineError>{error}</InlineError>
+      <p className="entry-alt">
+        <Link href="/">Enter a code instead</Link>
       </p>
-      <Link href="/" style={{ display: "inline-block", minHeight: 44, lineHeight: "44px" }}>
-        Enter a code instead
-      </Link>
     </>
   );
 }

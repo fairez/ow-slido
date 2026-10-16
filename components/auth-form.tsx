@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { InlineError, TextField } from "@/components/ui/field";
 
 type Mode = "login" | "signup";
 
 const COPY = {
-  login: { title: "Log in", submit: "Log in", alt: "Need an account?", altLink: "Sign up", altHref: "/signup" },
-  signup: { title: "Sign up", submit: "Create account", alt: "Already have an account?", altLink: "Log in", altHref: "/login" },
+  login: { title: "Log in", lead: "Welcome back. Log in to manage your events.", submit: "Log in", alt: "Need an account?", altLink: "Sign up", altHref: "/signup" },
+  signup: { title: "Create a host account", lead: "An email and a password are all you need to start an event.", submit: "Create account", alt: "Already have an account?", altLink: "Log in", altHref: "/login" },
 } as const;
 
 export function AuthForm({ mode }: { mode: Mode }) {
@@ -43,34 +45,26 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <main id="main" style={{ maxWidth: 400, margin: "0 auto", padding: 16 }}>
+    <main id="main" className="entry-page">
       <h1>{copy.title}</h1>
-      <form method="post" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 4 }}>
-          Email
-          <input name="email" type="email" autoComplete="email" required style={{ padding: 8, font: "inherit" }} />
-        </label>
-        <label style={{ display: "grid", gap: 4 }}>
-          Password
-          <input
-            name="password"
-            type="password"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={mode === "signup" ? 8 : undefined}
-            required
-            style={{ padding: 8, font: "inherit" }}
-          />
-        </label>
-        {error && (
-          <p role="alert" style={{ color: "#b00020", margin: 0 }}>
-            {error}
-          </p>
-        )}
-        <button type="submit" disabled={pending} style={{ padding: 10, font: "inherit" }}>
-          {pending ? "Please wait…" : copy.submit}
-        </button>
+      <p className="entry-lead">{copy.lead}</p>
+      <form method="post" onSubmit={onSubmit} className="entry-form">
+        <TextField label="Email" name="email" type="email" autoComplete="email" required />
+        <TextField
+          label="Password"
+          name="password"
+          type="password"
+          autoComplete={mode === "login" ? "current-password" : "new-password"}
+          minLength={mode === "signup" ? 8 : undefined}
+          hint={mode === "signup" ? "At least 8 characters." : undefined}
+          required
+        />
+        {error && <InlineError>{error}</InlineError>}
+        <Button type="submit" variant="primary" busy={pending}>
+          {pending ? "One moment" : copy.submit}
+        </Button>
       </form>
-      <p>
+      <p className="entry-alt">
         {copy.alt} <Link href={copy.altHref}>{copy.altLink}</Link>
       </p>
     </main>

@@ -14,9 +14,9 @@ afterEach(() => {
 
 it("renders a code input and Join button", () => {
   render(<Home />);
-  expect(screen.getByRole("heading", { name: "OW Slido" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Join an event" })).toBeTruthy();
   expect(screen.getByLabelText("Event code")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Join" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Join event" })).toBeTruthy();
 });
 
 it("shows 'Event not found' for an invalid code", async () => {
@@ -26,7 +26,7 @@ it("shows 'Event not found' for an invalid code", async () => {
   );
   render(<Home />);
   fireEvent.change(screen.getByLabelText("Event code"), { target: { value: "000000" } });
-  fireEvent.click(screen.getByRole("button", { name: "Join" }));
+  fireEvent.click(screen.getByRole("button", { name: "Join event" }));
   expect((await screen.findByRole("alert")).textContent).toBe("Event not found");
   expect(push).not.toHaveBeenCalled();
 });
@@ -38,6 +38,6 @@ it("routes to the participant view on success", async () => {
   );
   render(<Home />);
   fireEvent.change(screen.getByLabelText("Event code"), { target: { value: "123456" } });
-  fireEvent.click(screen.getByRole("button", { name: "Join" }));
+  fireEvent.click(screen.getByRole("button", { name: "Join event" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/e/e1"));
 });

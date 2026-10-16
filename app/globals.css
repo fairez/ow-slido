@@ -473,3 +473,36 @@ textarea:disabled {
     animation-duration: 0.01ms !important;
   }
 }
+
+.entry-page {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+.entry-lead {
+  margin: var(--space-2) 0 var(--space-5);
+  color: var(--ink-muted);
+}
+
+.entry-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.entry-alt {
+  margin-top: var(--space-5);
+  color: var(--ink-muted);
+}
+
+.entry-alt a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+}
+
+.ui-field input.code-input {
+  min-height: 56px;
+  font-size: var(--text-xl);
+  letter-spacing: 0.15em;
+}
