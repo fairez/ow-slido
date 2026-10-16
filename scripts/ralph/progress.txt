@@ -159,3 +159,14 @@ Started: Fri Oct 16 03:26:16 PM CST 2026
   - Tests: stub `fetch` with `vi.stubGlobal` and pass `{http: {sleep: async () => {}}}` to skip backoff; `{timeoutMs}` shortens the timeout. Join codes in test events must be 4-6 digits.
   - Use `isAiConfigured()` to hide AI UI; never import lib/ai from client components (it reads the key).
 ---
+
+## 2026-10-16 - US-016
+- `note_analyses` table (migration 0016, cascades from interactions), `lib/note-analysis.ts` (startAnalysis, getLatestAnalysis, hashNotes, setAnalysisRunner), POST /api/interactions/:id/analyze (202, owner only, 409 when one is queued/running, 400 with no approved notes) and GET /api/interactions/:id/analysis (latest or null, with `outdated`).
+- Files: db/schema.ts, db/migrations/0016*, lib/note-analysis.ts, app/api/interactions/[id]/analyze|analysis/route.ts, tests/note-analysis.test.ts
+- **Learnings for future iterations:**
+  - The AI step is not wired yet: US-017 must call `setAnalysisRunner(fn)` (fn gets `{eventId, interactionId, notes}` and returns `{summary, categories, keywords, model, promptVersion}`) from a module the analyze route imports. Until then a started job ends as `failed` ("Analysis is not available").
+  - Statuses go queued -> running (runner starts after a setImmediate) -> done|failed. Jobs older than `ANALYSIS_STALE_MS` (5 min) count as lost and are failed on the next start.
+  - The API view omits `notesSnapshotHash`; `outdated` is computed from the hash of current approved notes (id + text), so edits, approvals and deletes all flag it.
+  - Single-job guard is a `FOR UPDATE` on the interaction row inside the start transaction.
+  - A leftover `.next-shot` dir makes `npm run lint` fail with hundreds of errors; delete it first.
+---

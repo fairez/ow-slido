@@ -282,3 +282,33 @@ export const aiCalls = pgTable(
     index("ai_calls_created_idx").on(t.createdAt),
   ],
 );
+
+export const noteAnalyses = pgTable(
+  "note_analyses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["queued", "running", "done", "failed"] })
+      .notNull()
+      .default("queued"),
+    /** Hash of the approved notes the analysis was started from. */
+    notesSnapshotHash: text("notes_snapshot_hash").notNull(),
+    noteCount: integer("note_count").notNull(),
+    summary: text("summary"),
+    categories: jsonb("categories"),
+    keywords: jsonb("keywords"),
+    edited: boolean("edited").notNull().default(false),
+    published: boolean("published").notNull().default(false),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("note_analyses_status", sql`${t.status} in ('queued', 'running', 'done', 'failed')`),
+    index("note_analyses_interaction_idx").on(t.interactionId, t.createdAt),
+  ],
+);
