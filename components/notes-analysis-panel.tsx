@@ -1,5 +1,6 @@
 "use client";
 
+import type { Socket } from "socket.io-client";
 import { useCallback, useEffect, useState } from "react";
 import { AnalysisEditor } from "@/components/analysis-editor";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ function formatTime(iso: string) {
 }
 
 /** Host controls for the AI analysis of one shared-notes interaction. Rendered only when AI is configured. */
-export function NotesAnalysisPanel({ interactionId }: { interactionId: string }) {
+export function NotesAnalysisPanel({ interactionId, socket = null }: { interactionId: string; socket?: Socket | null }) {
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -52,11 +53,26 @@ export function NotesAnalysisPanel({ interactionId }: { interactionId: string })
 
   const running = state?.analysis?.status === "queued" || state?.analysis?.status === "running";
 
+  // The server announces every status change, so no tight polling. A slow poll only covers a missed message.
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdated = (msg: { interactionId: string }) => {
+      if (msg.interactionId === interactionId) void load();
+    };
+    const onConnect = () => void load();
+    socket.on("analysis:updated", onUpdated);
+    socket.on("connect", onConnect);
+    return () => {
+      socket.off("analysis:updated", onUpdated);
+      socket.off("connect", onConnect);
+    };
+  }, [socket, interactionId, load]);
+
   useEffect(() => {
     if (!running) return;
-    const timer = setInterval(() => void load(), 2000);
+    const timer = setInterval(() => void load(), socket ? 15_000 : 3000);
     return () => clearInterval(timer);
-  }, [running, load]);
+  }, [running, load, socket]);
 
   async function run() {
     if (!state) return;

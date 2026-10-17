@@ -129,6 +129,7 @@ export async function startAnalysis(eventId: string, interactionId: string): Pro
   if (created.kind === "rejected") return { ok: false, status: created.status, error: created.error };
 
   const { row, notes } = created;
+  notifyAnalysisChanged(eventId, interactionId);
   const done = runJob(row.id, eventId, interactionId, notes);
   return { ok: true, analysis: view(row, row.notesSnapshotHash), done };
 }
@@ -137,6 +138,7 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
   const db = getDb();
   try {
     await db.update(noteAnalyses).set({ status: "running" }).where(eq(noteAnalyses.id, id));
+    notifyAnalysisChanged(eventId, interactionId);
     // Let the caller return before the work begins.
     await new Promise<void>((resolve) => setImmediate(resolve));
     if (!runner) throw new Error("Analysis is not available");
@@ -154,6 +156,7 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
         finishedAt: new Date(),
       })
       .where(eq(noteAnalyses.id, id));
+    notifyAnalysisChanged(eventId, interactionId);
   } catch (err) {
     const message = err instanceof Error && err.message ? err.message : "The analysis failed";
     await db
@@ -161,7 +164,16 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
       .set({ status: "failed", error: message.slice(0, 300), finishedAt: new Date() })
       .where(eq(noteAnalyses.id, id))
       .catch(() => {});
+    notifyAnalysisChanged(eventId, interactionId);
   }
+}
+
+/**
+ * Tells the host's open pages (event page, presenter) that the analysis changed, so they refetch once
+ * instead of polling. Carries no content; hosts read the result through the authenticated endpoint.
+ */
+export function notifyAnalysisChanged(eventId: string, interactionId: string) {
+  publish(eventId, "analysis:updated", { interactionId }, { hostOnly: true });
 }
 
 export type AnalysisPanelState = {
@@ -261,6 +273,7 @@ export async function announcePublishedAnalysis(interactionId: string) {
   const found = await findNotesInteractionEvent(interactionId);
   if (!found) return;
   publish(found.eventId, "analysis:published", { interactionId, analysis: await getPublishedAnalysis(interactionId) });
+  notifyAnalysisChanged(found.eventId, interactionId);
 }
 
 export async function findNotesInteractionEvent(interactionId: string) {

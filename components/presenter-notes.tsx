@@ -1,4 +1,5 @@
 "use client";
+import type { Socket } from "socket.io-client";
 
 import { useState } from "react";
 import {
@@ -32,8 +33,10 @@ export function PresenterNotes({
   interactionId,
   notes,
   closed,
+  socket = null,
 }: {
   interactionId: string;
+  socket?: Socket | null;
   notes: PublicNote[];
   closed: boolean;
 }) {
@@ -53,7 +56,7 @@ export function PresenterNotes({
           </button>
         ))}
       </div>
-      {tab !== "notes" && <PresenterAnalysis interactionId={interactionId} notes={notes} view={tab} />}
+      {tab !== "notes" && <PresenterAnalysis interactionId={interactionId} notes={notes} view={tab} socket={socket} />}
       {tab === "notes" && (
         <>
           <div role="group" aria-label="Order notes by" className="present-switch" data-small>

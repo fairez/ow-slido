@@ -162,6 +162,25 @@ test("start returns immediately with a queued job, then it finishes as done", as
   expect(done.finishedAt).toBeTruthy();
 });
 
+test("each status change tells the host pages, with no content", async () => {
+  const publisher = await import("@/lib/realtime/publisher");
+  const sent: { name: string; payload: unknown; hostOnly?: boolean }[] = [];
+  publisher.setPublisher({ publish: (_e, name, payload, options) => void sent.push({ name, payload, hostOnly: options?.hostOnly }) });
+  try {
+    await addNote("one");
+    lib.setAnalysisRunner(async () => output);
+    await start();
+    await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
+    const updates = sent.filter((m) => m.name === "analysis:updated");
+    // queued, running and done
+    expect(updates.length).toBeGreaterThanOrEqual(3);
+    expect(updates.every((m) => m.hostOnly === true)).toBe(true);
+    expect(updates.every((m) => JSON.stringify(m.payload) === JSON.stringify({ interactionId: notesId }))).toBe(true);
+  } finally {
+    publisher.setPublisher(null);
+  }
+});
+
 test("only one job runs at a time per interaction", async () => {
   await addNote("one");
   let release!: () => void;

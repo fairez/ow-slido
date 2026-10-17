@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
+import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN, OPEN_TEXT_MAX, OPEN_TEXT_MIN } from "@/lib/interaction-config";
 import { NotesAnalysisPanel } from "@/components/notes-analysis-panel";
 import { OpenTextHostPanel } from "@/components/open-text-host-panel";
@@ -54,6 +55,8 @@ const STATE_LABELS: Record<InteractionItem["state"], string> = { draft: "Draft",
 
 export function PollManager({ eventId, initialInteractions, aiEnabled = false }: { eventId: string; initialInteractions: InteractionItem[]; aiEnabled?: boolean }) {
   const base = `/api/events/${eventId}/interactions`;
+  // Only needed for live analysis status; stays disconnected when AI is off.
+  const { socket } = useEventSocket(eventId, "host", undefined, aiEnabled);
   const [items, setItems] = useState(initialInteractions);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -225,7 +228,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
                 )}
               </div>
               {item.type === "openText" && item.state !== "draft" && <OpenTextHostPanel eventId={eventId} interactionId={item.id} live={item.state === "live"} />}
-              {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && <NotesAnalysisPanel interactionId={item.id} />}
+              {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && <NotesAnalysisPanel interactionId={item.id} socket={socket} />}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
                   <Button variant="quiet" onClick={() => edit(item)}>Edit</Button>

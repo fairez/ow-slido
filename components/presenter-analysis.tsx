@@ -1,4 +1,5 @@
 "use client";
+import type { Socket } from "socket.io-client";
 
 import { useEffect, useMemo, useState } from "react";
 import { WordCloud } from "@/components/word-cloud";
@@ -166,10 +167,12 @@ export function PresenterAnalysis({
   interactionId,
   notes,
   view,
+  socket = null,
 }: {
   interactionId: string;
   notes: PublicNote[];
   view: AnalysisView;
+  socket?: Socket | null;
 }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [failed, setFailed] = useState(false);
@@ -183,7 +186,8 @@ export function PresenterAnalysis({
     [notes],
   );
 
-  // Refetch on note changes and tab switches, and every 10s so a run started on the event page shows up here.
+  // Refetch on note changes and tab switches. A run started on the event page arrives as an
+  // `analysis:updated` message; the slow poll only covers a missed message or no socket.
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -200,13 +204,21 @@ export function PresenterAnalysis({
       }
     }
     const first = setTimeout(() => void load(), 500);
-    const poll = setInterval(() => void load(), 10_000);
+    const poll = setInterval(() => void load(), socket ? 60_000 : 10_000);
+    const onUpdated = (msg: { interactionId: string }) => {
+      if (msg.interactionId === interactionId) void load();
+    };
+    const onConnect = () => void load();
+    socket?.on("analysis:updated", onUpdated);
+    socket?.on("connect", onConnect);
     return () => {
       cancelled = true;
       clearTimeout(first);
       clearInterval(poll);
+      socket?.off("analysis:updated", onUpdated);
+      socket?.off("connect", onConnect);
     };
-  }, [interactionId, signature, view]);
+  }, [interactionId, signature, view, socket]);
 
   const categories = parseCategories(analysis?.categories);
   const aiKeywords = parseKeywords(analysis?.keywords);

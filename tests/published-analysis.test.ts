@@ -106,7 +106,12 @@ test("publishing and editing a published analysis notify participants", async ()
     await lib.setAnalysisPublished(interactionId, true);
     await lib.editAnalysis(interactionId, { op: "setSummary", summary: "New" });
     await vi.waitFor(() => expect(sent.filter((m) => m.name === "analysis:published")).toHaveLength(2));
-    expect(JSON.stringify(sent[1].payload)).toContain("New");
+    const published = sent.filter((m) => m.name === "analysis:published");
+    expect(JSON.stringify(published[1].payload)).toContain("New");
+    // Hosts' open pages are told too, with no content, so they refetch instead of polling.
+    const updated = sent.filter((m) => m.name === "analysis:updated");
+    expect(updated.length).toBeGreaterThanOrEqual(2);
+    expect(updated.every((m) => JSON.stringify(m.payload) === JSON.stringify({ interactionId }))).toBe(true);
   } finally {
     publisher.setPublisher(null);
   }

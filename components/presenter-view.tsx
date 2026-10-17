@@ -233,7 +233,7 @@ export function PresenterView({
     return (
       <section aria-labelledby="present-title">
         {head(poll.title)}
-        <PresenterNotes interactionId={poll.id} notes={poll.notes} closed={poll.state === "closed"} />
+        <PresenterNotes interactionId={poll.id} notes={poll.notes} closed={poll.state === "closed"} socket={socket} />
         {extras}
       </section>
     );

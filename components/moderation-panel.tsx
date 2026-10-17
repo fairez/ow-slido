@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { InlineError, Toggle } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { useCoalesced } from "@/lib/use-coalesced";
 import type { HostNote } from "@/lib/note-types";
 import type { HostQuestion } from "@/lib/question-types";
 import { NETWORK_ERROR } from "@/lib/copy";
@@ -54,6 +55,9 @@ export function ModerationPanel({
     }
   }, [eventId, authHeaders]);
 
+  // Many note events can arrive together; refetch the list once after they settle.
+  const refetchSoon = useCoalesced(() => void refetch());
+
   useEffect(() => {
     if (!socket) return;
     const upsert = (question: HostQuestion) =>
@@ -63,12 +67,13 @@ export function ModerationPanel({
     const onVotes = (msg: { questionId: string; upvotes: number }) =>
       setQuestions((cur) => cur.map((q) => (q.id === msg.questionId ? { ...q, upvotes: msg.upvotes } : q)));
     const onConnect = () => void refetch();
+    const onNoteChange = () => refetchSoon();
     const onNoteVotes = (msg: { noteId: string; upvotes: number }) =>
       setNotes((cur) => cur.map((n) => (n.id === msg.noteId ? { ...n, upvotes: msg.upvotes } : n)));
     const onNoteRemoved = (msg: { noteId: string }) => setNotes((cur) => cur.filter((n) => n.id !== msg.noteId));
-    socket.on("note:pending", onConnect);
-    socket.on("note:added", onConnect);
-    socket.on("note:updated", onConnect);
+    socket.on("note:pending", onNoteChange);
+    socket.on("note:added", onNoteChange);
+    socket.on("note:updated", onNoteChange);
     socket.on("note:votes", onNoteVotes);
     socket.on("note:removed", onNoteRemoved);
     socket.on("question:pending", onPending);
@@ -76,9 +81,9 @@ export function ModerationPanel({
     socket.on("question:votes", onVotes);
     socket.on("connect", onConnect);
     return () => {
-      socket.off("note:pending", onConnect);
-      socket.off("note:added", onConnect);
-      socket.off("note:updated", onConnect);
+      socket.off("note:pending", onNoteChange);
+      socket.off("note:added", onNoteChange);
+      socket.off("note:updated", onNoteChange);
       socket.off("note:votes", onNoteVotes);
       socket.off("note:removed", onNoteRemoved);
       socket.off("question:pending", onPending);
@@ -86,7 +91,7 @@ export function ModerationPanel({
       socket.off("question:votes", onVotes);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch]);
+  }, [socket, refetch, refetchSoon]);
 
   const request = async (url: string, init: RequestInit, failure: string) => {
     setError(null);
