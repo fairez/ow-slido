@@ -3,10 +3,10 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { castVote } from "@/lib/votes";
 
-const VOTE_IP_LIMIT = 100;
+const VOTE_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const VOTE_TOKEN_LIMIT = 20;
 const VOTE_WINDOW_SECONDS = 60;
 

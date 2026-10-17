@@ -3,42 +3,84 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
-import { joinEvent } from "@/lib/join-client";
+import { COOKIES_BLOCKED, JOIN_STUCK } from "@/lib/copy";
+import { joinEvent, participantPath } from "@/lib/join-client";
 
-export function JoinRedirect({ code }: { code: string }) {
+/** After a successful join, how long to wait for the participant page before offering a manual link. */
+export const NAVIGATION_STALL_MS = 12_000;
+
+export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; cookiesBlocked?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [stalledAt, setStalledAt] = useState<string | null>(null);
 
   useEffect(() => {
+    if (cookiesBlocked) return;
     let cancelled = false;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
     joinEvent(code).then((result) => {
       if (cancelled) return;
-      if (result.ok) router.replace(`/e/${result.eventId}`);
-      else setError(result.error);
+      if (!result.ok) return setError(result.error);
+      const path = participantPath(result.eventId);
+      router.replace(path);
+      stallTimer = setTimeout(() => setStalledAt(path), NAVIGATION_STALL_MS);
     });
     return () => {
       cancelled = true;
+      clearTimeout(stallTimer);
     };
-  }, [code, router]);
+  }, [code, router, cookiesBlocked]);
 
-  if (!error) {
+  if (cookiesBlocked) {
     return (
       <>
-        <h1>Joining the event</h1>
-        <p role="status" className="entry-lead">
-          Checking code {code}. This takes a moment.
+        <h1>Cookies are blocked</h1>
+        <InlineError>{COOKIES_BLOCKED}</InlineError>
+        <p className="entry-alt">
+          <a href={`/join/${code}`}>Try again</a>
         </p>
       </>
     );
   }
+
+  if (error) {
+    return (
+      <>
+        <h1>Could not join</h1>
+        <InlineError>{error}</InlineError>
+        <div className="entry-actions">
+          <Button variant="primary" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </div>
+        <p className="entry-alt">
+          <Link href="/">Enter a code instead</Link>
+        </p>
+      </>
+    );
+  }
+
   return (
     <>
-      <h1>Could not join</h1>
-      <InlineError>{error}</InlineError>
-      <p className="entry-alt">
-        <Link href="/">Enter a code instead</Link>
+      <h1>Joining the event</h1>
+      <p role="status" className="entry-lead">
+        Checking code {code}. This takes a moment.
       </p>
+      {stalledAt ? (
+        <p className="entry-alt">
+          <a href={stalledAt}>Taking long? Continue to the event</a>
+        </p>
+      ) : (
+        // Shown by CSS after a delay, so it still appears when scripts never run (old browser, blocked bundle).
+        <p className="join-stuck" role="status">
+          {JOIN_STUCK}
+        </p>
+      )}
+      <noscript>
+        <p className="join-noscript">This page needs JavaScript. Turn it on in your browser settings, or open the link in Chrome or Safari.</p>
+      </noscript>
     </>
   );
 }

@@ -8,16 +8,17 @@ import {
   readParticipantToken,
   verifyParticipantToken,
 } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { JOIN_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
-const JOIN_LIMIT = 30;
 const JOIN_WINDOW_SECONDS = 60;
 
 const notFound = () => Response.json({ error: "Event not found" }, { status: 404 });
 
 export async function POST(request: Request) {
-  const limit = await rateLimit(`join:ip:${clientIp(request)}`, JOIN_LIMIT, JOIN_WINDOW_SECONDS);
+  const limit = await rateLimit(`join:ip:${clientIp(request)}`, JOIN_IP_LIMIT, JOIN_WINDOW_SECONDS);
   if (!limit.allowed) {
+    // No address in the log: it is only here to tell "a room behind one IP" apart from other failures.
+    console.warn("[join] per-IP rate limit reached");
     return Response.json(
       { error: "Too many attempts. Try again shortly." },
       { status: 429, headers: { "retry-after": String(limit.retryAfterSeconds) } },

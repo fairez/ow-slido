@@ -11,7 +11,13 @@ import { participantCookieName, verifyParticipantToken } from "@/lib/participant
 
 export const dynamic = "force-dynamic";
 
-export default async function ParticipantPage({ params }: { params: Promise<{ eventId: string }> }) {
+export default async function ParticipantPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ j?: string }>;
+}) {
   const { eventId } = await params;
   if (!isUuid(eventId)) notFound();
   const [event] = await getDb().select().from(events).where(eq(events.id, eventId));
@@ -19,7 +25,12 @@ export default async function ParticipantPage({ params }: { params: Promise<{ ev
 
   const token = (await cookies()).get(participantCookieName(event.id))?.value;
   const participantId = token ? verifyParticipantToken(token, event.id) : null;
-  if (!participantId) redirect(`/join/${event.joinCode}`);
+  if (!participantId) {
+    // Coming straight from a successful join (`j`) without a cookie means the browser dropped it.
+    // Sending the participant back to join again would loop forever, so explain instead.
+    const { j } = await searchParams;
+    redirect(`/join/${event.joinCode}${j ? "?cookies=blocked" : ""}`);
+  }
 
   return (
     <main id="main" className="participant">

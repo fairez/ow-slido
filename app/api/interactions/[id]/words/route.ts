@@ -5,10 +5,10 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { findOwnedEvent } from "@/lib/polls";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { getWordcloudResults, submitWord } from "@/lib/wordclouds";
 
-const WORD_IP_LIMIT = 100;
+const WORD_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const WORD_TOKEN_LIMIT = 20;
 const WORD_WINDOW_SECONDS = 60;
 

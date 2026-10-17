@@ -1,9 +1,9 @@
 import { isUuid } from "@/lib/events";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { deleteNote, editNote, findNoteEventId, type NoteResult } from "@/lib/shared-notes";
 
-const NOTE_IP_LIMIT = 100;
+const NOTE_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const NOTE_TOKEN_LIMIT = 20;
 const NOTE_WINDOW_SECONDS = 60;
 

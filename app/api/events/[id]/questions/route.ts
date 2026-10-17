@@ -2,10 +2,10 @@ import { getSessionUser } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { findOwnedEvent } from "@/lib/polls";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { listApprovedQuestions, submitQuestion } from "@/lib/questions";
 
-const QUESTION_IP_LIMIT = 100;
+const QUESTION_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const QUESTION_TOKEN_LIMIT = 5;
 const QUESTION_WINDOW_SECONDS = 60;
 

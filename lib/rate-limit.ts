@@ -55,3 +55,12 @@ export function clientIp(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return real || forwarded || "unknown";
 }
+
+/**
+ * Per-IP ceilings per minute for the audience endpoints. A whole room often shares one public IP
+ * (venue Wi-Fi, mobile carrier NAT), so these only stop floods from a single address; the strict
+ * limits are per participant token.
+ */
+export const JOIN_IP_LIMIT = 300;
+export const AUDIENCE_IP_LIMIT = 600;
+export const AUDIENCE_READ_IP_LIMIT = 1200;

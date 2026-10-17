@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { interactions, participants, sharedNotes } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
+import { AUDIENCE_IP_LIMIT } from "@/lib/rate-limit";
 
 const { db, pool } = createTestDb();
 
@@ -176,7 +177,7 @@ test("rate limits per participant", async () => {
 });
 
 test("rate limits per IP", async () => {
-  for (let i = 0; i < 100; i++) await notes.POST(req("POST", { text: "" }, cookie), ctx(notesId));
+  for (let i = 0; i < AUDIENCE_IP_LIMIT; i++) await notes.POST(req("POST", { text: "" }, cookie), ctx(notesId));
   expect((await post("x")).status).toBe(429);
 });
 

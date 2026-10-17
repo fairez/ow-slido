@@ -5,11 +5,11 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { getResultsForHost, getResultsForParticipant, submitRating } from "@/lib/rating";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, AUDIENCE_READ_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
-const IP_LIMIT = 100;
+const IP_LIMIT = AUDIENCE_IP_LIMIT;
 const TOKEN_LIMIT = 10;
-const LIST_IP_LIMIT = 200;
+const LIST_IP_LIMIT = AUDIENCE_READ_IP_LIMIT;
 const WINDOW_SECONDS = 60;
 
 type Context = { params: Promise<{ id: string }> };

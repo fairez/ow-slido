@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { getPublishedAnalysis } from "@/lib/note-analysis";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_READ_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -12,7 +12,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Context) {
   const { id } = await params;
 
-  const ip = await rateLimit(`analysis:public:ip:${clientIp(request)}`, 200, 60);
+  const ip = await rateLimit(`analysis:public:ip:${clientIp(request)}`, AUDIENCE_READ_IP_LIMIT, 60);
   if (!ip.allowed) {
     return Response.json({ error: "Too many requests. Wait a moment, then try again." }, { status: 429, headers: { "Retry-After": String(ip.retryAfterSeconds) } });
   }

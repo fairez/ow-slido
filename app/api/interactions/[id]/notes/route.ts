@@ -3,10 +3,10 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { AUDIENCE_IP_LIMIT, AUDIENCE_READ_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { listNotes, submitNote, type NoteSort } from "@/lib/shared-notes";
 
-const NOTE_IP_LIMIT = 100;
+const NOTE_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const NOTE_TOKEN_LIMIT = 10;
 const NOTE_WINDOW_SECONDS = 60;
 
@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: Context) {
   return Response.json({ note: result.note }, { status: 201 });
 }
 
-const LIST_IP_LIMIT = 200;
+const LIST_IP_LIMIT = AUDIENCE_READ_IP_LIMIT;
 
 export async function GET(request: Request, { params }: Context) {
   const { id } = await params;

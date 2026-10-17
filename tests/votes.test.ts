@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { events, interactions, participants, pollVotes, users } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
+import { AUDIENCE_IP_LIMIT } from "@/lib/rate-limit";
 
 const { db, pool } = createTestDb();
 
@@ -152,7 +153,7 @@ test("votes are rate limited per participant token", async () => {
 
 test("votes are rate limited per IP", async () => {
   let last: Response | undefined;
-  for (let i = 0; i < 101; i++) {
+  for (let i = 0; i < AUDIENCE_IP_LIMIT + 1; i++) {
     last = await vote(
       new Request(`http://localhost/api/interactions/${pollId}/vote`, {
         method: "POST",

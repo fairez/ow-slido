@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
-import { joinEvent } from "@/lib/join-client";
+import { joinEvent, participantPath } from "@/lib/join-client";
 
 export function JoinForm() {
   const router = useRouter();
@@ -18,7 +18,7 @@ export function JoinForm() {
     setError(null);
     const result = await joinEvent(code);
     if (result.ok) {
-      router.push(`/e/${result.eventId}`);
+      router.push(participantPath(result.eventId));
       return;
     }
     setError(result.error);

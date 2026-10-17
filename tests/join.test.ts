@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, participants, users } from "@/db/schema";
 import { getRateLimitStore } from "@/lib/rate-limit";
 import { createTestDb, truncateAll } from "./helpers/db";
+import { JOIN_IP_LIMIT } from "@/lib/rate-limit";
 
 const { db, pool } = createTestDb();
 
@@ -100,7 +101,7 @@ test("a token for a deleted participant is replaced", async () => {
 });
 
 test("join is rate limited per IP", async () => {
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < JOIN_IP_LIMIT; i++) {
     expect((await join(req({ code: "000000" }))).status).toBe(404);
   }
   const limited = await join(req({ code: "123456" }));
