@@ -16,13 +16,16 @@ export default defineConfig({
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
   webServer: {
-    command: "npx tsx server.ts",
+    // A production build: `next dev` compiles each route on first request, which is slower than the
+    // 5s waits in the tests on a small machine and made the runs flaky.
+    command: "npx next build && npx tsx server.ts",
     url: `http://localhost:${port}`,
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
     // The app under test runs against the test database, never the dev one.
     env: {
       PORT: String(port),
+      NODE_ENV: "production",
       NEXT_DIST_DIR: ".next-e2e",
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       // Deterministic fake: the e2e run never reaches a real AI service.
