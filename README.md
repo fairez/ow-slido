@@ -20,6 +20,8 @@ Stack: Next.js (App Router) + TypeScript, PostgreSQL (Drizzle ORM), Socket.IO vi
 | `AI_MODEL` | Optional model override |
 | `AI_EVENT_CALL_CAP` / `AI_DAILY_CALL_CAP` | Optional limits on AI calls per event and per day |
 
+   With `npm run dev`, values in `.env.local` replace variables inherited from your shell (the server logs which ones it replaced). With `npm start` the real environment wins, so hosting settings are not overridden.
+
 3. Apply migrations: `npm run db:migrate` (and `npm run db:migrate:test` for the test DB).
 4. `npm run dev`, then open http://localhost:3000 (`PORT` overrides the port).
 
