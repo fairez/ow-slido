@@ -19,8 +19,18 @@ async function main() {
       await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
       await db.execute(sql`CREATE SCHEMA public`);
     }
+    const applied = async () => {
+      try {
+        const r = await db.execute(sql`select count(*)::int as n from drizzle.__drizzle_migrations`);
+        return Number((r.rows[0] as { n: number }).n);
+      } catch {
+        return 0;
+      }
+    };
+    const before = await applied();
     await migrate(db, { migrationsFolder: "./db/migrations" });
-    console.log(`migrated ${envName}`);
+    const after = await applied();
+    console.log(`migrated ${envName}: ${after - before} applied now, ${after} in total`);
   } finally {
     await pool.end();
   }
