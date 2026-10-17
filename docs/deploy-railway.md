@@ -1,0 +1,44 @@
+# Deploy ke Railway
+
+Aplikasi ini satu service Node (Next.js + Socket.IO dalam satu proses) ditambah satu database PostgreSQL. `railway.json` di root repo sudah mengatur build, migrasi database, health check, dan jumlah replika.
+
+## Langkah
+
+1. Di Railway: **New Project → Deploy from GitHub repo**, pilih `fairez/ow-slido`, branch `main`.
+2. Di project yang sama: **New → Database → Add PostgreSQL**.
+3. Buka service aplikasi → **Variables**, isi variabel di bawah.
+4. Buka **Settings → Networking → Generate Domain** untuk mendapat URL publik (HTTPS otomatis).
+5. Deploy. Urutannya: build (`npm run build`) → migrasi (`npm run db:migrate`, sebelum aplikasi menyala) → start (`npm start`) → health check `/api/health`.
+6. Buka URL-nya, daftar sebagai admin pertama di `/signup`, lalu **tutup pendaftaran** (lihat `ALLOW_SIGNUP` di bawah).
+
+## Variabel
+
+| Variabel | Isi | Wajib |
+| --- | --- | --- |
+| `DATABASE_URL` | Referensi ke Postgres: `${{Postgres.DATABASE_URL}}` (ganti `Postgres` dengan nama service database Anda). Pakai URL internal supaya tidak lewat internet. | Ya |
+| `SESSION_SECRET` | Acak panjang. Buat dengan `openssl rand -hex 32`. Mengganti nilainya membuat semua admin logout. | Ya |
+| `PARTICIPANT_TOKEN_SECRET` | Acak panjang lain (jangan sama dengan di atas). Mengganti nilainya membuat peserta harus join ulang. | Ya |
+| `ALLOW_SIGNUP` | Isi `false` setelah admin pertama dibuat. Tanpa ini **siapa pun yang membuka URL bisa mendaftar sebagai admin** dan memakai key AI Anda. | Sangat disarankan |
+| `AI_PROVIDER` | `openai` atau `openrouter`. Kosongkan untuk mematikan fitur AI. **Jangan** isi `mock` di produksi. | Untuk AI |
+| `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Key sesuai provider. Hanya di Railway Variables, jangan di repo. | Untuk AI |
+| `AI_MODEL` | Contoh `gpt-4o-mini`. Kosong memakai default provider. | Tidak |
+| `AI_EVENT_CALL_CAP`, `AI_DAILY_CALL_CAP` | Batas panggilan AI per event (default 20) dan per hari (default 200). Ini batas biaya Anda. | Tidak |
+
+Jangan isi `TEST_DATABASE_URL`, `ALLOWED_DEV_ORIGINS`, atau `PORT` (Railway mengisi `PORT` sendiri).
+
+## Yang perlu diketahui
+
+- **Satu replika saja.** Rate limiting dan pesan realtime (Socket.IO) disimpan di memori proses. Dengan dua replika, peserta dan presenter bisa berada di server berbeda dan tidak saling melihat. `railway.json` sudah mengatur `numReplicas: 1`; jangan dinaikkan sebelum ada adapter Redis.
+- **Restart memutus koneksi realtime sesaat.** Klien tersambung ulang otomatis dan mengambil data terbaru. Hindari deploy saat acara berlangsung.
+- **Migrasi berjalan otomatis** sebelum versi baru menyala. Jika migrasi gagal, deploy dibatalkan dan versi lama tetap jalan.
+- **Backup database:** aktifkan backup di service Postgres (tab Backups) sebelum dipakai untuk acara sungguhan.
+- **Biaya AI:** tiap admin yang login bisa menekan Analyze notes dan memakai key Anda. Tutup pendaftaran (`ALLOW_SIGNUP=false`) dan pasang `AI_DAILY_CALL_CAP` sesuai anggaran.
+- **Kesehatan:** `GET /api/health` mengembalikan 200 jika database terjangkau, 503 jika tidak.
+- **Domain sendiri:** tambahkan di Settings → Networking → Custom Domain. Cookie login otomatis memakai `Secure` karena Railway meneruskan `x-forwarded-proto: https`.
+
+## Memeriksa setelah deploy
+
+1. `https://<domain>/api/health` menampilkan `{"status":"ok"}`.
+2. Daftar, buat event, mulai satu poll, lalu buka halaman join dari ponsel (data seluler, bukan Wi-Fi yang sama) dan kirim satu suara. Hasilnya harus muncul di halaman presenter.
+3. Jika AI dipakai: jalankan Analyze notes sekali pada event uji, dan cek tagihan provider.
+4. Set `ALLOW_SIGNUP=false`, redeploy, dan pastikan `/signup` menolak pendaftaran baru.

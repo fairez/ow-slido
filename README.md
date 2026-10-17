@@ -25,6 +25,10 @@ Stack: Next.js (App Router) + TypeScript, PostgreSQL (Drizzle ORM), Socket.IO vi
 3. Apply migrations: `npm run db:migrate` (and `npm run db:migrate:test` for the test DB).
 4. `npm run dev`, then open http://localhost:3000 (`PORT` overrides the port).
 
+## Deploy
+
+Railway: see [docs/deploy-railway.md](docs/deploy-railway.md) (config in `railway.json`). In production set `ALLOW_SIGNUP=false` after the first admin exists, and run a single instance (realtime and rate limits are in memory).
+
 ## Commands
 
 | Command | What it does |

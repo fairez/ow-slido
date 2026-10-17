@@ -49,6 +49,9 @@ export async function rateLimit(key: string, limit: number, windowSeconds: numbe
 }
 
 export function clientIp(request: Request) {
+  // Behind a hosting proxy (Railway) x-real-ip is set by the proxy itself; the first x-forwarded-for
+  // entry can carry whatever the client sent, so it is only the fallback.
+  const real = request.headers.get("x-real-ip")?.trim();
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || request.headers.get("x-real-ip") || "unknown";
+  return real || forwarded || "unknown";
 }

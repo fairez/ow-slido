@@ -35,9 +35,10 @@ test("window resets after windowSeconds", async () => {
   expect(await rateLimit("k", 3, 60)).toMatchObject({ allowed: true, remaining: 2 });
 });
 
-test("clientIp prefers the first x-forwarded-for entry", () => {
+test("clientIp uses the proxy-set x-real-ip first, then the first x-forwarded-for entry", () => {
   const req = (h: Record<string, string>) => new Request("http://localhost", { headers: h });
   expect(clientIp(req({ "x-forwarded-for": "9.9.9.9, 10.0.0.1" }))).toBe("9.9.9.9");
   expect(clientIp(req({ "x-real-ip": "8.8.8.8" }))).toBe("8.8.8.8");
+  expect(clientIp(req({ "x-real-ip": "8.8.8.8", "x-forwarded-for": "1.1.1.1, 8.8.8.8" }))).toBe("8.8.8.8");
   expect(clientIp(req({}))).toBe("unknown");
 });

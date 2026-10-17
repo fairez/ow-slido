@@ -200,3 +200,18 @@ test("cookies are Secure only when the request arrived over https", async () => 
   expect(loggedIn.status).toBe(200);
   expect(loggedIn.headers.get("set-cookie")).not.toMatch(/Secure/i);
 });
+
+test("sign-up can be closed with ALLOW_SIGNUP=false, and logging in still works", async () => {
+  expect((await signup(post("/api/auth/signup", creds))).status).toBe(201);
+  process.env.ALLOW_SIGNUP = "false";
+  try {
+    const closed = await signup(post("/api/auth/signup", { email: "other@example.com", password: "password123" }));
+    expect(closed.status).toBe(403);
+    expect((await closed.json()).error).toMatch(/closed/i);
+    expect(await db.select().from(users).where(eq(users.email, "other@example.com"))).toHaveLength(0);
+    expect((await login(post("/api/auth/login", creds))).status).toBe(200);
+  } finally {
+    delete process.env.ALLOW_SIGNUP;
+  }
+  expect((await signup(post("/api/auth/signup", { email: "later@example.com", password: "password123" }))).status).toBe(201);
+});
