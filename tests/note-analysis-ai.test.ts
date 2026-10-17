@@ -87,6 +87,44 @@ test("the prompt carries only opaque ids and delimited note text", async () => {
   expect(refsIn(requests[0])).toEqual(["n1", "n2", "n3"]);
 });
 
+test("the prompt asks for the notes' language, wording copied from the notes, and a structured summary", async () => {
+  const { provider, requests } = scripted((req) => good(refsIn(req)));
+  await lib.analyzeNotes({ eventId, notes: notes(3, (i) => `Catatan nomor ${i}`) }, { provider });
+  const system = requests[0].messages.find((m) => m.content.startsWith("You analyze"))!.content;
+  expect(system).toMatch(/in the language of the notes/);
+  expect(system).toMatch(/Never translate the participants' wording/);
+  expect(system).toMatch(/taken from the notes themselves, copied in the participants' own wording/);
+  expect(system).toMatch(/Do not invent words that are not in the notes/);
+  expect(system).toContain("## Overview");
+  expect(system).toContain("## Key points");
+  expect(system).toContain("- One short bullet per main point");
+  expect(lib.ANALYSIS_PROMPT_VERSION).toBe("notes-v2");
+});
+
+test("a structured summary keeps its line breaks and does not count markers as words", async () => {
+  const summary = "## Ringkasan\nRapat dinilai terlalu panjang.\n## Poin utama\n- Jeda kurang\n- Kopi kurang";
+  const { provider } = scripted((req) => ({ ...good(refsIn(req)), summary }));
+  const out = await lib.analyzeNotes({ eventId, notes: notes(3) }, { provider });
+  expect(out.summary).toBe(summary);
+
+  // 250 real words plus markers is still within the limit.
+  const body = `## Overview\n${Array.from({ length: 245 }, () => "w").join(" ")}\n- a\n- b`;
+  const second = scripted((req) => ({ ...good(refsIn(req)), summary: body }));
+  await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider: second.provider })).resolves.toBeTruthy();
+});
+
+test("the merge prompt keeps the layout and the language", async () => {
+  const { provider, requests } = scripted((req) => {
+    if (req.messages.some((m) => m.content.includes("partial summaries"))) return { summary: "## Overview\nCombined." };
+    return good(refsIn(req));
+  });
+  await lib.analyzeNotes({ eventId, notes: notes(250) }, { provider });
+  const merge = requests.find((r) => r.messages.some((m) => m.content.includes("partial summaries")))!;
+  const system = merge.messages.find((m) => m.content.startsWith("Combine"))!.content;
+  expect(system).toContain("## Key points");
+  expect(system).toMatch(/in the language they are written in/);
+});
+
 test("unknown ids are ignored, duplicates keep the first category and unassigned notes become Uncategorized", async () => {
   const { provider } = scripted(() => ({
     summary: "S",
@@ -156,8 +194,8 @@ test("invalid output fails with a readable error", async () => {
   await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider })).rejects.toThrow(/could not be used/);
 });
 
-test("a summary over 150 words is rejected", async () => {
-  const long = Array.from({ length: 151 }, () => "w").join(" ");
+test("a summary over 250 words is rejected", async () => {
+  const long = Array.from({ length: 251 }, () => "w").join(" ");
   const { provider } = scripted((req) => ({ ...good(refsIn(req)), summary: long }));
   await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider })).rejects.toThrow();
 });

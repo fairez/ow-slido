@@ -2,7 +2,7 @@
 
 export const UNCATEGORIZED_NAME = "Uncategorized";
 export const CATEGORY_NAME_MAX = 60;
-export const SUMMARY_MAX = 1500;
+export const SUMMARY_MAX = 3000;
 
 export type EditableCategory = { name: string; description: string; noteIds: string[] };
 export type EditableKeyword = { word: string; weight: number };

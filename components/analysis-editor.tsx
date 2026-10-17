@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalysisSummary } from "@/components/analysis-summary";
 import { useState } from "react";
 import { CATEGORY_NAME_MAX, SUMMARY_MAX, UNCATEGORIZED_NAME, type AnalysisEdit } from "@/lib/analysis-edit";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
           <h4>Summary</h4>
           {draft === null ? (
             <>
-              <p className="analysis-summary">{summary}</p>
+              <AnalysisSummary text={summary} className="analysis-summary" />
               <div className="row-actions"><Button onClick={() => setDraft(summary)}>Edit summary</Button></div>
             </>
           ) : (

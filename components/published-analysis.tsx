@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalysisSummary } from "@/components/analysis-summary";
 import { useCallback, useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { WordCloud } from "@/components/word-cloud";
@@ -45,7 +46,7 @@ export function PublishedAnalysis({ interactionId, socket }: Props) {
     <section aria-labelledby="published-analysis-title" className="analysis-card">
       <h3 id="published-analysis-title">Themes from the notes</h3>
       <p className="analysis-muted">Written by an AI service and reviewed by the host.</p>
-      {analysis.summary && <p className="analysis-summary">{analysis.summary}</p>}
+      {analysis.summary && <AnalysisSummary text={analysis.summary} className="analysis-summary" />}
       {analysis.categories.length > 0 && (
         <ul aria-label="Categories" className="analysis-list">
           {analysis.categories.map((c) => (

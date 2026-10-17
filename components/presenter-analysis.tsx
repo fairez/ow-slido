@@ -1,4 +1,5 @@
 "use client";
+import { AnalysisSummary } from "@/components/analysis-summary";
 import type { Socket } from "socket.io-client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -257,9 +258,7 @@ export function PresenterAnalysis({
       <>
         <AiLabel outdated={outdated} />
         {analysis.summary ? (
-          <p className="present-summary">
-            {analysis.summary}
-          </p>
+          <AnalysisSummary text={analysis.summary} className="present-summary" />
         ) : (
           <p role="status" className="present-empty">
             This run produced keywords only, so there is no summary.

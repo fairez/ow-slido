@@ -1311,10 +1311,8 @@ a.ui-button:not([data-variant]) {
 
 .present-summary {
   max-width: 60ch;
-  margin: 0;
-  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
   line-height: 1.4;
-  white-space: pre-wrap;
 }
 
 .present-category {
@@ -1463,8 +1461,31 @@ a.ui-button:not([data-variant]) {
 }
 
 .analysis-summary {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.summary-text {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.summary-text p,
+.summary-text ul,
+.summary-text h4 {
+  margin: 0;
+}
+
+.summary-heading {
+  font-family: var(--font-heading);
+  font-size: 1em;
+  line-height: 1.3;
+  padding-top: var(--space-2);
+}
+
+.summary-list {
+  padding-left: 1.25em;
+  display: grid;
+  gap: var(--space-1);
 }
 
 .analysis summary {
