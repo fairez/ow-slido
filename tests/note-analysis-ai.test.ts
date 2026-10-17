@@ -93,11 +93,13 @@ test("the prompt asks for the notes' language, wording copied from the notes, an
   const system = requests[0].messages.find((m) => m.content.startsWith("You analyze"))!.content;
   expect(system).toMatch(/in the language of the notes/);
   expect(system).toMatch(/Never translate the participants' wording/);
-  expect(system).toMatch(/taken from the notes themselves, copied in the participants' own wording/);
+  expect(system).toMatch(/copied exactly in the participants' own wording/);
   expect(system).toMatch(/Do not invent words that are not in the notes/);
-  expect(system).toContain("## Overview");
-  expect(system).toContain("## Key points");
-  expect(system).toContain("- One short bullet per main point");
+  expect(system).toContain('"sections" array');
+  expect(system).toContain("translate every heading into the language of the notes");
+  expect(system).toContain("Key points");
+  expect(system).toContain("appears literally in at least one note of that theme");
+  expect(system).toContain("do not restate every note one by one");
   expect(lib.ANALYSIS_PROMPT_VERSION).toBe("notes-v2");
 });
 
@@ -113,6 +115,49 @@ test("a structured summary keeps its line breaks and does not count markers as w
   await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider: second.provider })).resolves.toBeTruthy();
 });
 
+test("a summary returned as sections becomes headed text, even when nested the way gpt-4o-mini did", async () => {
+  const sections = scripted((req) => ({
+    ...good(refsIn(req)),
+    summary: { sections: [{ heading: "Ringkasan", paragraph: "Rapat terlalu panjang." }, { heading: "Poin utama", bullets: ["Jeda kurang", "Wifi putus"] }] },
+  }));
+  const a = await lib.analyzeNotes({ eventId, notes: notes(3) }, { provider: sections.provider });
+  expect(a.summary).toBe("## Ringkasan\nRapat terlalu panjang.\n\n## Poin utama\n- Jeda kurang\n- Wifi putus");
+
+  // The shape the real model returned: keys as headings, a paragraph and a list.
+  const observed = scripted((req) => ({
+    ...good(refsIn(req)),
+    summary: { overview: "Catatan peserta mengungkapkan masukan.", "key points": ["Materi bermanfaat.", "Wifi sering terputus."] },
+  }));
+  const b = await lib.analyzeNotes({ eventId, notes: notes(3) }, { provider: observed.provider });
+  expect(b.summary).toBe("## Overview\nCatatan peserta mengungkapkan masukan.\n\n## Key points\n- Materi bermanfaat.\n- Wifi sering terputus.");
+  expect(observed.requests).toHaveLength(1); // accepted first time, no repair round trip
+});
+
+test("a theme name the model made up is replaced by wording from the theme's notes", async () => {
+  const texts = ["Wifi sering terputus saat demo", "Kopi dan snack kurang", "Materi sangat bermanfaat"];
+  const { provider } = scripted((req) => {
+    const ids = refsIn(req);
+    return {
+      summary: "S",
+      categories: [
+        { name: "Fasilitas", description: "d", noteIds: [ids[0], ids[1]] },
+        { name: "Materi", description: "d", noteIds: [ids[2]] },
+        { name: "Lain", description: "d", noteIds: [] },
+      ],
+      keywords: [{ word: "wifi", weight: 3 }, { word: "snack", weight: 2 }, { word: "materi", weight: 4 }],
+    };
+  });
+  const out = await lib.analyzeNotes({ eventId, notes: notes(3, (i) => texts[i - 1]) }, { provider });
+  expect((out.categories as { name: string }[]).map((c) => c.name)).toEqual(["Wifi & snack", "Materi"]);
+});
+
+test("a summary with nothing usable in it is rejected", async () => {
+  for (const summary of [{}, { sections: [] }, { sections: [{ heading: "Empty" }] }, 42, "   ", null]) {
+    const { provider } = scripted((req) => ({ ...good(refsIn(req)), summary }));
+    await expect(lib.analyzeNotes({ eventId, notes: notes(3) }, { provider })).rejects.toThrow(/could not be used/);
+  }
+});
+
 test("the merge prompt keeps the layout and the language", async () => {
   const { provider, requests } = scripted((req) => {
     if (req.messages.some((m) => m.content.includes("partial summaries"))) return { summary: "## Overview\nCombined." };
@@ -121,7 +166,7 @@ test("the merge prompt keeps the layout and the language", async () => {
   await lib.analyzeNotes({ eventId, notes: notes(250) }, { provider });
   const merge = requests.find((r) => r.messages.some((m) => m.content.includes("partial summaries")))!;
   const system = merge.messages.find((m) => m.content.startsWith("Combine"))!.content;
-  expect(system).toContain("## Key points");
+  expect(system).toContain("translate every heading into the language of the notes");
   expect(system).toMatch(/in the language they are written in/);
 });
 
@@ -237,6 +282,6 @@ test("falls back when the event cap is reached and when the provider fails", asy
 test("the mock provider produces a usable result", async () => {
   process.env.AI_PROVIDER = "mock";
   const out = await lib.analyzeNotes({ eventId, notes: notes(5) });
-  expect(out.summary).toBe("mock");
+  expect(out.summary).toBe("## mock\nmock\n- mock");
   expect((out.categories as { name: string }[]).at(-1)?.name).toBe("Uncategorized");
 });

@@ -96,6 +96,8 @@ export async function complete<T>(
   );
   const secondResult = check(repaired, schema);
   if (secondResult.ok) return secondResult.value;
+  // Our own validation message (no reply content, notes or keys), so a failing prompt can be diagnosed.
+  console.warn(`[ai] ${options.kind ?? "complete"}: reply rejected twice: ${secondResult.error}`);
   throw new AiError("invalid_output", "The AI returned a reply that could not be used.");
 }
 
