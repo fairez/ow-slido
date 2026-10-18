@@ -4,6 +4,7 @@ import { interactions, noteAnalyses, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { publish } from "@/lib/realtime/publisher";
 import { applyEdit, type AnalysisEdit, type EditableCategory, type EditableKeyword } from "@/lib/analysis-edit";
+import { normalizeKeywords } from "@/lib/note-keywords";
 
 /** A job that has not finished after this long is treated as lost (for example after a restart). */
 export const ANALYSIS_STALE_MS = 5 * 60_000;
@@ -73,7 +74,8 @@ async function approvedNotes(db: Db, interactionId: string): Promise<AnalysisNot
 
 function view(row: Row, currentHash: string): AnalysisView {
   const { notesSnapshotHash, ...rest } = row;
-  return { ...rest, outdated: notesSnapshotHash !== currentHash };
+  // Runs saved before stop words were filtered still hold "dan", "yang" and the like.
+  return { ...rest, keywords: storedKeywords(rest.keywords), outdated: notesSnapshotHash !== currentHash };
 }
 
 export async function getLatestAnalysis(interactionId: string): Promise<AnalysisView | null> {
@@ -303,7 +305,9 @@ function storedCategories(raw: unknown): EditableCategory[] {
 
 function storedKeywords(raw: unknown): EditableKeyword[] {
   if (!Array.isArray(raw)) return [];
-  return raw.flatMap((k) => (isRecord(k) && typeof k.word === "string" && typeof k.weight === "number" ? [{ word: k.word, weight: k.weight }] : []));
+  const items = raw.flatMap((k) => (isRecord(k) && typeof k.word === "string" && typeof k.weight === "number" ? [{ word: k.word, weight: k.weight }] : []));
+  // Analyses saved before stop words were filtered still contain "dan", "yang" and the like.
+  return normalizeKeywords(items);
 }
 
 export type EditOutcome = { ok: true; analysis: AnalysisView } | { ok: false; status: 400 | 409; error: string };

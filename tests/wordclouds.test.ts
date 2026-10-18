@@ -156,6 +156,18 @@ test("rejects empty and over-long words", async () => {
   expect((await send("a".repeat(25))).status).toBe(201);
 });
 
+test("a bare Indonesian connector is rejected and does not use up an entry; phrases with real words stay", async () => {
+  for (const w of ["dan", "Yang", " di ", "untuk"]) {
+    const res = await send(w);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/too common/);
+  }
+  expect(await db.select().from(wordcloudEntries)).toHaveLength(0);
+  expect((await send("dan jeda")).status).toBe(201);
+  expect((await send("wifi")).status).toBe(201);
+  expect((await results()).json.words.map((w: { word: string }) => w.word).sort()).toEqual(["dan jeda", "wifi"]);
+});
+
 test("enforces the per-participant entry limit", async () => {
   const first = await send("one");
   expect(await first.json()).toEqual({ ok: true, remaining: 1 });

@@ -100,7 +100,8 @@ test("the prompt asks for the notes' language, wording copied from the notes, an
   expect(system).toContain("Key points");
   expect(system).toContain("appears literally in at least one note of that theme");
   expect(system).toContain("do not restate every note one by one");
-  expect(lib.ANALYSIS_PROMPT_VERSION).toBe("notes-v2");
+  expect(lib.ANALYSIS_PROMPT_VERSION).toBe("notes-v3");
+  expect(system).toMatch(/Never list conjunctions, prepositions, pronouns or other function words/);
 });
 
 test("a structured summary keeps its line breaks and does not count markers as words", async () => {

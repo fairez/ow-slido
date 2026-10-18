@@ -4,7 +4,7 @@ import type { Socket } from "socket.io-client";
 
 import { useEffect, useMemo, useState } from "react";
 import { WordCloud } from "@/components/word-cloud";
-import { fallbackKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
+import { fallbackKeywords, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
 import type { PublicNote } from "@/lib/shared-notes";
 
 export type AnalysisView = "cloud" | "categories" | "top" | "summary";
@@ -40,10 +40,12 @@ export function parseCategories(raw: unknown): Category[] {
 
 export function parseKeywords(raw: unknown): AnalysisKeyword[] {
   if (!Array.isArray(raw)) return [];
-  return raw.flatMap((k) =>
-    isRecord(k) && typeof k.word === "string" && typeof k.weight === "number"
-      ? [{ word: k.word, weight: k.weight }]
-      : [],
+  return normalizeKeywords(
+    raw.flatMap((k) =>
+      isRecord(k) && typeof k.word === "string" && typeof k.weight === "number"
+        ? [{ word: k.word, weight: k.weight }]
+        : [],
+    ),
   );
 }
 

@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { interactions, participants, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { isIndonesianStopWord } from "@/lib/note-stopwords";
 import { isProfane } from "@/lib/profanity";
 import { publish } from "@/lib/realtime/publisher";
 import {
@@ -108,6 +109,10 @@ export async function submitWord(
       if (!word) return { ok: false, status: 400, error: "Enter a word" };
       if (word.length > WORDCLOUD_WORD_MAX) {
         return { ok: false, status: 400, error: `Words must be at most ${WORDCLOUD_WORD_MAX} characters` };
+      }
+      // A bare connector ("dan", "yang", "di") would only clutter the cloud; it does not use up an entry.
+      if (isIndonesianStopWord(word)) {
+        return { ok: false, status: 400, error: "That word is too common to show in the cloud. Try another." };
       }
 
       const { maxEntriesPerParticipant: max } = wordcloudConfig(

@@ -6,7 +6,7 @@ import { setAnalysisRunner, type AnalysisNote, type AnalysisOutput, type Analysi
 import { anchorCategoryNames } from "@/lib/note-category-names";
 import { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
 
-export const ANALYSIS_PROMPT_VERSION = "notes-v2";
+export const ANALYSIS_PROMPT_VERSION = "notes-v3";
 export const ANALYSIS_BATCH_SIZE = 200;
 /** Notes can be 5000 characters, so a batch is also capped by total text (about 15k tokens). */
 export const ANALYSIS_BATCH_CHARS = 60_000;
@@ -173,7 +173,7 @@ const SYSTEM = [
   "Language: write the summary, its headings, the theme names and the theme descriptions in the language of the notes. If the notes mix languages, use the language most of them use. Never translate the participants' wording into another language.",
   SUMMARY_LAYOUT,
   `Themes: group the notes into ${CATEGORIES_MIN} to ${CATEGORIES_MAX} themes (fewer only if there are fewer notes). Name each theme with a word or short phrase that appears literally in at least one note of that theme, copied exactly in the participants' own wording and language; if a theme groups several notes, pick the most representative wording among them. Do not make up abstract umbrella labels (for example "Facilities" or "Interaction") unless those exact words appear in the notes; use a neutral label only when no wording in the notes fits at all. Each theme has that name, a one-line description and the ids of its notes. Put every note in exactly one theme and use only the ids you were given.`,
-  `Keywords: list up to ${KEYWORDS_MAX} keywords or short phrases, copied from the notes in their original language and in lowercase, each with a positive weight for how often or how strongly it comes up. Do not invent words that are not in the notes. Leave out offensive words.`,
+  `Keywords: list up to ${KEYWORDS_MAX} keywords or short phrases, copied from the notes in their original language and in lowercase, each with a positive weight for how often or how strongly it comes up. Do not invent words that are not in the notes. Never list conjunctions, prepositions, pronouns or other function words (for example dan, yang, di, ke, untuk, dengan, and, the, of). Leave out offensive words.`,
 ].join("\n");
 
 function notesBlock(batch: { ref: string; text: string }[]) {

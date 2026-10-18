@@ -255,6 +255,23 @@ test("analysis is outdated once the approved notes change", async () => {
   expect((await latest()).outdated).toBe(true);
 });
 
+test("an analysis saved with connectors in its keywords is shown without them", async () => {
+  await addNote("one");
+  await db.insert(noteAnalyses).values({
+    interactionId: notesId,
+    notesSnapshotHash: "x",
+    noteCount: 1,
+    status: "done",
+    summary: "S",
+    categories: [],
+    keywords: [{ word: "dan", weight: 9 }, { word: "yang", weight: 8 }, { word: "wifi", weight: 3 }, { word: "untuk wifi", weight: 1 }],
+    model: "m",
+    promptVersion: "notes-v1",
+    finishedAt: new Date(),
+  });
+  expect((await latest()).keywords).toEqual([{ word: "wifi", weight: 4 }]);
+});
+
 test("returns null before any analysis", async () => {
   expect(await latest()).toBeNull();
 });
