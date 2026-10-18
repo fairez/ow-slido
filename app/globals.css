@@ -1091,12 +1091,100 @@ a.ui-button:not([data-variant]) {
   color: var(--ink-muted);
 }
 
-.present-fullscreen {
+.present-controls {
   position: fixed;
   right: var(--space-4);
   bottom: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.present-controls button {
   min-height: 44px;
   padding: 0 var(--space-4);
+}
+
+.present-qa {
+  display: grid;
+  gap: var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.present-qa-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.present-qa-bar .present-total {
+  margin: 0;
+}
+
+.present-qa-sort {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.present-qa-sort-btn {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+.present-qa-sort-btn[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.present-qa-list {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.present-qa-item {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) 0 var(--space-4) var(--space-5);
+  border-left: 4px solid var(--border);
+}
+
+.present-qa-item[data-pinned="true"] {
+  border-left-color: var(--accent);
+}
+
+.present-qa-item[data-answered="true"] {
+  opacity: 0.6;
+}
+
+.present-qa-text {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2.5rem);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.present-qa-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-lg);
 }
 
 .present-notice {

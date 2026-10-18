@@ -6,15 +6,19 @@ import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { PresenterOpenText } from "@/components/presenter-open-text";
 import { PresenterRating } from "@/components/presenter-rating";
 import { PresenterNotes } from "@/components/presenter-notes";
+import { PresenterQa } from "@/components/presenter-qa";
 import { Button } from "@/components/ui/button";
 import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
+import { applyQuestionEvent, type QaSort } from "@/lib/question-order";
+import type { PublicQuestion } from "@/lib/question-types";
 import type { RatingResults } from "@/lib/rating";
 import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
 export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed" };
+export type PresenterScreen = "interaction" | "qa";
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 type Words = { interactionId: string; words: WordCount[]; total: number };
@@ -25,17 +29,25 @@ export function PresenterView({
   initial,
   joinCode,
   items,
+  initialQuestions = [],
+  initialScreen = "interaction",
 }: {
   eventId: string;
   initial: PresenterState | null;
   joinCode: string;
   items: NavItem[];
+  initialQuestions?: PublicQuestion[];
+  initialScreen?: PresenterScreen;
 }) {
   const { socket } = useEventSocket(eventId, "host");
   const [poll, setPoll] = useState<PresenterState | null>(initial);
   const [list, setList] = useState<NavItem[]>(items);
   const [notice, setNotice] = useState("");
   const [qr, setQr] = useState("");
+  // Which screen the projector shows. It only changes this page: participants and interaction states are untouched.
+  const [screen, setScreen] = useState<PresenterScreen>(initialScreen);
+  const [questions, setQuestions] = useState<PublicQuestion[]>(initialQuestions);
+  const [qaSort, setQaSort] = useState<QaSort>("popular");
   // Last interaction shown, so arrows still work from the "nothing live" screen.
   const cursor = useRef<string | null>(initial?.id ?? null);
   const busy = useRef(false);
@@ -58,6 +70,29 @@ export function PresenterView({
       setList(body.interactions.map((i) => ({ id: i.id, state: i.state })));
     } catch {
       // Keep the last known list.
+    }
+  }, [eventId]);
+
+  const changeScreen = useCallback((next: PresenterScreen) => {
+    setScreen(next);
+    // Keep the choice in the URL so a reload, or a second tab on another monitor, opens the same screen.
+    try {
+      const url = new URL(window.location.href);
+      if (next === "qa") url.searchParams.set("view", "qa");
+      else url.searchParams.delete("view");
+      window.history.replaceState(null, "", url);
+    } catch {
+      // The URL is only a convenience.
+    }
+  }, []);
+
+  const refetchQuestions = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/present/questions`);
+      if (!res.ok) return;
+      setQuestions(((await res.json()) as { questions: PublicQuestion[] }).questions);
+    } catch {
+      // Offline: the next reconnect refetches.
     }
   }, [eventId]);
 
@@ -89,13 +124,19 @@ export function PresenterView({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") void go(1);
-      else if (e.key === "ArrowLeft") void go(-1);
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        // Arrows start the next interaction, so they leave the Q&A screen instead of acting behind it.
+        changeScreen("interaction");
+        void go(e.key === "ArrowRight" ? 1 : -1);
+      } else if (e.key === "q" || e.key === "Q") changeScreen(screen === "qa" ? "interaction" : "qa");
       else if (e.key === "Escape" && document.fullscreenElement) void document.exitFullscreen();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go]);
+  }, [go, changeScreen, screen]);
 
   const refetch = useCallback(async () => {
     try {
@@ -130,6 +171,7 @@ export function PresenterView({
     const onConnect = () => {
       void refetch();
       void refetchList();
+      void refetchQuestions();
     };
     const forNotes = (id: string, fn: (notes: PublicNote[]) => PublicNote[]) =>
       setPoll((cur) => (cur && cur.type === "sharedNotes" && cur.id === id ? { ...cur, notes: fn(cur.notes) } : cur));
@@ -156,6 +198,16 @@ export function PresenterView({
       forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
     const onRating = (msg: { results: RatingResults }) =>
       setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
+    const onQuestion = (name: "question:added" | "question:votes" | "question:updated" | "question:removed") => (msg: object) =>
+      setQuestions((cur) => applyQuestionEvent(cur, { name, ...msg } as never));
+    const onQuestionAdded = onQuestion("question:added");
+    const onQuestionVotes = onQuestion("question:votes");
+    const onQuestionUpdated = onQuestion("question:updated");
+    const onQuestionRemoved = onQuestion("question:removed");
+    socket.on("question:added", onQuestionAdded);
+    socket.on("question:votes", onQuestionVotes);
+    socket.on("question:updated", onQuestionUpdated);
+    socket.on("question:removed", onQuestionRemoved);
     socket.on("rating:results", onRating);
     socket.on("response:added", onResponse);
     socket.on("response:updated", onResponse);
@@ -169,6 +221,10 @@ export function PresenterView({
     socket.on("state-changed", onChange);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("question:added", onQuestionAdded);
+      socket.off("question:votes", onQuestionVotes);
+      socket.off("question:updated", onQuestionUpdated);
+      socket.off("question:removed", onQuestionRemoved);
       socket.off("rating:results", onRating);
       socket.off("response:added", onResponse);
       socket.off("response:updated", onResponse);
@@ -182,7 +238,7 @@ export function PresenterView({
       socket.off("state-changed", onChange);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch, refetchList]);
+  }, [socket, refetch, refetchList, refetchQuestions]);
 
   const corner = (
     <aside className="present-join" aria-label="How to join">
@@ -204,9 +260,12 @@ export function PresenterView({
   );
   const extras = (
     <>
-      <Button className="present-fullscreen" onClick={() => void document.documentElement.requestFullscreen?.()}>
-        Fullscreen (Esc to exit)
-      </Button>
+      <div className="present-controls">
+        <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
+          {screen === "qa" ? "Show interaction (Q)" : "Show Q&A (Q)"}
+        </Button>
+        <Button onClick={() => void document.documentElement.requestFullscreen?.()}>Fullscreen (Esc to exit)</Button>
+      </div>
       {notice && (
         <p role="status" className="present-notice">
           {notice}
@@ -214,6 +273,16 @@ export function PresenterView({
       )}
     </>
   );
+
+  if (screen === "qa") {
+    return (
+      <section aria-labelledby="present-title">
+        {head("Q&A")}
+        <PresenterQa questions={questions} sort={qaSort} onSortChange={setQaSort} joinCode={joinCode} />
+        {extras}
+      </section>
+    );
+  }
 
   if (!poll) {
     return (

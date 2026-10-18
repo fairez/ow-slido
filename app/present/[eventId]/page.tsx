@@ -8,10 +8,17 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { findOwnedEvent } from "@/lib/polls";
 import { getPresenterState } from "@/lib/presenter";
+import { listApprovedQuestions } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
 
-export default async function PresentPage({ params }: { params: Promise<{ eventId: string }> }) {
+export default async function PresentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ view?: string }>;
+}) {
   const user = await getUserFromToken((await cookies()).get(SESSION_COOKIE)?.value);
   if (!user) redirect("/login");
 
@@ -31,6 +38,8 @@ export default async function PresentPage({ params }: { params: Promise<{ eventI
         initial={await getPresenterState(event.id)}
         joinCode={event.joinCode}
         items={items}
+        initialQuestions={await listApprovedQuestions(event.id)}
+        initialScreen={(await searchParams).view === "qa" ? "qa" : "interaction"}
       />
     </main>
   );

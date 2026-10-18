@@ -162,3 +162,113 @@ it("updates notes live and keeps a closed board on screen", () => {
   expect(screen.queryByText("Older but popular")).toBeNull();
   expect(screen.getByText("9 upvotes")).toBeTruthy();
 });
+
+const question = (id: string, over: Record<string, unknown> = {}) => ({
+  id,
+  text: `Question ${id}`,
+  authorName: null,
+  answered: false,
+  pinned: false,
+  createdAt: `2026-11-01T10:0${id}:00.000Z`,
+  upvotes: 0,
+  upvoted: false,
+  ...over,
+});
+
+const listItems = () => screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+
+it("shows a Show Q&A button that swaps the screen, and back", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={state({ a: 1, b: 0 }, 1)} initialQuestions={[question("1")]} />);
+  expect(screen.getByText("Total votes: 1")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Show Q&A/ }));
+  expect(screen.getByRole("heading", { name: "Q&A" })).toBeTruthy();
+  expect(screen.getByText("Question 1")).toBeTruthy();
+  expect(screen.queryByText("Total votes: 1")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Show interaction/ }));
+  expect(screen.getByText("Total votes: 1")).toBeTruthy();
+});
+
+it("the Q key toggles the screen", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[question("1")]} />);
+  fireEvent.keyDown(window, { key: "q" });
+  expect(screen.getByRole("heading", { name: "Q&A" })).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Q" });
+  expect(screen.getByText("No live interaction")).toBeTruthy();
+});
+
+it("opens on the Q&A screen when asked to (the ?view=qa link)", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[]} initialScreen="qa" />);
+  expect(screen.getByRole("heading", { name: "Q&A" })).toBeTruthy();
+  expect(screen.getByText(/No questions yet. Ask from your phone with code 1234/)).toBeTruthy();
+});
+
+it("lists pinned first, answered last, names or Anonymous, and upvote counts", () => {
+  const list = [
+    question("1", { upvotes: 5, authorName: "Dewi" }),
+    question("2", { answered: true, upvotes: 9 }),
+    question("3", { pinned: true }),
+  ];
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={list} initialScreen="qa" />);
+  const items = listItems();
+  expect(items[0]).toMatch(/Question 3.*Anonymous.*0 upvotes.*Pinned/);
+  expect(items[1]).toMatch(/Question 1.*Dewi.*5 upvotes/);
+  expect(items[2]).toMatch(/Question 2.*9 upvotes.*Answered/);
+  expect(screen.getByText("3 questions")).toBeTruthy();
+});
+
+it("the sort buttons switch between most upvoted and newest", () => {
+  const list = [question("1", { upvotes: 9 }), question("2", { upvotes: 0 })];
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={list} initialScreen="qa" />);
+  expect(listItems()[0]).toMatch(/Question 1/);
+  fireEvent.click(screen.getByRole("button", { name: "Newest" }));
+  expect(listItems()[0]).toMatch(/Question 2/);
+  expect(screen.getByRole("button", { name: "Newest" }).getAttribute("aria-pressed")).toBe("true");
+});
+
+it("stays current from the question events, even while another screen is shown", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[question("1")]} />);
+  act(() => {
+    fake.emit("question:added", { question: question("2") });
+    fake.emit("question:votes", { questionId: "1", upvotes: 4 });
+  });
+  fireEvent.keyDown(window, { key: "q" });
+  expect(screen.getByText("2 questions")).toBeTruthy();
+  expect(listItems()[0]).toMatch(/Question 1.*4 upvotes/);
+  act(() => {
+    fake.emit("question:updated", { questionId: "2", pinned: true, answered: false });
+    fake.emit("question:removed", { questionId: "1" });
+  });
+  expect(screen.getByText("1 question")).toBeTruthy();
+  expect(listItems()[0]).toMatch(/Question 2.*Pinned/);
+});
+
+it("resyncs the questions after a reconnect", async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    String(url).endsWith("/present/questions")
+      ? new Response(JSON.stringify({ questions: [question("7")] }))
+      : new Response(JSON.stringify({ interaction: null, interactions: [] })),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[]} initialScreen="qa" />);
+  act(() => void fake.emit("connect"));
+  await waitFor(() => expect(screen.getByText("Question 7")).toBeTruthy());
+  expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/present/questions");
+});
+
+it("an arrow key leaves the Q&A screen and moves to the next interaction", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ interaction: null, interactions: [] })));
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <PresenterView
+      eventId="e1"
+      joinCode="1234"
+      items={[{ id: "i1", state: "live" }, { id: "i2", state: "draft" }]}
+      initial={state({ a: 0, b: 0 }, 0)}
+      initialQuestions={[]}
+      initialScreen="qa"
+    />,
+  );
+  fireEvent.keyDown(window, { key: "ArrowRight" });
+  expect(screen.getByText("Total votes: 0")).toBeTruthy();
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/interactions/i2/start", { method: "POST" }));
+});
