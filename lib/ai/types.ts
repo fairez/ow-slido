@@ -21,6 +21,8 @@ export class AiError extends Error {
   constructor(
     readonly code: AiErrorCode,
     message: string,
+    /** Short, safe cause for the host and the server log (`HTTP 401 invalid_api_key`, `network ENOTFOUND`). Never request or reply text. */
+    readonly reason?: string,
   ) {
     super(message);
     this.name = "AiError";

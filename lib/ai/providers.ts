@@ -19,6 +19,28 @@ function backoffMs(attempt: number) {
   return 500 * 2 ** attempt;
 }
 
+const SAFE_CODE = /^[A-Za-z0-9_.-]{1,60}$/;
+
+/** `HTTP 401 invalid_api_key`: the status plus the provider's own error code, never the message text. */
+async function httpReason(res: Response): Promise<string> {
+  let code: string | undefined;
+  try {
+    const body = (await res.json()) as { error?: { code?: unknown; type?: unknown } };
+    const raw = body?.error?.code ?? body?.error?.type;
+    if (typeof raw === "string" && SAFE_CODE.test(raw)) code = raw;
+  } catch {
+    // Not JSON: keep the status only.
+  }
+  return ["HTTP " + res.status, code].filter(Boolean).join(" ");
+}
+
+/** `network ENOTFOUND`: the Node error code when there is one, so DNS, refused and timeout are told apart. */
+function networkReason(err: unknown): string {
+  const e = err as { code?: unknown; cause?: { code?: unknown } } | null;
+  const raw = e?.cause?.code ?? e?.code;
+  return typeof raw === "string" && /^[A-Z0-9_]{3,40}$/.test(raw) ? `network ${raw}` : "network";
+}
+
 function createHttpProvider(
   name: "openai" | "openrouter",
   model: string,
@@ -39,14 +61,14 @@ function createHttpProvider(
             body: JSON.stringify({ model, messages, response_format: { type: "json_object" } }),
             signal,
           });
-        } catch {
+        } catch (err) {
           if (signal.aborted) throw new AiError("timeout", "The AI request timed out");
           // Network failures are retried like 5xx; the cause is dropped so it cannot leak request data.
           if (attempt < MAX_ATTEMPTS - 1) {
             await sleep(backoffMs(attempt));
             continue;
           }
-          throw new AiError("provider", "Could not reach the AI provider");
+          throw new AiError("provider", "Could not reach the AI provider", networkReason(err));
         }
 
         if (res.status === 429 || res.status >= 500) {
@@ -54,9 +76,13 @@ function createHttpProvider(
             await sleep(backoffMs(attempt));
             continue;
           }
-          throw new AiError("provider", `The AI provider is unavailable (HTTP ${res.status})`);
+          const reason = await httpReason(res);
+          throw new AiError("provider", `The AI provider is unavailable (${reason})`, reason);
         }
-        if (!res.ok) throw new AiError("provider", `The AI provider rejected the request (HTTP ${res.status})`);
+        if (!res.ok) {
+          const reason = await httpReason(res);
+          throw new AiError("provider", `The AI provider rejected the request (${reason})`, reason);
+        }
 
         const body = (await res.json().catch(() => null)) as {
           choices?: { message?: { content?: unknown } }[];

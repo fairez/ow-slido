@@ -1,6 +1,7 @@
 import { complete, AiError, type AiMessage, type AiSchema } from "@/lib/ai";
 import type { AiProvider } from "@/lib/ai/types";
 import { getAiConfig } from "@/lib/ai/config";
+import { providerHint } from "@/lib/ai/hints";
 import { setAnalysisRunner, type AnalysisNote, type AnalysisOutput, type AnalysisRunner } from "@/lib/note-analysis";
 import { anchorCategoryNames } from "@/lib/note-category-names";
 import { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
@@ -227,9 +228,12 @@ const FALLBACK_NOTICES: Record<string, string> = {
   provider: "The AI service could not be reached, so this shows keywords only.",
 };
 
-function fallback(notes: AnalysisNote[], code: string): AnalysisOutput {
+function fallback(notes: AnalysisNote[], code: string, reason?: string): AnalysisOutput {
+  // Only our own short cause goes to the log: no key, no request or reply text, no notes.
+  console.warn(`[ai] analysis fell back to keywords: ${code}${reason ? ` (${reason})` : ""}`);
+  const hint = code === "provider" ? providerHint(reason) : "";
   return {
-    notice: FALLBACK_NOTICES[code],
+    notice: [FALLBACK_NOTICES[code], hint].filter(Boolean).join(" "),
     summary: "",
     categories: [] as AnalysisCategory[],
     keywords: fallbackKeywords(notes),
@@ -311,7 +315,7 @@ export async function analyzeNotes(
       promptVersion: ANALYSIS_PROMPT_VERSION,
     };
   } catch (err) {
-    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes, err.code);
+    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes, err.code, err.reason);
     if (err instanceof AiError) throw new Error("The AI returned a reply that could not be used. Your previous analysis is unchanged.");
     throw err;
   }

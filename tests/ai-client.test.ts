@@ -135,6 +135,40 @@ test("does not retry a 4xx", async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
+test("a rejected request carries the status and the provider's error code as a safe reason", async () => {
+  process.env.AI_PROVIDER = "openai";
+  process.env.OPENAI_API_KEY = "sk-secret-key";
+  const body = JSON.stringify({ error: { code: "invalid_api_key", message: "Incorrect API key provided: sk-secret-key" } });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { status: 401 })));
+  const err = await ai.complete([], schema, { http: noSleep }).catch((e) => e);
+  expect(err).toMatchObject({ code: "provider", reason: "HTTP 401 invalid_api_key" });
+  expect(err.message).not.toMatch(/sk-secret-key|Incorrect/);
+});
+
+test("an exhausted quota (429 after retries) keeps its reason", async () => {
+  process.env.AI_PROVIDER = "openai";
+  process.env.OPENAI_API_KEY = "sk-test";
+  const quota = () => new Response(JSON.stringify({ error: { type: "insufficient_quota" } }), { status: 429 });
+  const fetchMock = vi.fn(async () => quota());
+  vi.stubGlobal("fetch", fetchMock);
+  const err = await ai.complete([], schema, { http: noSleep }).catch((e) => e);
+  expect(err).toMatchObject({ code: "provider", reason: "HTTP 429 insufficient_quota" });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
+test("a network failure reports the Node error code, and unsafe codes or non-JSON bodies are ignored", async () => {
+  process.env.AI_PROVIDER = "openai";
+  process.env.OPENAI_API_KEY = "sk-test";
+  const dns = Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } });
+  vi.stubGlobal("fetch", vi.fn(async () => { throw dns; }));
+  expect(await ai.complete([], schema, { http: noSleep }).catch((e) => e)).toMatchObject({ reason: "network ENOTFOUND" });
+
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "has spaces and sk-secret-key" } }), { status: 400 })));
+  expect((await ai.complete([], schema, { http: noSleep }).catch((e) => e)).reason).toBe("HTTP 400");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("echo sk-secret-key my private note", { status: 400 })));
+  expect((await ai.complete([], schema, { http: noSleep }).catch((e) => e)).reason).toBe("HTTP 400");
+});
+
 test("invalid output gets one repair retry, then fails", async () => {
   process.env.AI_PROVIDER = "openai";
   process.env.OPENAI_API_KEY = "sk-test";

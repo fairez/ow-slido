@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeAll, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { events, users } from "@/db/schema";
 import type { AiProvider, ProviderRequest } from "@/lib/ai/types";
 import { createTestDb, truncateAll } from "./helpers/db";
@@ -277,6 +277,34 @@ test("falls back when the event cap is reached and when the provider fails", asy
   const failing: AiProvider = { name: "mock", model: "m", chat: async () => { throw new Error("boom"); } };
   const failed = await lib.analyzeNotes({ eventId, notes: notes(3, () => "pizza") }, { provider: failing });
   expect(failed.model).toBe(lib.FALLBACK_MODEL);
+});
+
+test("the keywords-only notice says what to fix, from the provider's reason, and the log has no secrets", async () => {
+  const { AiError } = await import("@/lib/ai/types");
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const cases: [string | undefined, RegExp | null][] = [
+      ["HTTP 401 invalid_api_key", /key was rejected/],
+      ["HTTP 429 insufficient_quota", /no credit left/],
+      ["HTTP 404 model_not_found", /AI_MODEL/],
+      ["HTTP 429 rate_limit_exceeded", /rate limiting/],
+      ["HTTP 503", /reported an error/],
+      ["network ENOTFOUND", /could not connect/],
+      [undefined, null],
+    ];
+    for (const [reason, hint] of cases) {
+      const provider: AiProvider = { name: "mock", model: "m", chat: async () => { throw new AiError("provider", "x", reason); } };
+      const out = await lib.analyzeNotes({ eventId, notes: notes(3, () => "private pizza note") }, { provider });
+      expect(out.notice).toMatch(/^The AI service could not be reached, so this shows keywords only\./);
+      if (hint) expect(out.notice).toMatch(hint);
+      else expect(out.notice).toBe("The AI service could not be reached, so this shows keywords only.");
+    }
+    const logged = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(logged).toContain("fell back to keywords: provider (HTTP 401 invalid_api_key)");
+    expect(logged).not.toMatch(/private pizza note/);
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 test("the mock provider produces a usable result", async () => {
