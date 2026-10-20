@@ -42,6 +42,7 @@ const MIGRATED = [
   "components/rating-chart.tsx",
   "components/theme-toggle.tsx",
   "components/ui/app-shell.tsx",
+  "components/workspace-switcher.tsx",
 ];
 
 /** Props that carry text a person reads or hears. */

@@ -6,14 +6,14 @@ import { can, type Action } from "./permissions";
 import { readSessionToken, verifySessionToken } from "./session";
 import { WORKSPACE_COOKIE, readCookie, resolveActiveMembership, type MembershipInfo } from "./workspace";
 
-export type AuthUser = { id: string; email: string; role: "admin"; memberships: MembershipInfo[] };
+export type AuthUser = { id: string; email: string; memberships: MembershipInfo[] };
 
 export async function getUserFromToken(token: string | null | undefined): Promise<AuthUser | null> {
   const userId = token && verifySessionToken(token);
   if (!userId) return null;
   const db = getDb();
   const [user] = await db
-    .select({ id: users.id, email: users.email, role: users.role })
+    .select({ id: users.id, email: users.email })
     .from(users)
     .where(and(eq(users.id, userId), eq(users.active, true)));
   if (!user) return null;

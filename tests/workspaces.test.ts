@@ -123,3 +123,15 @@ describe("migration 0019 on seeded data", () => {
     }
   }, 60_000);
 });
+
+it("listActiveWorkspaces names active memberships and skips suspended ones", async () => {
+  const { listActiveWorkspaces } = await import("@/lib/workspaces");
+  const [a] = await db.insert(workspaces).values({ name: "Alpha" }).returning();
+  const [b] = await db.insert(workspaces).values({ name: "Beta" }).returning();
+  const list = await listActiveWorkspaces(db, [
+    { workspaceId: a.id, role: "editor", status: "active" },
+    { workspaceId: b.id, role: "viewer", status: "suspended" },
+  ]);
+  expect(list).toEqual([{ id: a.id, name: "Alpha", role: "editor" }]);
+  expect(await listActiveWorkspaces(db, [])).toEqual([]);
+});

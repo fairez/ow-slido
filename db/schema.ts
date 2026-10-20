@@ -24,9 +24,6 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").notNull().unique(),
     passwordHash: text("password_hash").notNull(),
-    role: text("role", { enum: ["admin"] })
-      .notNull()
-      .default("admin"),
     active: boolean("active").notNull().default(true),
     firstLoginAt: timestamp("first_login_at", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -36,7 +33,6 @@ export const users = pgTable(
   },
   (t) => [
     check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
-    check("users_role_admin", sql`${t.role} = 'admin'`),
   ],
 );
 

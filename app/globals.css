@@ -232,6 +232,7 @@ input[type="radio"] {
 }
 
 .site-name {
+  white-space: nowrap;
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: var(--text-lg);
@@ -251,6 +252,59 @@ input[type="radio"] {
   align-items: center;
   min-height: 44px;
   min-width: 44px;
+}
+
+.workspace-current {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.workspace-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+
+.workspace-role {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.workspace-switcher select {
+  min-height: 44px;
+  max-width: 12rem;
+}
+
+@media (max-width: 40rem) {
+  .site-header {
+    flex-wrap: wrap;
+  }
+
+  .workspace-current,
+  .workspace-switcher {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .workspace-switcher select {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .workspace-name {
+    max-width: 100%;
+  }
+}
+
+.workspace-error {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--error);
 }
 
 .skip-link {

@@ -120,3 +120,13 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Dev server in dev mode lets `.env.local` DATABASE_URL override the shell, so screenshots sign up users in the dev DB; clean them up (I did).
   - Screenshots checked at 360/1280 (moderate page, 404): no overflow. The 404 Log in button sits tight under the paragraph.
 ---
+
+## 2026-10-20 - US-011
+- Migration 0022 drops `users.role` and `users_role_admin`; `AuthUser` no longer has `role` (nothing read it; roles come from the active membership). App shell (root layout) shows the active workspace name and role; a `WorkspaceSwitcher` select appears only with 2+ active workspaces and posts to `/api/workspaces/active`, then goes to /dashboard and refreshes. New `listActiveWorkspaces` in lib/workspaces.ts; `role.*` and `workspace.*` i18n keys (en + id).
+- Files: db/schema.ts, db/migrations/0022_*, lib/{workspaces,auth/require-admin}.ts, components/{ui/app-shell,workspace-switcher}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{workspace-switcher.test.tsx,workspaces,users,no-inline-strings}
+- **Learnings for future iterations:**
+  - AppShell is an async server component in the root layout; it reads the session cookie itself, so tests that render the layout need `next/headers` mocked.
+  - Dev server stuck in a "Compiled in Xms" reload loop (Playwright goto never settles): kill it and `rm -rf .next-shot`, then restart.
+  - `.env.local` DATABASE_URL points screenshot users at the dev DB; the script deletes the user and workspace it creates (verified 0 left).
+  - Header wraps below 40rem so the switcher takes its own row; checked 360/1280 with one and two workspaces, no overflow.
+---
