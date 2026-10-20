@@ -140,6 +140,9 @@ export const workspaceExports = pgTable(
       .default("queued"),
     /** A short code (`build_failed`, `interrupted`), never a message that could carry content. */
     error: text("error"),
+    /** Tries made so far (the first run plus retries), and the class of the last error (`Error`, `AiError:provider`), never its message. */
+    attempts: integer("attempts").notNull().default(0),
+    errorClass: text("error_class"),
     zip: bytea("zip"),
     sizeBytes: integer("size_bytes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -154,6 +157,23 @@ export const workspaceExports = pgTable(
       .on(t.workspaceId)
       .where(sql`${t.status} in ('queued', 'running')`),
   ],
+);
+
+/**
+ * Last run of each recurring job, written by `recordJobRun` (lib/jobs.ts) and read by `/api/health`. Platform
+ * data, not workspace data: no workspace, event or person is referenced.
+ */
+export const jobRuns = pgTable(
+  "job_runs",
+  {
+    name: text("name").primaryKey(),
+    lastStartedAt: timestamp("last_started_at", { withTimezone: true }).notNull(),
+    lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
+    lastStatus: text("last_status", { enum: ["running", "ok", "failed"] }).notNull(),
+    /** Class of the last error, never its message. */
+    lastErrorClass: text("last_error_class"),
+  },
+  (t) => [check("job_runs_status", sql`${t.lastStatus} in ('running', 'ok', 'failed')`)],
 );
 
 /**
@@ -704,6 +724,9 @@ export const noteAnalyses = pgTable(
     model: text("model"),
     promptVersion: text("prompt_version"),
     error: text("error"),
+    /** Tries made so far (the first run plus retries), and the class of the last error, never its message. */
+    attempts: integer("attempts").notNull().default(0),
+    errorClass: text("error_class"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },

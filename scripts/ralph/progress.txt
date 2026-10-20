@@ -164,3 +164,16 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - A count by day needs both bounds (`gte` start, `lt` next day), or a `now` in the past counts later rows.
   - Full `npm test` took 581 s (1375 tests). No UI change, so no browser check.
 ---
+
+## 2026-10-21 - US-014
+- `GET /api/health` (now `getHealth` in lib/health.ts) keeps its 503 rules (database unreachable, migrations pending) and on 200 adds `dailyJobs` (last start/finish/status/error class of the `subscriptions` and `retention` sweeps) and `jobRunner` (`exports` and `analysis`: idle/busy/stuck, queued, running, failures in 24 h, last error class). Only counts, times and classes; a test checks no env value appears.
+- Failed export and analysis jobs are retried 3 times after the first try (4 tries in all) with backoff 1 s, 5 s, 20 s (`JOB_RETRY_BACKOFF_MS`); `attempts` and `error_class` (migration 0046) are stored on `workspace_exports` and `note_analyses`, never the message. New `job_runs` table (no FK) for the daily sweeps.
+- Files: db/schema.ts, db/migrations/0046_*, lib/jobs.ts, lib/health.ts, app/api/health/route.ts, lib/note-analysis.ts, lib/workspace-export.ts, lib/retention.ts, lib/billing/expire.ts, tests/setup.ts, tests/health.test.ts, tests/note-analysis.test.ts, tests/workspace-export.test.ts, .env.example, docs/deploy-railway.md, CLAUDE.md.
+- **Learnings for future iterations:**
+  - "Retried up to 3 times" was read literally (3 retries). Permanent failures (no runner, `not_configured`/`event_cap`/`daily_cap`) are not retried, so a spent AI cap does not burn more calls.
+  - `note_analyses.error` still holds the host-facing message (up to 300 chars, shown in the panel); only the new `error_class` is content-free. US-015 (operator list) should read `error_class`, not `error`.
+  - The export sweep (hourly) and the stuck-job rules are not in `job_runs`; only the two daily jobs are. Add a name to `DAILY_JOBS` when a new daily job appears.
+  - Health tests fake a pending migration by pointing `process.cwd` at a temp dir with a long `_journal.json`, and an unreachable database by passing a `db` whose `execute` rejects to `getHealth`.
+  - tests/setup.ts sets `JOB_RETRY_BACKOFF_MS=0,0,0`, so existing "failing runner" tests do not wait; tests of the delays pass `delays`/`sleep` explicitly.
+  - Full `npm test` took 591 s (1390 tests). No UI change, so no browser check.
+---

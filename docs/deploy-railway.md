@@ -33,12 +33,12 @@ Jangan isi `TEST_DATABASE_URL`, `ALLOWED_DEV_ORIGINS`, atau `PORT` (Railway meng
 - **Migrasi berjalan otomatis** di awal start command, jadi tidak bergantung pada fitur pre-deploy Railway. Log deploy menampilkan `migrated DATABASE_URL: N applied now, M in total`. Jika migrasi gagal, proses berhenti, health check tidak lolos, dan versi lama tetap jalan. Migrasi bersifat idempoten: aman dijalankan berulang.
 - **Backup database:** aktifkan backup di service Postgres (tab Backups) sebelum dipakai untuk acara sungguhan.
 - **Biaya AI:** tiap admin yang login bisa menekan Analyze notes dan memakai key Anda. Tutup pendaftaran (`ALLOW_SIGNUP=false`) dan pasang `AI_DAILY_CALL_CAP` sesuai anggaran.
-- **Kesehatan:** `GET /api/health` mengembalikan 200 jika database terjangkau dan semua migrasi terpasang. 503 berarti `database unavailable` atau `migrations pending` (beserta jumlah terpasang dan yang diharapkan).
+- **Kesehatan:** `GET /api/health` mengembalikan 200 jika database terjangkau dan semua migrasi terpasang. 503 berarti `database unavailable` atau `migrations pending` (beserta jumlah terpasang dan yang diharapkan). Jawaban 200 juga memuat `dailyJobs` (kapan job harian `subscriptions` dan `retention` terakhir jalan, dan hasilnya) serta `jobRunner` (antrean, job yang gagal dalam 24 jam, dan job yang macet untuk ekspor dan analisis). Isinya hanya angka, waktu, dan kelas error; tidak ada nilai konfigurasi atau isi data.
 - **Domain sendiri:** tambahkan di Settings → Networking → Custom Domain. Cookie login otomatis memakai `Secure` karena Railway meneruskan `x-forwarded-proto: https`.
 
 ## Memeriksa setelah deploy
 
-1. `https://<domain>/api/health` menampilkan `{"status":"ok"}`.
+1. `https://<domain>/api/health` menampilkan `"status":"ok"`.
 2. Daftar, buat event, mulai satu poll, lalu buka halaman join dari ponsel (data seluler, bukan Wi-Fi yang sama) dan kirim satu suara. Hasilnya harus muncul di halaman presenter.
 3. Jika AI dipakai: jalankan Analyze notes sekali pada event uji, dan cek tagihan provider.
 4. Set `ALLOW_SIGNUP=false`, redeploy, dan pastikan `/signup` menolak pendaftaran baru.

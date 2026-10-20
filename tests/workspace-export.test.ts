@@ -142,6 +142,44 @@ describe("export job", () => {
     expect(row.zip).toBeNull();
   });
 
+  it("retries a failing build with backoff, then records the attempts and the error class only", async () => {
+    const { owner } = await setup();
+    const request = await lib.requestWorkspaceExport({ workspaceId: owner.workspaceId, userId: owner.user.id });
+    if (!request.ok) throw new Error("refused");
+    const slept: number[] = [];
+    let calls = 0;
+    await lib.runWorkspaceExport(request.exportId, {
+      delays: [5, 10, 15],
+      sleep: async (ms) => void slept.push(ms),
+      build: async () => {
+        calls += 1;
+        throw Object.assign(new Error("secret note text that must not be stored"), { code: "ECONNRESET" });
+      },
+    });
+    expect(calls).toBe(4);
+    expect(slept).toEqual([5, 10, 15]);
+    const [row] = await db.select().from(workspaceExports);
+    expect(row).toMatchObject({ status: "failed", error: "build_failed", attempts: 4, errorClass: "Error:ECONNRESET", zip: null });
+    expect(JSON.stringify({ ...row, zip: null })).not.toContain("secret note text");
+  });
+
+  it("finishes when a retry succeeds", async () => {
+    const { owner } = await setup();
+    const request = await lib.requestWorkspaceExport({ workspaceId: owner.workspaceId, userId: owner.user.id });
+    if (!request.ok) throw new Error("refused");
+    let calls = 0;
+    await lib.runWorkspaceExport(request.exportId, {
+      delays: [0, 0, 0],
+      build: async () => {
+        calls += 1;
+        if (calls < 2) throw new Error("flaky");
+        return Buffer.from("zip");
+      },
+    });
+    const [row] = await db.select().from(workspaceExports);
+    expect(row).toMatchObject({ status: "done", attempts: 2, errorClass: null });
+  });
+
   it("allows one queued or running export per workspace", async () => {
     const { owner } = await setup();
     const first = await lib.requestWorkspaceExport({ workspaceId: owner.workspaceId, userId: owner.user.id });

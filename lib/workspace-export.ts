@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { events, memberships, templateItems, templates, users, workspaceExports } from "@/db/schema";
 import { buildEventFiles, csvField, fileSlug } from "@/lib/export";
 import { getDb } from "@/lib/db";
+import { runWithRetry } from "@/lib/jobs";
 import { getEntitlements } from "@/lib/plans";
 import { createZip, type ZipEntry } from "@/lib/zip";
 
@@ -11,7 +12,7 @@ export const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;
 /** How long a download link works; the status endpoint hands out a new one on every call. */
 export const DOWNLOAD_LINK_TTL_MS = 5 * 60 * 1000;
 /** A running export older than this is marked failed by the sweep. */
-const STUCK_AFTER_MS = 30 * 60 * 1000;
+export const STUCK_AFTER_MS = 30 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export type WorkspaceExportStatus = (typeof workspaceExports.$inferSelect)["status"];
@@ -125,9 +126,15 @@ export async function buildWorkspaceZip(workspaceId: string, now: Date = new Dat
   return createZip(entries, now);
 }
 
-type RunOptions = { now?: Date; build?: (workspaceId: string, now: Date) => Promise<Buffer> };
+type RunOptions = {
+  now?: Date;
+  build?: (workspaceId: string, now: Date) => Promise<Buffer>;
+  /** Waits between tries and how to wait; tests pass zeros. */
+  delays?: number[];
+  sleep?: (ms: number) => Promise<void>;
+};
 
-/** Runs a queued export to the end. Never throws: a failure is recorded as `failed` with a short code. */
+/** Runs a queued export to the end, retrying a failed build with backoff. Never throws: a failure is recorded as `failed` with a short code and error class. */
 export async function runWorkspaceExport(exportId: string, options: RunOptions = {}) {
   const db = getDb();
   const now = options.now ?? new Date();
@@ -138,20 +145,25 @@ export async function runWorkspaceExport(exportId: string, options: RunOptions =
     .returning({ workspaceId: workspaceExports.workspaceId });
   if (!claimed) return;
 
-  try {
-    const zip = await (options.build ?? buildWorkspaceZip)(claimed.workspaceId, now);
+  const result = await runWithRetry(() => (options.build ?? buildWorkspaceZip)(claimed.workspaceId, now), {
+    delays: options.delays,
+    sleep: options.sleep,
+    onAttempt: (attempts) => db.update(workspaceExports).set({ attempts }).where(eq(workspaceExports.id, exportId)).then(() => undefined),
+  });
+  if (result.ok) {
+    const zip = result.value;
     await db
       .update(workspaceExports)
-      .set({ status: "done", zip, sizeBytes: zip.length, finishedAt: now, expiresAt: new Date(now.getTime() + EXPORT_TTL_MS) })
+      .set({ status: "done", zip, sizeBytes: zip.length, errorClass: null, finishedAt: now, expiresAt: new Date(now.getTime() + EXPORT_TTL_MS) })
       .where(eq(workspaceExports.id, exportId));
-  } catch (error) {
-    // The message may quote content, so only the code is stored and logged.
-    console.error("> workspace export failed:", (error as { code?: string } | null)?.code ?? "build_failed");
-    await db
-      .update(workspaceExports)
-      .set({ status: "failed", error: "build_failed", zip: null, finishedAt: now })
-      .where(eq(workspaceExports.id, exportId));
+    return;
   }
+  // The message may quote content, so only the class is stored and logged.
+  console.error("> workspace export failed:", result.errorClass);
+  await db
+    .update(workspaceExports)
+    .set({ status: "failed", error: "build_failed", errorClass: result.errorClass, zip: null, finishedAt: now })
+    .where(eq(workspaceExports.id, exportId));
 }
 
 /** Starts the job after the response is on its way; the request never waits for the build. */

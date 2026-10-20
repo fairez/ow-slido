@@ -212,6 +212,43 @@ test("a failing runner marks the job failed and allows a retry", async () => {
   expect((await start()).status).toBe(202);
 });
 
+test("a failing runner is retried three times, then the attempts and the error class are stored without the message", async () => {
+  await addNote("one");
+  let calls = 0;
+  lib.setAnalysisRunner(async () => {
+    calls += 1;
+    throw Object.assign(new Error("note says hello"), { name: "AiError", code: "provider" });
+  });
+  await start();
+  await vi.waitFor(async () => expect((await latest()).status).toBe("failed"));
+  const [row] = await db.select().from(noteAnalyses);
+  expect(calls).toBe(4);
+  expect(row).toMatchObject({ attempts: 4, errorClass: "AiError:provider" });
+});
+
+test("a runner that fails once and then works ends done", async () => {
+  await addNote("one");
+  let calls = 0;
+  lib.setAnalysisRunner(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("flaky");
+    return output;
+  });
+  await start();
+  await vi.waitFor(async () => expect((await latest()).status).toBe("done"));
+  const [row] = await db.select().from(noteAnalyses);
+  expect(row).toMatchObject({ attempts: 2, errorClass: null });
+});
+
+test("a missing runner or a spent cap is not retried", async () => {
+  await addNote("one");
+  lib.setAnalysisRunner(null);
+  await start();
+  await vi.waitFor(async () => expect((await latest()).status).toBe("failed"));
+  const [row] = await db.select().from(noteAnalyses);
+  expect(row.attempts).toBe(1);
+});
+
 test("a job lost to a restart is failed after the stale window", async () => {
   await addNote("one");
   await db.insert(noteAnalyses).values({

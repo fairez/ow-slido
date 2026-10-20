@@ -4,6 +4,7 @@ import { recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { getEmailSender } from "@/lib/email";
 import { DEFAULT_LOCALE, t } from "@/lib/i18n";
+import { recordJobRun } from "@/lib/jobs";
 import {
   DAY_MS,
   RETENTION_NOTICE_DAYS,
@@ -159,7 +160,7 @@ const SWEEP_INTERVAL_MS = DAY_MS;
 /** Runs `runRetention` now and then once a day. The timer does not keep the process alive. */
 export function startRetentionSweep(db: Db = getDb()): () => void {
   const run = () =>
-    runRetention(db).catch((error) =>
+    recordJobRun("retention", () => runRetention(db), db).catch((error) =>
       console.error("> retention sweep failed:", error instanceof Error ? error.message : error),
     );
   void run();

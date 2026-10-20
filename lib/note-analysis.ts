@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { publish } from "@/lib/realtime/publisher";
 import { applyEdit, type AnalysisEdit, type EditableCategory, type EditableKeyword } from "@/lib/analysis-edit";
 import { normalizeKeywords } from "@/lib/note-keywords";
+import { errorClass, permanentError, runWithRetry } from "@/lib/jobs";
 
 /** A job that has not finished after this long is treated as lost (for example after a restart). */
 export const ANALYSIS_STALE_MS = 5 * 60_000;
@@ -137,6 +138,15 @@ export async function startAnalysis(eventId: string, interactionId: string): Pro
   return { ok: true, analysis: view(row, row.notesSnapshotHash), done };
 }
 
+async function markFailed(db: Db, id: string, error: unknown, failureClass: string) {
+  const message = error instanceof Error && error.message ? error.message : "The analysis failed";
+  await db
+    .update(noteAnalyses)
+    .set({ status: "failed", error: message.slice(0, 300), errorClass: failureClass, finishedAt: new Date() })
+    .where(eq(noteAnalyses.id, id))
+    .catch(() => {});
+}
+
 async function runJob(id: string, eventId: string, interactionId: string, notes: AnalysisNote[]) {
   const db = getDb();
   try {
@@ -144,31 +154,37 @@ async function runJob(id: string, eventId: string, interactionId: string, notes:
     notifyAnalysisChanged(eventId, interactionId);
     // Let the caller return before the work begins.
     await new Promise<void>((resolve) => setImmediate(resolve));
-    if (!runner) throw new Error("Analysis is not available");
-    const out = await runner({ eventId, interactionId, notes });
-    await db
-      .update(noteAnalyses)
-      .set({
-        status: "done",
-        summary: out.summary,
-        categories: out.categories,
-        keywords: out.keywords,
-        model: out.model,
-        promptVersion: out.promptVersion,
-        error: out.notice ?? null,
-        finishedAt: new Date(),
-      })
-      .where(eq(noteAnalyses.id, id));
-    notifyAnalysisChanged(eventId, interactionId);
+    const result = await runWithRetry(
+      async () => {
+        if (!runner) throw permanentError("Analysis is not available");
+        return runner({ eventId, interactionId, notes });
+      },
+      { onAttempt: (attempts) => db.update(noteAnalyses).set({ attempts }).where(eq(noteAnalyses.id, id)).then(() => undefined) },
+    );
+    if (result.ok) {
+      const out = result.value;
+      await db
+        .update(noteAnalyses)
+        .set({
+          status: "done",
+          summary: out.summary,
+          categories: out.categories,
+          keywords: out.keywords,
+          model: out.model,
+          promptVersion: out.promptVersion,
+          error: out.notice ?? null,
+          errorClass: null,
+          finishedAt: new Date(),
+        })
+        .where(eq(noteAnalyses.id, id));
+    } else {
+      await markFailed(db, id, result.error, result.errorClass);
+    }
   } catch (err) {
-    const message = err instanceof Error && err.message ? err.message : "The analysis failed";
-    await db
-      .update(noteAnalyses)
-      .set({ status: "failed", error: message.slice(0, 300), finishedAt: new Date() })
-      .where(eq(noteAnalyses.id, id))
-      .catch(() => {});
-    notifyAnalysisChanged(eventId, interactionId);
+    // The bookkeeping itself failed (for example the database went away mid-job).
+    await markFailed(db, id, err, errorClass(err));
   }
+  notifyAnalysisChanged(eventId, interactionId);
 }
 
 /**
