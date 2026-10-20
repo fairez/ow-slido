@@ -16,7 +16,7 @@ export type SharedNotesConfig = {
 };
 export type OpenTextConfig = { prompt: string; maxResponsesPerParticipant: number };
 export type RatingConfig = { prompt: string; scale: "stars5" | "numeric10" };
-export type QaConfig = { prompt: string; moderation: "open" | "moderated" };
+export type QaConfig = { prompt: string; moderation: "open" | "moderated"; profanityFilter: boolean };
 
 export const QA_DEFAULT_TITLE = "Q&A";
 export const QA_DEFAULT_PROMPT = "Ask a question";
@@ -38,7 +38,7 @@ const DEFAULTS: ConfigByType = {
   sharedNotes: { prompt: "", maxNotesPerParticipant: 3, moderation: "open", showAuthorNames: false },
   openText: { prompt: "", maxResponsesPerParticipant: 1 },
   rating: { prompt: "", scale: "stars5" },
-  qa: { prompt: QA_DEFAULT_PROMPT, moderation: "open" },
+  qa: { prompt: QA_DEFAULT_PROMPT, moderation: "open", profanityFilter: true },
 };
 
 function intField(
@@ -104,6 +104,10 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
     if (b.moderation !== undefined) {
       if (b.moderation !== "open" && b.moderation !== "moderated") error = { error: "api.moderationInvalid" };
       else config.moderation = b.moderation;
+    }
+    if (!error && b.profanityFilter !== undefined) {
+      if (typeof b.profanityFilter !== "boolean") error = { error: "api.profanityFilterBoolean" };
+      else config.profanityFilter = b.profanityFilter;
     }
   } else if (type === "sharedNotes") {
     error = intField(b, "maxNotesPerParticipant", "api.notesPerParticipantRange", NOTES_MIN, NOTES_MAX, config);

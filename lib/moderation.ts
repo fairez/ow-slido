@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, questionVotes, questions, sharedNoteVotes, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { publish } from "@/lib/realtime/publisher";
-import { toPublicQuestion } from "@/lib/questions";
+import { resolveEventQa, toPublicQuestion } from "@/lib/questions";
 import type { HostNote } from "@/lib/note-types";
 import type { HostQuestion } from "@/lib/question-types";
 
@@ -14,23 +14,29 @@ const toHostQuestion = (row: Row, upvotes: number): HostQuestion => ({
   status: row.status === "pending" ? "pending" : "approved",
 });
 
-/** Pending and approved questions for the host (rejected ones are gone from the queue): pinned first, then newest. */
-export async function listHostQuestions(eventId: string): Promise<HostQuestion[]> {
+/** Pending and approved questions of one Q&A for the host (rejected ones are gone from the queue): pinned first, then newest. */
+export async function listHostQuestions(interactionId: string): Promise<HostQuestion[]> {
   const db = getDb();
   const rows = await db
     .select()
     .from(questions)
-    .where(and(eq(questions.eventId, eventId), inArray(questions.status, ["pending", "approved"])))
+    .where(and(eq(questions.interactionId, interactionId), inArray(questions.status, ["pending", "approved"])))
     .orderBy(desc(questions.pinned), desc(questions.createdAt));
   if (rows.length === 0) return [];
   const counts = await db
     .select({ questionId: questionVotes.questionId, n: sql<number>`count(*)::int` })
     .from(questionVotes)
     .innerJoin(questions, eq(questions.id, questionVotes.questionId))
-    .where(eq(questions.eventId, eventId))
+    .where(eq(questions.interactionId, interactionId))
     .groupBy(questionVotes.questionId);
   const countById = new Map(counts.map((c) => [c.questionId, c.n]));
   return rows.map((r) => toHostQuestion(r, countById.get(r.id) ?? 0));
+}
+
+/** Host queue of the event's live (else first) Q&A; empty when it has none. */
+export async function listEventHostQuestions(eventId: string): Promise<HostQuestion[]> {
+  const interactionId = await resolveEventQa(getDb(), eventId);
+  return interactionId ? listHostQuestions(interactionId) : [];
 }
 
 export type ModerationChange = { status?: unknown; pinned?: unknown; answered?: unknown };
@@ -50,11 +56,11 @@ async function upvoteCount(questionId: string) {
 }
 
 /**
- * Applies a host change to a question of the event. `status` may move a pending question to
+ * Applies a host change to a question of the Q&A. `status` may move a pending question to
  * approved/rejected; `pinned` and `answered` only apply to approved questions.
  */
 export async function moderateQuestion(
-  eventId: string,
+  interactionId: string,
   questionId: string,
   change: ModerationChange,
 ): Promise<ModerationResult> {
@@ -74,7 +80,7 @@ export async function moderateQuestion(
     const [current] = await tx
       .select()
       .from(questions)
-      .where(and(eq(questions.id, questionId), eq(questions.eventId, eventId)))
+      .where(and(eq(questions.id, questionId), eq(questions.interactionId, interactionId)))
       .for("update");
     if (!current || current.status === "rejected") return notFound;
 
@@ -102,21 +108,26 @@ export async function moderateQuestion(
   if (row.status === "rejected") return { ok: true, question: null };
   const question = toHostQuestion(row, await upvoteCount(row.id));
   if (approvedNow) {
-    publish(eventId, "question:added", { question: toPublicQuestion(row, question.upvotes) });
+    publish(row.eventId, "question:added", { interactionId, question: toPublicQuestion(row, question.upvotes) });
   } else if (row.status === "approved") {
-    publish(eventId, "question:updated", { questionId: row.id, pinned: row.pinned, answered: row.answered });
+    publish(row.eventId, "question:updated", {
+      interactionId,
+      questionId: row.id,
+      pinned: row.pinned,
+      answered: row.answered,
+    });
   }
   return { ok: true, question };
 }
 
 /** Deletes a question (any status). Participants are told only if it was visible to them. */
-export async function deleteQuestion(eventId: string, questionId: string): Promise<boolean> {
+export async function deleteQuestion(interactionId: string, questionId: string): Promise<boolean> {
   const [row] = await getDb()
     .delete(questions)
-    .where(and(eq(questions.id, questionId), eq(questions.eventId, eventId)))
-    .returning({ status: questions.status });
+    .where(and(eq(questions.id, questionId), eq(questions.interactionId, interactionId)))
+    .returning({ status: questions.status, eventId: questions.eventId });
   if (!row) return false;
-  if (row.status === "approved") publish(eventId, "question:removed", { questionId });
+  if (row.status === "approved") publish(row.eventId, "question:removed", { interactionId, questionId });
   return true;
 }
 

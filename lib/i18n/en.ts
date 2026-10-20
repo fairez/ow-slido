@@ -497,6 +497,7 @@ export const en = {
   "api.aiNoticeRequired": "Accept the AI notice before the first analysis",
   "api.moderationInvalid": "Moderation must be 'open' or 'moderated'",
   "api.showAuthorNamesBoolean": "showAuthorNames must be true or false",
+  "api.profanityFilterBoolean": "profanityFilter must be true or false",
   "api.scaleInvalid": "Scale must be 'stars5' or 'numeric10'",
   "api.notesMax": "Notes must be at most {max} characters",
   "api.namesMax": "Names must be at most {max} characters",

@@ -8,7 +8,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isUuid } from "@/lib/events";
 import { getT } from "@/lib/i18n/server";
-import { listHostNotes, listHostQuestions } from "@/lib/moderation";
+import { listEventHostQuestions, listHostNotes } from "@/lib/moderation";
 import { findOwnedEvent } from "@/lib/polls";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function ModeratePage({ params }: { params: Promise<{ id: s
       <ModerationPanel
         eventId={event.id}
         initialMode={event.moderationMode}
-        initialQuestions={await listHostQuestions(event.id)}
+        initialQuestions={await listEventHostQuestions(event.id)}
         initialNotes={await listHostNotes(event.id)}
         canChangeMode={can(membership.role, "event.edit")}
       />

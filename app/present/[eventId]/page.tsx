@@ -9,7 +9,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { findOwnedEvent } from "@/lib/polls";
 import { getPresenterState } from "@/lib/presenter";
-import { listApprovedQuestions } from "@/lib/questions";
+import { listEventQuestions } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ export default async function PresentPage({
         initial={await getPresenterState(event.id)}
         joinCode={event.joinCode}
         items={items}
-        initialQuestions={await listApprovedQuestions(event.id)}
+        initialQuestions={await listEventQuestions(event.id)}
         initialScreen={(await searchParams).view === "qa" ? "qa" : "interaction"}
       />
     </main>

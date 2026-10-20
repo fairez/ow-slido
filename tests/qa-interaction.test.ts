@@ -89,9 +89,17 @@ test.each([
   { prompt: 5 },
   { title: "" },
   { moderation: "strict" },
+  { profanityFilter: "no" },
 ])("rejects invalid qa config %j with 400", async (rest) => {
   const { res } = await create({ type: "qa", ...rest });
   expect(res.status).toBe(400);
+});
+
+test("the profanity filter is a boolean that defaults to on", async () => {
+  const { json } = await create({ type: "qa" });
+  expect(json.interaction.config).toMatchObject({ profanityFilter: true });
+  const off = await create({ type: "qa", profanityFilter: false });
+  expect(off.json.interaction.config).toMatchObject({ profanityFilter: false });
 });
 
 test("accepts a prompt of exactly 200 characters", () => {

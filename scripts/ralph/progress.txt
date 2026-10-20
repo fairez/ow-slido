@@ -311,3 +311,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - A live Q&A holds the one-live slot: starting a poll pauses it (and broadcasts that state change). US-029/030 decide how Q&A and the other types coexist.
   - Dev and test DBs migrated to 0031. No browser check: the only UI change is the type label on the host list (unit-tested); the Q&A UI stories (US-029/030) should screenshot.
 ---
+## 2026-10-20 - US-028
+- Question routes are written once in `lib/question-routes.ts` and mounted twice. New paths under `/api/interactions/[id]/questions`: POST ask, GET approved, `/queue` (host: pending + approved), `/[questionId]` PATCH/DELETE, `/[questionId]/upvote`. The old event paths (`/api/events/[id]/questions[/qid]`, `/moderation`, `/present/questions`, `/api/questions/[id]/upvote`) resolve the event's live Q&A, else its first (`resolveEventQa`), and moderate/upvote a question in whichever Q&A it sits. The event-level POST creates a paused Q&A only after the caller proves to be a participant; an event with no Q&A lists as `{interactionId: null, questions: []}`.
+- `lib/questions.ts` and `lib/moderation.ts` take `interactionId` (submit, list approved, host queue, moderate, delete; `toggleUpvote` has an optional `interactionId` guard). Moderation and the profanity filter come from the Q&A config; new `profanityFilter` boolean (default true, missing = true for older rows). Every `question:*` socket message carries `interactionId`; list responses carry it too.
+- `PATCH /api/events/[id]` with `moderationMode` also sets `config.moderation` on the event's Q&As (jsonb_set in the same transaction), so the existing moderation panel switch still works until US-030 gives each Q&A its own control.
+- Files: lib/{questions,moderation,question-routes,interaction-config}.ts, app/api/interactions/[id]/questions/**, app/api/events/[id]/{questions,moderation,present/questions,route.ts}, app/api/questions/[id]/upvote, app/{e,present}/[eventId]/page.tsx, app/dashboard/events/[id]/moderate/page.tsx, lib/i18n/{en,id}.ts, tests/{question-interaction-routes,questions,qa-interaction}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Clients (qa-tab, presenter-view, moderation-panel) still use the old event paths and do not filter socket messages by `interactionId`; with two Q&As in one event they would mix. US-029 (participant) and US-030 (host/presenter) must pass the Q&A id, call the new paths and drop messages for other interactions.
+  - No state check on submit yet (a paused or closed Q&A still accepts questions); US-029 decides what closed means for participants.
+  - Tests that flip moderation should PATCH the event (or set the Q&A `config.moderation`), not update `events.moderation_mode` after the Q&A exists.
+  - `events.join_code` must be 4-6 digits in direct inserts.
+  - No UI change, no browser check. Full suite: 873 tests green, e2e presenter-qa passes, typecheck and eslint (source dirs) clean.
+---

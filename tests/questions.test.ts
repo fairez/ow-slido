@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { events, participants, questionVotes, questions } from "@/db/schema";
+import { participants, questionVotes, questions } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -51,8 +51,9 @@ const list = async (c: string | null = cookie) => {
   const res = await route.GET(req("GET", undefined, c), ctx());
   return { res, json: await res.json() };
 };
+// Moderation lives on the Q&A's config; the event-level PATCH is what sets it for the event's Q&As.
 const setMode = (moderationMode: "open" | "moderated") =>
-  db.update(events).set({ moderationMode }).where(eq(events.id, eventId));
+  eventRoute.PATCH(req("PATCH", { moderationMode }, hostCookie), ctx());
 
 beforeEach(async () => {
   await truncateAll(db);

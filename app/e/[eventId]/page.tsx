@@ -6,7 +6,7 @@ import { getDb } from "@/lib/db";
 import { ParticipantView } from "@/components/participant-view";
 import { isUuid } from "@/lib/events";
 import { getLiveInteraction } from "@/lib/live-view";
-import { listApprovedQuestions } from "@/lib/questions";
+import { listEventQuestions } from "@/lib/questions";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export default async function ParticipantPage({
       <ParticipantView
         eventId={event.id}
         initial={await getLiveInteraction(event.id, participantId)}
-        initialQuestions={await listApprovedQuestions(event.id, participantId)}
+        initialQuestions={await listEventQuestions(event.id, participantId)}
       />
     </main>
   );
