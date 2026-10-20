@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { users } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -46,6 +47,7 @@ beforeEach(async () => {
       body: JSON.stringify({ email: "host@b.co", password: "password123" }),
     }),
   );
+  await db.update(users).set({ emailVerifiedAt: new Date() });
   hostCookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
   const created = await eventsRoute.POST(
     req("POST", { name: "E", startsAt: "2026-01-01T10:00:00Z", endsAt: "2026-01-01T12:00:00Z" }),

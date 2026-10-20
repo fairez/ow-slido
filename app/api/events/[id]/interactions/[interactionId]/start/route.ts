@@ -1,5 +1,5 @@
 import { apiMessage } from "@/lib/i18n/server";
-import { requireMember } from "@/lib/auth/require-admin";
+import { denyUnlessVerified, requireMember } from "@/lib/auth/require-admin";
 import { startInteraction } from "@/lib/interaction-state";
 import { eventNotFound, findInteraction, findOwnedEvent, interactionNotFound } from "@/lib/polls";
 
@@ -8,6 +8,8 @@ type Context = { params: Promise<{ id: string; interactionId: string }> };
 export async function POST(request: Request, { params }: Context) {
   const auth = await requireMember(request, "live.run");
   if (!auth.ok) return auth.response;
+  const unverified = denyUnlessVerified(request, auth.user);
+  if (unverified) return unverified;
   const { id, interactionId } = await params;
   const event = await findOwnedEvent(id, auth.workspaceId);
   if (!event) return eventNotFound(request);

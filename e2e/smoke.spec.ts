@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { verifyEmail } from "./verify-email";
 
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
@@ -10,6 +11,7 @@ test("host runs a poll and a participant's vote reaches the presenter page", asy
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Create account" }).click();
   await page.waitForURL("**/dashboard");
+  await verifyEmail(email);
 
   const now = Date.now();
   await page.getByLabel("Event name").fill("E2E event");

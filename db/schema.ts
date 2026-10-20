@@ -28,6 +28,8 @@ export const users = pgTable(
     firstLoginAt: timestamp("first_login_at", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    // Defaults to now() so existing users and rows inserted directly count as verified; sign-up sets null.
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }).defaultNow(),
     firstInteractionLiveAt: timestamp("first_interaction_live_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

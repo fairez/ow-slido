@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { VerifyBanner } from "@/components/verify-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { getUserFromToken } from "@/lib/auth/require-admin";
@@ -17,7 +18,7 @@ async function loadWorkspaces() {
   const active = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!active) return null;
   const list = await listActiveWorkspaces(getDb(), user.memberships);
-  return { list, activeId: active.workspaceId };
+  return { list, activeId: active.workspaceId, unverifiedEmail: user.emailVerifiedAt ? null : user.email };
 }
 
 export async function AppShell({ children }: { children: ReactNode }) {
@@ -39,6 +40,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
         {workspaces ? <WorkspaceSwitcher workspaces={workspaces.list} activeId={workspaces.activeId} /> : null}
         <ThemeToggle />
       </header>
+      {workspaces?.unverifiedEmail ? <VerifyBanner email={workspaces.unverifiedEmail} /> : null}
       {children}
     </>
   );

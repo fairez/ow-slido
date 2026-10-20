@@ -6,14 +6,14 @@ import { can, type Action } from "./permissions";
 import { readSessionToken, verifySessionToken } from "./session";
 import { WORKSPACE_COOKIE, readCookie, resolveActiveMembership, type MembershipInfo } from "./workspace";
 
-export type AuthUser = { id: string; email: string; memberships: MembershipInfo[] };
+export type AuthUser = { id: string; email: string; emailVerifiedAt: Date | null; memberships: MembershipInfo[] };
 
 export async function getUserFromToken(token: string | null | undefined): Promise<AuthUser | null> {
   const userId = token && verifySessionToken(token);
   if (!userId) return null;
   const db = getDb();
   const [user] = await db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, email: users.email, emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
     .where(and(eq(users.id, userId), eq(users.active, true)));
   if (!user) return null;
@@ -68,6 +68,15 @@ export async function requireMember(
   }
   if (action && !can(membership.role, action)) return { ok: false, response: forbidden(request) };
   return { ok: true, user, workspaceId: membership.workspaceId, role: membership.role };
+}
+
+/** 403 with reason `email_unverified` for actions that need a confirmed email; null when the user may go on. */
+export function denyUnlessVerified(request: Request, user: AuthUser): Response | null {
+  if (user.emailVerifiedAt) return null;
+  return Response.json(
+    { error: serverT(request, "api.emailUnverified"), reason: "email_unverified" },
+    { status: 403 },
+  );
 }
 
 export function forbidden(request: Request): Response {

@@ -139,3 +139,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Import nodemailer's type as `type Transporter` from "nodemailer"; the namespace form fails typecheck.
   - `npm run lint` still reports only generated-file errors; `npx eslint lib tests db app components` is the clean check.
 ---
+## 2026-10-20 - US-013
+- Sign-up now rate limits per IP and email (5/h), emails a verification link (`lib/auth/verification.ts`: `sendVerificationEmail`, `verifyEmailToken`) and leaves `users.email_verified_at` null. `/verify?token=` page consumes the token; `POST /api/auth/verify/resend` (session, rate limited) re-sends; `VerifyBanner` in AppShell shows until verified. Migration 0024 adds the column.
+- `denyUnlessVerified(request, user)` (require-admin.ts) returns 403 `{reason: "email_unverified"}`; applied to the interaction start route. Invitation routes (US-015) must call it too.
+- Files: db/schema.ts, db/migrations/0024_*, lib/auth/{verification,require-admin}.ts, app/api/auth/{signup,verify/resend}, app/verify, components/{verify-banner,ui/app-shell}.tsx, lib/i18n/{en,id}.ts, tests/{email-verification,setup}.ts, e2e/verify-email.ts
+- **Learnings for future iterations:**
+  - The column defaults to now(), so users inserted directly (tests, backfill) count as verified; only the sign-up route inserts null. Tests that sign up through the route and then start interactions must set `emailVerifiedAt` (see interaction-state.test.ts); e2e specs call `verifyEmail(email)` from e2e/verify-email.ts.
+  - tests/setup.ts (vitest setupFiles) resets the rate-limit store before every test; sign-up tests share one fake IP.
+  - Never run two vitest runs at once: they share ow_slido_test and truncate each other's data. `pkill -f vitest` kills your own shell.
+  - The banner must not use role="status": e2e specs locate the created-event notice with `getByRole("status")`.
+  - Dev DB needed `npm run db:migrate` before the dev server could sign up users; screenshot users were deleted afterwards.
+  - Screenshots at 360/1280 (banner, failed verify page): no overflow.
+---

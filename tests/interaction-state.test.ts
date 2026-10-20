@@ -62,6 +62,7 @@ async function newHost(email: string) {
       body: JSON.stringify({ email, password: "password123" }),
     }),
   );
+  await db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.email, email));
   return (res.headers.get("set-cookie") ?? "").split(";")[0];
 }
 

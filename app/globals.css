@@ -1658,3 +1658,18 @@ a.ui-button:not([data-variant]) {
   min-height: 44px;
   cursor: pointer;
 }
+
+.verify-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.verify-banner p {
+  margin: 0;
+  flex: 1 1 18rem;
+}

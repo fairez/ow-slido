@@ -1,13 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
+import { verifyEmail } from "./verify-email";
 
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
 async function createEvent(page: Page) {
   await page.goto("/signup");
-  await page.getByLabel("Email").fill(`host-${Date.now()}@example.com`);
+  const email = `host-${Date.now()}@example.com`;
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Create account" }).click();
   await page.waitForURL("**/dashboard");
+  await verifyEmail(email);
   const now = Date.now();
   await page.getByLabel("Event name").fill("Notes e2e");
   await page.getByLabel("Start").fill(localInput(new Date(now - 3_600_000)));
