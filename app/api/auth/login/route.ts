@@ -3,7 +3,9 @@ import { eq, sql } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { readCredentials } from "@/lib/auth/credentials";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { createPendingTwoFactorToken } from "@/lib/auth/pending-two-factor";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
+import { getTwoFactorStatus, isTwoFactorConfigured } from "@/lib/auth/two-factor";
 import { getDb } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -36,6 +38,14 @@ export async function POST(request: Request) {
   const [user] = await getDb().select().from(users).where(eq(users.email, creds.email));
   const passwordOk = await verifyPassword(creds.password, user?.passwordHash ?? (await dummyHash));
   if (!user || !user.active || !passwordOk) return invalid(request);
+
+  // With 2FA on, the password alone never makes a session: hand out a short-lived pending token instead.
+  if ((await getTwoFactorStatus(getDb(), user.id)).enabled) {
+    if (!isTwoFactorConfigured()) {
+      return Response.json({ error: serverT(request, "api.twoFactorUnavailable") }, { status: 503 });
+    }
+    return Response.json({ twoFactorRequired: true, pendingToken: createPendingTwoFactorToken(user.id) });
+  }
 
   await getDb()
     .update(users)

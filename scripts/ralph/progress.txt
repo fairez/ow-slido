@@ -26,3 +26,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - No replay protection on a TOTP step yet (a code works again within its window); add it with the login step if US-002 needs it.
   - `npm run lint` reports errors only in the gitignored `scripts/ralph/screens/*.mjs` scratch files; `npx eslint lib tests db app components` is clean. Full `npm test` took ~470 s this run.
 ---
+
+## 2026-10-21 - US-002
+- Login with 2FA on returns `{twoFactorRequired: true, pendingToken}` and no cookie. `POST /api/auth/2fa/verify {pendingToken, code}` takes an authenticator code (6 digits, spaces allowed) or a recovery code in the same field and then sets the session cookie. Enrolment: `POST /api/auth/2fa/enrol` (uri + secret), `/confirm {code}` (recovery codes once), `/disable {password, code}`, `GET /api/auth/2fa` (status for the account page).
+- Files: lib/auth/pending-two-factor.ts, lib/auth/two-factor.ts (`verifySecondFactor`, `disableTwoFactor`), lib/auth/password-reset.ts (`setSessionsValidAfter`), app/api/auth/login + reset routes, app/api/auth/2fa/*, lib/i18n en/id, tests/two-factor-routes.test.ts.
+- **Learnings for future iterations:**
+  - The pending token is `2fa-pending.<userId>.<expires>.<sig>` (5 min, signed with SESSION_SECRET); the prefix is signed, so it never parses as a session token. A bad token, an expired one and a wrong code all return the same 401 `api.twoFactorInvalid`; a wrong password on login stays the usual `api.loginInvalid`.
+  - A recovery code at login and a successful disable call `setSessionsValidAfter` (other devices drop) and then issue a fresh cookie; enabling 2FA touches no session. An authenticator code at login leaves other sessions alone.
+  - `POST /api/auth/reset` withholds the cookie when the user has 2FA (`{ok, loginRequired: true}`), so an emailed link cannot replace the second factor. The reset form still pushes to /dashboard, which redirects to login; US-003 may want to route it to /login directly. Invitation accept only signs in brand-new accounts, which have no 2FA.
+  - A user with 2FA on while `TWOFA_ENCRYPTION_KEY` is missing gets 503 at login rather than a password-only session.
+  - Attempt budget stays one key per user (`2fa:<userId>`), shared by confirm, verify and disable; verify also has a per-IP limit (30 per 15 min). The enrolment confirm uses one attempt, so route tests count that when probing the limit.
+  - tests/totp `totp(secret, timeMs)` needs the time argument; route tests wrap it as `totp(secret)`.
+---

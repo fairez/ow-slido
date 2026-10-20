@@ -26,6 +26,11 @@ export async function sendResetEmail(db: Db, request: Request, email: string) {
   });
 }
 
+/** Ends every session issued before now; the caller sets a fresh cookie for the current device. */
+export async function setSessionsValidAfter(db: Db, userId: string) {
+  await db.update(users).set({ sessionsValidAfter: new Date() }).where(eq(users.id, userId));
+}
+
 /** Stores a new password, clears the forced-change flag and ends every session issued before now. */
 export async function setPassword(db: Db, userId: string, password: string) {
   await db

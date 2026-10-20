@@ -164,3 +164,27 @@ export async function remainingRecoveryCodes(db: Db, userId: string): Promise<nu
     .where(and(eq(recoveryCodes.userId, userId), isNull(recoveryCodes.usedAt)));
   return rows.length;
 }
+
+export type SecondFactorResult = { ok: true; method: "totp" | "recovery" } | Extract<VerifyResult, { ok: false }>;
+
+/**
+ * One field for both kinds: six digits (spaces allowed) is an authenticator code, anything else is tried
+ * as a recovery code. A spent recovery code reports `method: "recovery"` so the caller can end other sessions.
+ */
+export async function verifySecondFactor(db: Db, userId: string, input: string, now = Date.now()): Promise<SecondFactorResult> {
+  const compact = input.replace(/\s+/g, "");
+  if (/^\d{6}$/.test(compact)) {
+    const result = await verifyTotpCode(db, userId, compact, now);
+    return result.ok ? { ok: true, method: "totp" } : result;
+  }
+  const result = await verifyRecoveryCode(db, userId, input);
+  return result.ok ? { ok: true, method: "recovery" } : result;
+}
+
+/** Removes the secret and every recovery code; the caller decides what happens to the user's sessions. */
+export async function disableTwoFactor(db: Db, userId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, userId));
+    await tx.delete(userTotp).where(eq(userTotp.userId, userId));
+  });
+}

@@ -2,6 +2,7 @@ import { serverT } from "@/lib/i18n/server";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth/credentials";
 import { resetPasswordWithToken } from "@/lib/auth/password-reset";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
+import { getTwoFactorStatus } from "@/lib/auth/two-factor";
 import { getDb } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
 
   const userId = token ? await resetPasswordWithToken(getDb(), token, password) : null;
   if (!userId) return Response.json({ error: serverT(request, "api.resetLinkInvalid") }, { status: 400 });
+
+  // An emailed link must not stand in for the second factor: with 2FA on the user logs in normally.
+  if ((await getTwoFactorStatus(getDb(), userId)).enabled) return Response.json({ ok: true, loginRequired: true });
 
   return Response.json({ ok: true }, { headers: { "set-cookie": sessionSetCookie(userId, isSecureRequest(request)) } });
 }
