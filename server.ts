@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { config, parse } from "dotenv";
 import next from "next";
 import { startSubscriptionSweep } from "./lib/billing/expire";
+import { rebuildLeaderboard } from "./lib/leaderboard";
 import { attachSocketServer } from "./lib/realtime/socket-server";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -21,12 +22,14 @@ const port = Number(process.env.PORT ?? 3000);
 const app = next({ dev, port });
 const handle = app.getRequestHandler();
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
   const httpServer = createServer((req, res) => {
     handle(req, res);
   });
   attachSocketServer(httpServer);
   startSubscriptionSweep();
+  const restored = await rebuildLeaderboard();
+  console.log(`> Leaderboard restored (${restored} scores)`);
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });

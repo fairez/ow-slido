@@ -508,3 +508,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-host.mjs): builder with validation error, list, live presenter with seconds and answer count, time up, closed with correct option; no horizontal overflow, only the expected 400 console errors. The fixed presenter buttons overlap the last row at 360, as on other presenter screens.
   - Full suite 1066 tests green (~540 s), typecheck and eslint (source dirs) clean.
 ---
+
+## 2026-10-20 - US-044
+- `lib/leaderboard/`: `LeaderboardStore` interface (`add`, `top`, `rankOf`, `size`, `reset`, `replaceAll`) with `MemoryLeaderboardStore`, kept on `globalThis` (`getLeaderboardStore`/`setLeaderboardStore`). `quiz_scores` (PK event + participant; points, answered_count, total_elapsed_ms; cascades from events and participants), migration 0035. `closeInteraction` now runs in a transaction and, for a quiz question, adds its answers to `quiz_scores` (`persistClosedQuestion`); the store is updated after commit (`applyScoreDeltas`). `rebuildLeaderboard()` reloads the table into the store at server start (server.ts). `POST /api/events/[id]/leaderboard/reset` (`live.run`) deletes the event's rows and resets the store.
+- Ranking: points desc, then less total answer time; equal on both shares a rank (1,2,2,4); participants with no answers are not ranked, so a late joiner is ranked on the questions they answered. Scores are keyed by participant id, so a rejoin with the same token keeps score and nickname.
+- Files: db/schema.ts, db/migrations/0035_*, lib/leaderboard/{store,memory,index}.ts, lib/interaction-state.ts, app/api/events/[id]/leaderboard/reset/route.ts, server.ts, tests/leaderboard.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - `total_elapsed_ms` is an extra column beyond the story's list: the tie-break must survive a rebuild.
+  - Points count only when a question closes; a question left live or paused never reaches the leaderboard. US-046 should read `getLeaderboardStore()` (`top`, `rankOf`) and can call it after the `state-changed` closed message.
+  - Tests that insert quiz interactions directly need `position` (NOT NULL, no default) and at most one `live` per event, so close each before inserting the next.
+  - No nickname entry yet (US-045); `participants.nickname` already exists and is untouched by rejoin.
+  - No UI change, no browser check. Full suite 1080 tests green (~410 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0035.
+---

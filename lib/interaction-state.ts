@@ -2,6 +2,7 @@ import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { applyScoreDeltas, persistClosedQuestion } from "@/lib/leaderboard";
 import { quizTimeLimitSeconds } from "@/lib/quiz";
 import { publish } from "@/lib/realtime/publisher";
 
@@ -79,14 +80,23 @@ export async function pauseInteraction(eventId: string, id: string): Promise<Res
   return { ok: true, interaction: paused };
 }
 
-/** Live or paused -> closed. */
+/**
+ * Live or paused -> closed. Closing a quiz question also adds its answers to the event's cumulative
+ * scores (`quiz_scores`) in the same transaction; the live leaderboard is updated once it has committed.
+ */
 export async function closeInteraction(eventId: string, id: string): Promise<Result> {
-  const [closed] = await getDb()
-    .update(interactions)
-    .set({ state: "closed" })
-    .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId), inArray(interactions.state, ["live", "paused"])))
-    .returning();
+  const { closed, deltas } = await getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .update(interactions)
+      .set({ state: "closed" })
+      .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId), inArray(interactions.state, ["live", "paused"])))
+      .returning();
+    // The update holds the row lock, so answers still being stored have finished and later ones are refused.
+    const scored = row?.type === "quiz" ? await persistClosedQuestion(tx, eventId, id) : [];
+    return { closed: row, deltas: scored };
+  });
   if (!closed) return { ok: false, error: "api.closeInvalid" };
+  await applyScoreDeltas(eventId, deltas);
   broadcast(eventId, [{ interactionId: id, state: "closed" }]);
   return { ok: true, interaction: closed };
 }

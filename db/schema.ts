@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -491,6 +492,28 @@ export const quizAnswers = pgTable(
     unique("quiz_answers_one_per_participant").on(t.interactionId, t.participantId),
     check("quiz_answers_elapsed", sql`${t.elapsedMs} >= 0`),
     check("quiz_answers_points", sql`${t.points} >= 0`),
+  ],
+);
+
+/** Cumulative quiz score of one participant in one event; written when a quiz question closes. */
+export const quizScores = pgTable(
+  "quiz_scores",
+  {
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    points: integer("points").notNull().default(0),
+    /** Closed questions this participant answered. */
+    answeredCount: integer("answered_count").notNull().default(0),
+    /** Sum of `quiz_answers.elapsed_ms` over those questions; the tie-break (less time ranks higher). */
+    totalElapsedMs: integer("total_elapsed_ms").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.participantId] }),
+    check("quiz_scores_nonnegative", sql`${t.points} >= 0 and ${t.answeredCount} >= 0 and ${t.totalElapsedMs} >= 0`),
   ],
 );
 
