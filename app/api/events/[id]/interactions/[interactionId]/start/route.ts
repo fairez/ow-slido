@@ -6,7 +6,7 @@ import { eventNotFound, findInteraction, findOwnedEvent, interactionNotFound } f
 type Context = { params: Promise<{ id: string; interactionId: string }> };
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "live.run");
   if (!auth.ok) return auth.response;
   const { id, interactionId } = await params;
   const event = await findOwnedEvent(id, auth.workspaceId);

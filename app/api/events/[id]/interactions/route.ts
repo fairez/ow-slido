@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: Context) {
 }
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.edit");
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);
@@ -59,6 +59,7 @@ export async function POST(request: Request, { params }: Context) {
     .insert(interactions)
     .values({
       eventId: event.id,
+      createdBy: auth.user.id,
       type,
       title,
       position: sql`(select coalesce(max(position) + 1, 0) from interactions where event_id = ${event.id})`,

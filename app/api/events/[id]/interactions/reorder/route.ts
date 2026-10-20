@@ -9,7 +9,7 @@ type Context = { params: Promise<{ id: string }> };
 
 /** Body `{ ids }` lists every interaction of the event in the desired order. */
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.edit");
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);

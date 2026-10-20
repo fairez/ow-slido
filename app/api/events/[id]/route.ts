@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
-import { requireMember } from "@/lib/auth/require-admin";
+import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid, parseEventInput } from "@/lib/events";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: Context) {
 }
 
 export async function PATCH(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.edit");
   if (!auth.ok) return auth.response;
   const current = await findOwned((await params).id, auth.workspaceId);
   if (!current) return notFound(request);
@@ -53,6 +53,8 @@ export async function DELETE(request: Request, { params }: Context) {
   if (!auth.ok) return auth.response;
   const current = await findOwned((await params).id, auth.workspaceId);
   if (!current) return notFound(request);
+  const denied = denyUnlessCan(request, auth.role, "event.delete", { ownsContent: current.createdBy === auth.user.id });
+  if (denied) return denied;
   await getDb().delete(events).where(eq(events.id, current.id));
   return new Response(null, { status: 204 });
 }

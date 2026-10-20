@@ -18,7 +18,7 @@ import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 type Context = { params: Promise<{ id: string; interactionId: string }> };
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.edit");
   if (!auth.ok) return auth.response;
   const { id, interactionId } = await params;
   const event = await findOwnedEvent(id, auth.workspaceId);
@@ -38,6 +38,7 @@ export async function POST(request: Request, { params }: Context) {
     .insert(interactions)
     .values({
       eventId: event.id,
+      createdBy: auth.user.id,
       type: source.type,
       title: source.title,
       position: sql`(select coalesce(max(position) + 1, 0) from interactions where event_id = ${event.id})`,

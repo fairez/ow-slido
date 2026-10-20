@@ -16,7 +16,7 @@ async function isCodeFree(code: string) {
 
 /** Copies the event settings and its interactions (as drafts); responses, participants and Q&A stay behind. */
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.create");
   if (!auth.ok) return auth.response;
 
   const id = (await params).id;
@@ -43,6 +43,7 @@ export async function POST(request: Request, { params }: Context) {
           .insert(events)
           .values({
             ownerId: auth.user.id,
+            createdBy: auth.user.id,
             workspaceId: source.workspaceId,
             name,
             startsAt: source.startsAt,
@@ -55,6 +56,7 @@ export async function POST(request: Request, { params }: Context) {
           await tx.insert(interactions).values(
             copies.map((i, index) => ({
               eventId: created.id,
+              createdBy: auth.user.id,
               type: i.type,
               title: i.title,
               state: "draft" as const,

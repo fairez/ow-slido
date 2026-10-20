@@ -141,6 +141,13 @@
       "when": 1792482289498,
       "tag": "0019_skinny_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792483598487,
+      "tag": "0020_brief_arachne",
+      "breakpoints": true
     }
   ]
 }

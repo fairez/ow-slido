@@ -54,7 +54,7 @@ beforeEach(async () => {
     { workspaceId: wsA, userId: a.id, role: "owner" },
     { workspaceId: wsB, userId: b.id, role: "owner" },
     { workspaceId: wsA, userId: both.id, role: "editor" },
-    { workspaceId: wsB, userId: both.id, role: "viewer" },
+    { workspaceId: wsB, userId: both.id, role: "editor" },
   ]);
   const when = { startsAt: new Date("2026-01-01"), endsAt: new Date("2026-01-02") };
   const [ea, eb] = await db

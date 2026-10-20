@@ -79,6 +79,8 @@ export const events = pgTable(
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** Who created the event; editors may only delete what they created. */
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
@@ -117,6 +119,7 @@ export const interactions = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating"] }).notNull(),
     title: text("title").notNull(),
     state: text("state", { enum: ["draft", "live", "paused", "closed"] })

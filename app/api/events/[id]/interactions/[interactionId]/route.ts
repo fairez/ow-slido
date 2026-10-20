@@ -1,7 +1,8 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { requireMember } from "@/lib/auth/require-admin";
+import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
+import type { Action } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import {
@@ -20,15 +21,15 @@ type Context = { params: Promise<{ id: string; interactionId: string }> };
 const notDraft = (request: Request) =>
   Response.json({ error: serverT(request, "api.draftOnly") }, { status: 409 });
 
-async function load(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+async function load(request: Request, { params }: Context, action?: Action) {
+  const auth = await requireMember(request, action);
   if (!auth.ok) return { response: auth.response };
   const { id, interactionId } = await params;
   const event = await findOwnedEvent(id, auth.workspaceId);
   if (!event) return { response: eventNotFound(request) };
   const interaction = await findInteraction(event.id, interactionId);
   if (!interaction) return { response: interactionNotFound(request) };
-  return { interaction };
+  return { interaction, auth };
 }
 
 export async function GET(request: Request, context: Context) {
@@ -37,7 +38,7 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const loaded = await load(request, context);
+  const loaded = await load(request, context, "event.edit");
   if (!loaded.interaction) return loaded.response;
   const current = loaded.interaction;
   if (current.state !== "draft") return notDraft(request);
@@ -72,6 +73,10 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(request: Request, context: Context) {
   const loaded = await load(request, context);
   if (!loaded.interaction) return loaded.response;
+  const denied = denyUnlessCan(request, loaded.auth.role, "event.delete", {
+    ownsContent: loaded.interaction.createdBy === loaded.auth.user.id,
+  });
+  if (denied) return denied;
   const deleted = await getDb()
     .delete(interactions)
     .where(and(eq(interactions.id, loaded.interaction.id), eq(interactions.state, "draft")))

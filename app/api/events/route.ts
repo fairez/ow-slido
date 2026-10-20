@@ -13,7 +13,7 @@ async function isCodeFree(code: string) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "event.create");
   if (!auth.ok) return auth.response;
 
   const parsed = parseEventInput(await request.json().catch(() => null), false);
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     try {
       const [event] = await getDb()
         .insert(events)
-        .values({ ownerId: auth.user.id, workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, joinCode })
+        .values({ ownerId: auth.user.id, createdBy: auth.user.id, workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, joinCode })
         .returning();
       return Response.json({ event }, { status: 201 });
     } catch (err) {

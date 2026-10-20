@@ -86,3 +86,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Callers deleting content must pass `ownsContent` (e.g. `events.owner_id === user.id`); omitting it denies editors.
   - No UI change, no browser check.
 ---
+
+## 2026-10-20 - US-008
+- `requireMember(request, action?, workspaceId?)` now checks `can(role, action)` and returns 403 `{error}` when denied (401 when anonymous). Event create/duplicate/edit and interaction create/edit/duplicate/reorder use `event.create`/`event.edit`; start/pause/close use `live.run`. Deletes (event, interaction) call `denyUnlessCan(request, role, "event.delete", {ownsContent})` after loading, since ownership needs the row.
+- Migration 0020 adds nullable `created_by` (users, set null) to `events` and `interactions`, backfilled from the event owner; create/duplicate routes set it.
+- Files: lib/auth/require-admin.ts, db/schema.ts, db/migrations/0020_*, app/api/events/**, tests/route-permissions.test.ts, tests/workspace-access.test.ts
+- **Learnings for future iterations:**
+  - The second argument of `requireMember` is now the action; the explicit workspace id moved to the third.
+  - Read routes (GET) still take any active member; US-009 covers moderation, export, AI and results.
+  - Any new insert into `events`/`interactions` should set `createdBy`.
+  - Test users who create content need an edit-capable role (a `viewer` membership now gets 403 on create).
+  - No UI change, no browser check.
+---
