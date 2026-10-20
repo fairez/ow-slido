@@ -399,3 +399,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Browser check at 360/1280 (light and dark): event page, save dialog, limit error with hint, picker, templates page with rename/delete dialogs, dashboard form and result. No horizontal overflow; the only console error was the expected 402 from the limit test. Screenshot users/workspaces deleted from the dev DB; dev DB migrated to 0032 (`npm run db:migrate`).
   - Full suite 956 tests green, e2e 4 specs pass, typecheck and eslint (source dirs) clean.
 ---
+## 2026-10-20 - US-035
+- `lib/interaction-modules.ts`: `InteractionModule` (type, validateConfig, results, csv, responseCount, plus `presenter(row)`, `live(row, participantId)` and `presentWhenClosed`) with poll, wordcloud, qa, sharedNotes, openText and rating registered; `interactionModule(type)` throws for an unregistered type. `lib/export.ts` (`buildEventCsv`, new `buildInteractionCsv`/`tablesToCsv`), `lib/presenter.ts`, `lib/live-view.ts` and `responseCounts` (lib/content-library.ts) now dispatch through it. Output unchanged: existing export, presenter, live and library tests pass untouched.
+- `csv` returns `CsvTable[]` (header, rows, optional `trailing`); the event file merges same-header tables, flat table first, `trailing` ones (the notes analysis) last. The sharedNotes module's csv includes its analysis table, so US-036's per-interaction files carry it too.
+- Files: lib/{interaction-modules,export,presenter,live-view,content-library}.ts, tests/interaction-modules.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - The combined event CSV now visits interactions in registry order (all poll rows, then wordcloud, then Q&A), not purely by position; with several Q&As, questions are sorted per Q&A, not across the event. Single-Q&A output is identical.
+  - Do not name a variable `module` (next lint rule `no-assign-module-variable`).
+  - Q&A `presenter` and `live` return null on purpose; those screens have their own routes.
+  - `responseCount` runs one query per interaction (Promise.all); fine for event-sized lists.
+  - No UI change, no browser check. Full suite 960 tests green, typecheck and eslint (source dirs) clean.
+---

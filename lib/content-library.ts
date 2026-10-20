@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { interactionModule } from "@/lib/interaction-modules";
 import { publish } from "@/lib/realtime/publisher";
 
 /** Host sockets of the event refetch the content list when they hear this. */
@@ -11,20 +12,11 @@ export function publishContentChanged(eventId: string) {
 }
 
 /**
- * Responses per interaction of an event, for the content list: poll votes, word entries, notes,
- * open text answers, ratings and questions. Rejected notes and questions are left out.
+ * Responses per interaction of an event, for the content list; each type's module decides what
+ * counts (rejected notes and questions are left out).
  */
 export async function responseCounts(eventId: string): Promise<Record<string, number>> {
-  const mine = sql`(select ${interactions.id} from ${interactions} where ${interactions.eventId} = ${eventId})`;
-  const result = await getDb().execute<{ id: string; n: number }>(sql`
-    select interaction_id as id, count(*)::int as n from (
-      select interaction_id from poll_votes where interaction_id in ${mine}
-      union all select interaction_id from wordcloud_entries where interaction_id in ${mine}
-      union all select interaction_id from open_text_responses where interaction_id in ${mine}
-      union all select interaction_id from rating_responses where interaction_id in ${mine}
-      union all select interaction_id from shared_notes where status <> 'rejected' and interaction_id in ${mine}
-      union all select interaction_id from questions where status <> 'rejected' and interaction_id in ${mine}
-    ) r group by interaction_id
-  `);
-  return Object.fromEntries(result.rows.map((row) => [row.id, row.n]));
+  const list = await getDb().select({ id: interactions.id, type: interactions.type }).from(interactions).where(eq(interactions.eventId, eventId));
+  const counts = await Promise.all(list.map((i) => interactionModule(i.type).responseCount(i.id)));
+  return Object.fromEntries(list.flatMap((i, n) => (counts[n] > 0 ? [[i.id, counts[n]]] : [])));
 }
