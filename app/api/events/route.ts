@@ -1,9 +1,8 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { asc, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
-import { firstWorkspaceId } from "@/lib/workspaces";
 import { generateUniqueJoinCode, parseEventInput } from "@/lib/events";
 
 const UNIQUE_VIOLATION = "23505";
@@ -14,15 +13,14 @@ async function isCodeFree(code: string) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
 
   const parsed = parseEventInput(await request.json().catch(() => null), false);
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
   const { name, startsAt, endsAt, moderationMode } = parsed.value;
 
-  const workspaceId = await firstWorkspaceId(getDb(), auth.user.id);
-  if (!workspaceId) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
+  const { workspaceId } = auth;
 
   // A concurrent create can take the code between the check and the insert; retry on that.
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -41,13 +39,13 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
 
   const list = await getDb()
     .select()
     .from(events)
-    .where(eq(events.ownerId, auth.user.id))
+    .where(eq(events.workspaceId, auth.workspaceId))
     .orderBy(asc(events.startsAt), asc(events.createdAt));
   return Response.json({ events: list });
 }

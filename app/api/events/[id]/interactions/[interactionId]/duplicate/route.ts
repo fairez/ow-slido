@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import {
   eventNotFound,
@@ -18,10 +18,10 @@ import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 type Context = { params: Promise<{ id: string; interactionId: string }> };
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
   const { id, interactionId } = await params;
-  const event = await findOwnedEvent(id, auth.user.id);
+  const event = await findOwnedEvent(id, auth.workspaceId);
   if (!event) return eventNotFound(request);
   const source = await findInteraction(event.id, interactionId);
   if (!source) return interactionNotFound(request);

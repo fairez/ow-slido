@@ -417,6 +417,7 @@ export const id: Record<MessageKey, string> = {
   "api.tooManyRequests": "Too many requests. Wait a moment, then try again.",
   "api.questionNotFound": "Question not found",
   "api.unauthorized": "Unauthorized",
+  "api.forbidden": "You do not have access to this workspace",
   "api.invalidBody": "Invalid request body",
   "api.responseNotFound": "Response not found",
   "api.nothingToChange": "Nothing to change",

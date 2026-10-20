@@ -9,6 +9,7 @@ import { ModerationPanel } from "@/components/moderation-panel";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { listHostNotes, listHostQuestions } from "@/lib/moderation";
@@ -23,8 +24,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const user = await getUserFromToken(token);
   if (!user) redirect("/login");
+  const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
+  if (!membership) notFound();
 
-  const event = await findOwnedEvent((await params).id, user.id);
+  const event = await findOwnedEvent((await params).id, membership.workspaceId);
   if (!event) notFound();
 
   const list = await getDb()

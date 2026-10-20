@@ -6,7 +6,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { events, interactions, memberships, users, workspaces } from "@/db/schema";
-import { createPersonalWorkspace, firstWorkspaceId } from "@/lib/workspaces";
+import { createPersonalWorkspace } from "@/lib/workspaces";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -23,7 +23,6 @@ describe("workspaces and memberships", () => {
     const rows = await db.select().from(memberships).where(eq(memberships.userId, u.id));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ workspaceId: ws.id, role: "owner", status: "active" });
-    expect(await firstWorkspaceId(db, u.id)).toBe(ws.id);
   });
 
   it("allows one membership per user and workspace, and only known roles", async () => {

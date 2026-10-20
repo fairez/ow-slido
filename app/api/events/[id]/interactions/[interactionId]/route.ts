@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import {
@@ -21,10 +21,10 @@ const notDraft = (request: Request) =>
   Response.json({ error: serverT(request, "api.draftOnly") }, { status: 409 });
 
 async function load(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return { response: auth.response };
   const { id, interactionId } = await params;
-  const event = await findOwnedEvent(id, auth.user.id);
+  const event = await findOwnedEvent(id, auth.workspaceId);
   if (!event) return { response: eventNotFound(request) };
   const interaction = await findInteraction(event.id, interactionId);
   if (!interaction) return { response: interactionNotFound(request) };

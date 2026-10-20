@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PresenterView } from "@/components/presenter-view";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -21,8 +22,10 @@ export default async function PresentPage({
 }) {
   const user = await getUserFromToken((await cookies()).get(SESSION_COOKIE)?.value);
   if (!user) redirect("/login");
+  const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
+  if (!membership) notFound();
 
-  const event = await findOwnedEvent((await params).eventId, user.id);
+  const event = await findOwnedEvent((await params).eventId, membership.workspaceId);
   if (!event) notFound();
 
   const items = await getDb()

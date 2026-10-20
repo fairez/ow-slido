@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { getSessionUser } from "@/lib/auth/require-admin";
+import { getSessionMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { findOwnedEvent } from "@/lib/polls";
@@ -67,9 +67,9 @@ export async function GET(request: Request, { params }: Context) {
   if (!interaction) return notFound(request);
 
   if (!participantFor(request, interaction.eventId)) {
-    const user = await getSessionUser(request);
-    if (!user) return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
-    if (!(await findOwnedEvent(interaction.eventId, user.id))) return notFound(request);
+    const member = await getSessionMember(request);
+    if (!member) return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
+    if (!(await findOwnedEvent(interaction.eventId, member.workspaceId))) return notFound(request);
   }
   const { words, total } = await getWordcloudResults(id);
   return Response.json({ words, total });

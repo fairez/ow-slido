@@ -120,13 +120,13 @@ export async function listResponses(interactionId: string, participantId: string
 /** Every response including hidden ones, for the owning host. */
 export async function listResponsesForHost(
   interactionId: string,
-  ownerId: string,
+  workspaceId: string,
 ): Promise<ListResult<HostResponse>> {
   const [row] = await getDb()
     .select({ type: interactions.type })
     .from(interactions)
     .innerJoin(events, eq(events.id, interactions.eventId))
-    .where(and(eq(interactions.id, interactionId), eq(events.ownerId, ownerId)));
+    .where(and(eq(interactions.id, interactionId), eq(events.workspaceId, workspaceId)));
   if (!row || row.type !== "openText") return { ok: false, status: 404, error: "api.interactionNotFound" };
   const rows = await listFor(interactionId, true);
   return { ok: true, responses: rows.map((r) => ({ ...toPublic(r), hidden: r.hidden })) };
@@ -137,13 +137,13 @@ export async function listPresenterResponses(interactionId: string): Promise<Pub
   return (await listFor(interactionId, false)).map(toPublic);
 }
 
-async function findOwned(responseId: string, ownerId: string) {
+async function findOwned(responseId: string, workspaceId: string) {
   const [row] = await getDb()
     .select({ response: openTextResponses, eventId: interactions.eventId })
     .from(openTextResponses)
     .innerJoin(interactions, eq(interactions.id, openTextResponses.interactionId))
     .innerJoin(events, eq(events.id, interactions.eventId))
-    .where(and(eq(openTextResponses.id, responseId), eq(events.ownerId, ownerId)));
+    .where(and(eq(openTextResponses.id, responseId), eq(events.workspaceId, workspaceId)));
   return row ?? null;
 }
 
@@ -154,7 +154,7 @@ export type HostChangeResult =
 /** Owner only: toggle `highlighted` and/or `hidden`. Hiding also removes the highlight. */
 export async function updateResponseAsHost(
   responseId: string,
-  ownerId: string,
+  workspaceId: string,
   change: Record<string, unknown>,
 ): Promise<HostChangeResult> {
   const patch: { hidden?: boolean; highlighted?: boolean } = {};
@@ -165,7 +165,7 @@ export async function updateResponseAsHost(
   }
   if (Object.keys(patch).length === 0) return { ok: false, status: 400, error: "api.nothingToChange" };
 
-  const found = await findOwned(responseId, ownerId);
+  const found = await findOwned(responseId, workspaceId);
   if (!found) return { ok: false, status: 404, error: "api.responseNotFound" };
   if (patch.hidden) patch.highlighted = false;
   const [row] = await getDb()
@@ -185,8 +185,8 @@ export async function updateResponseAsHost(
   return { ok: true, response: { ...toPublic(row), hidden: row.hidden } };
 }
 
-export async function deleteResponseAsHost(responseId: string, ownerId: string): Promise<boolean> {
-  const found = await findOwned(responseId, ownerId);
+export async function deleteResponseAsHost(responseId: string, workspaceId: string): Promise<boolean> {
+  const found = await findOwned(responseId, workspaceId);
   if (!found) return false;
   const [row] = await getDb()
     .delete(openTextResponses)

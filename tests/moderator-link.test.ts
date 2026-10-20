@@ -136,6 +136,7 @@ test("without a token or session the queue is unauthorized; other owners get 404
   const host = await queueRoute.GET(req("GET", { cookie: hostCookie }), ctx());
   expect(host.status).toBe(200);
   const [stranger] = await db.insert(users).values({ email: "s@example.com", passwordHash: "x" }).returning();
+  await workspaceFor(db, stranger.id);
   const strangerCookie = `${session.SESSION_COOKIE}=${session.createSessionToken(stranger.id)}`;
   expect((await queueRoute.GET(req("GET", { cookie: strangerCookie }), ctx())).status).toBe(404);
   expect((await linkRoute.POST(req("POST", { cookie: strangerCookie }), ctx())).status).toBe(404);

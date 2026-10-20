@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { getSessionUser } from "@/lib/auth/require-admin";
+import { getSessionMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { getResultsForHost, getResultsForParticipant, submitRating } from "@/lib/rating";
@@ -72,9 +72,9 @@ export async function GET(request: Request, { params }: Context) {
     return Response.json({ results: result.results, mine: result.mine });
   }
 
-  const user = await getSessionUser(request);
-  if (!user) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
-  const result = await getResultsForHost(id, user.id);
+  const member = await getSessionMember(request);
+  if (!member) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
+  const result = await getResultsForHost(id, member.workspaceId);
   if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
   return Response.json({ results: result.results, mine: result.mine });
 }

@@ -1,7 +1,7 @@
 import { serverT } from "@/lib/i18n/server";
 import { and, asc, eq } from "drizzle-orm";
 import { events, interactions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { EVENT_NAME_MAX, generateUniqueJoinCode, isUuid } from "@/lib/events";
 
@@ -16,7 +16,7 @@ async function isCodeFree(code: string) {
 
 /** Copies the event settings and its interactions (as drafts); responses, participants and Q&A stay behind. */
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
 
   const id = (await params).id;
@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Context) {
     ? await getDb()
         .select()
         .from(events)
-        .where(and(eq(events.id, id), eq(events.ownerId, auth.user.id)))
+        .where(and(eq(events.id, id), eq(events.workspaceId, auth.workspaceId)))
     : [];
   if (!source) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 

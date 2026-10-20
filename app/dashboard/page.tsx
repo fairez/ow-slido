@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { LogoutButton } from "@/components/logout-button";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +17,13 @@ export default async function DashboardPage() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const user = await getUserFromToken(token);
   if (!user) redirect("/login");
+  const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
+  if (!membership) redirect("/login");
 
   const list = await getDb()
     .select()
     .from(events)
-    .where(eq(events.ownerId, user.id))
+    .where(eq(events.workspaceId, membership.workspaceId))
     .orderBy(asc(events.startsAt), asc(events.createdAt));
   const initialEvents = list.map((e) => ({
     id: e.id,

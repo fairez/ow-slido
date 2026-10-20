@@ -114,13 +114,13 @@ export async function getResultsForParticipant(interactionId: string, participan
 }
 
 /** Aggregates for the owning host, any state. */
-export async function getResultsForHost(interactionId: string, ownerId: string): Promise<RatingReadResult> {
+export async function getResultsForHost(interactionId: string, workspaceId: string): Promise<RatingReadResult> {
   const db = getDb();
   const [row] = await db
     .select({ interaction: interactions })
     .from(interactions)
     .innerJoin(events, eq(events.id, interactions.eventId))
-    .where(and(eq(interactions.id, interactionId), eq(events.ownerId, ownerId)));
+    .where(and(eq(interactions.id, interactionId), eq(events.workspaceId, workspaceId)));
   if (!row || row.interaction.type !== "rating") return notFound;
   return { ok: true, results: await computeResults(db, interactionId, scaleOf(row.interaction.config)), mine: null };
 }

@@ -1,7 +1,7 @@
 import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { eventNotFound, findOwnedEvent } from "@/lib/polls";
 
@@ -9,9 +9,9 @@ type Context = { params: Promise<{ id: string }> };
 
 /** Body `{ ids }` lists every interaction of the event in the desired order. */
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const event = await findOwnedEvent((await params).id, auth.user.id);
+  const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);
 
   const body = (await request.json().catch(() => null)) as { ids?: unknown } | null;

@@ -194,6 +194,7 @@ test("without credentials, or as another host, note moderation is refused", asyn
   expect((await noteRoute.PATCH(req("PATCH", {}, { status: "approved" }), nctx(id))).status).toBe(401);
   expect((await noteRoute.DELETE(req("DELETE", asMod("garbage")), nctx(id))).status).toBe(401);
   const [stranger] = await db.insert(users).values({ email: "s@example.com", passwordHash: "x" }).returning();
+  await workspaceFor(db, stranger.id);
   const cookie = `${session.SESSION_COOKIE}=${session.createSessionToken(stranger.id)}`;
   expect((await noteRoute.PATCH(req("PATCH", { cookie }, { status: "approved" }), nctx(id))).status).toBe(404);
   expect(await statusOf(id)).toBe("pending");

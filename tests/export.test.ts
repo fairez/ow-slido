@@ -59,6 +59,7 @@ beforeEach(async () => {
     ])
     .returning();
   hostCookie = `${session.SESSION_COOKIE}=${session.createSessionToken(host.id)}`;
+  await workspaceFor(db, other.id);
   otherCookie = `${session.SESSION_COOKIE}=${session.createSessionToken(other.id)}`;
   const [event] = await db
     .insert(events)

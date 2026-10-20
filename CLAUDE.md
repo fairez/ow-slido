@@ -17,6 +17,7 @@
 ## Workspaces
 - Events belong to a workspace (`events.workspace_id`, NOT NULL, cascade); `events.owner_id` is only the creator. Users reach workspaces through `memberships`.
 - Every data table must reach a workspace through `events` (or `interactions`, which reach `events`), so deleting a workspace removes everything. A table that holds workspace-level data (not event data) references `workspaces` directly with `onDelete: "cascade"`.
+- Access: `requireMember(request)` (`lib/auth/require-admin.ts`) resolves the active workspace (cookie `workspace`, else first active membership) and returns `{user, workspaceId, role}`; use `getSessionMember` where anonymous callers are also allowed. Find events with `findOwnedEvent(id, auth.workspaceId)`; pages and the socket server use `resolveActiveMembership` from `lib/auth/workspace.ts`. Test users who act as hosts or strangers need a workspace (`workspaceFor`), else they get 403.
 - Tests that insert events directly need `workspaceId: await workspaceFor(db, user.id)` from `tests/helpers/db.ts`. In routes, `lib/workspaces.ts` has `createPersonalWorkspace` and `firstWorkspaceId`.
 
 ## Interactions

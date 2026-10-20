@@ -1,5 +1,5 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { parseEdit } from "@/lib/analysis-edit";
 import { editAnalysis, findNotesInteractionEvent, getAnalysisPanelState, setAnalysisPublished } from "@/lib/note-analysis";
@@ -8,11 +8,11 @@ import { findOwnedEvent } from "@/lib/polls";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
-  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.user.id) : null;
+  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.workspaceId) : null;
   if (!interaction || !event) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
   const state = await getAnalysisPanelState(id);
@@ -27,11 +27,11 @@ export async function GET(request: Request, { params }: Context) {
 
 /** Publish or unpublish the latest finished analysis, or apply a host edit (`{op, ...}`) to it. */
 export async function PATCH(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
-  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.user.id) : null;
+  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.workspaceId) : null;
   if (!interaction || !event) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
   const raw = await request.json().catch(() => null);

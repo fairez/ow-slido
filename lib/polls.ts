@@ -84,12 +84,12 @@ export function pollConfig(partial: Partial<PollConfig>): PollConfig {
   };
 }
 
-export async function findOwnedEvent(id: string, ownerId: string) {
+export async function findOwnedEvent(id: string, workspaceId: string) {
   if (!isUuid(id)) return null;
   const [event] = await getDb()
     .select()
     .from(events)
-    .where(and(eq(events.id, id), eq(events.ownerId, ownerId)));
+    .where(and(eq(events.id, id), eq(events.workspaceId, workspaceId)));
   return event ?? null;
 }
 

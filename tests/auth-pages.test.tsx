@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { users } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const cookieValue = vi.fn<() => string | undefined>();
 vi.mock("next/headers", () => ({
@@ -42,6 +42,7 @@ describe("dashboard guard", () => {
 
   it("renders for a signed-in host", async () => {
     const [user] = await db.insert(users).values({ email: "host@example.com", passwordHash: "x" }).returning();
+    await workspaceFor(db, user.id);
     cookieValue.mockReturnValue(sessionToken(user.id));
     const element = await DashboardPage();
     expect(JSON.stringify(element)).toContain("host@example.com");

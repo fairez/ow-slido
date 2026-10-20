@@ -1,5 +1,5 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { findNotesInteractionEvent, startAnalysis } from "@/lib/note-analysis";
 import "@/lib/note-analysis-ai";
@@ -11,11 +11,11 @@ import { and, eq, isNull } from "drizzle-orm";
 type Context = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
-  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.user.id) : null;
+  const event = interaction ? await findOwnedEvent(interaction.eventId, auth.workspaceId) : null;
   if (!interaction || !event) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
   if (!event.aiNoticeAcceptedAt) {

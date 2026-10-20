@@ -1,19 +1,26 @@
 import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
-import { users } from "@/db/schema";
+import { memberships, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { readSessionToken, verifySessionToken } from "./session";
+import { WORKSPACE_COOKIE, readCookie, resolveActiveMembership, type MembershipInfo } from "./workspace";
 
-export type AuthUser = { id: string; email: string; role: "admin" };
+export type AuthUser = { id: string; email: string; role: "admin"; memberships: MembershipInfo[] };
 
 export async function getUserFromToken(token: string | null | undefined): Promise<AuthUser | null> {
   const userId = token && verifySessionToken(token);
   if (!userId) return null;
-  const [user] = await getDb()
+  const db = getDb();
+  const [user] = await db
     .select({ id: users.id, email: users.email, role: users.role })
     .from(users)
     .where(and(eq(users.id, userId), eq(users.active, true)));
-  return user ?? null;
+  if (!user) return null;
+  const rows = await db
+    .select({ workspaceId: memberships.workspaceId, role: memberships.role, status: memberships.status })
+    .from(memberships)
+    .where(eq(memberships.userId, user.id));
+  return { ...user, memberships: rows };
 }
 
 export function getSessionUser(request: Request) {
@@ -28,4 +35,34 @@ export async function requireAdmin(
     return { ok: false, response: Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 }) };
   }
   return { ok: true, user };
+}
+
+export type MemberContext = { user: AuthUser; workspaceId: string; role: MembershipInfo["role"] };
+
+/** The signed-in user together with the workspace the request acts in; null for anonymous, non-member or suspended users. */
+export async function getSessionMember(request: Request, workspaceId?: string): Promise<MemberContext | null> {
+  const user = await getSessionUser(request);
+  if (!user) return null;
+  const membership = resolveActiveMembership(user.memberships, workspaceId ?? readCookie(request, WORKSPACE_COOKIE));
+  if (!membership || (workspaceId && membership.workspaceId !== workspaceId)) return null;
+  return { user, workspaceId: membership.workspaceId, role: membership.role };
+}
+
+/**
+ * Resolves the active workspace (cookie `workspace`, default: first active membership). An explicit
+ * `workspaceId` must be one the user is an active member of; otherwise the request is rejected.
+ */
+export async function requireMember(
+  request: Request,
+  workspaceId?: string,
+): Promise<({ ok: true } & MemberContext) | { ok: false; response: Response }> {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return { ok: false, response: Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 }) };
+  }
+  const membership = resolveActiveMembership(user.memberships, workspaceId ?? readCookie(request, WORKSPACE_COOKIE));
+  if (!membership || (workspaceId && membership.workspaceId !== workspaceId)) {
+    return { ok: false, response: Response.json({ error: serverT(request, "api.forbidden") }, { status: 403 }) };
+  }
+  return { ok: true, user, workspaceId: membership.workspaceId, role: membership.role };
 }

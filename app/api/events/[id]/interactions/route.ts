@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import { eventNotFound, findOwnedEvent, parsePollInput, pollConfig } from "@/lib/polls";
@@ -10,9 +10,9 @@ import { parseWordcloudInput, wordcloudConfig } from "@/lib/wordclouds";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const event = await findOwnedEvent((await params).id, auth.user.id);
+  const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);
   const list = await getDb()
     .select()
@@ -23,9 +23,9 @@ export async function GET(request: Request, { params }: Context) {
 }
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const event = await findOwnedEvent((await params).id, auth.user.id);
+  const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);
 
   const body = await request.json().catch(() => null);

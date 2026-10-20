@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/server";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { createModeratorToken, regenerateModeratorToken, revokeModeratorToken } from "@/lib/moderator-token";
 import { findOwnedEvent } from "@/lib/polls";
@@ -9,10 +9,10 @@ type Context = { params: Promise<{ id: string }> };
 const linkFor = (eventId: string, token: string) => `/moderate/${eventId}?t=${encodeURIComponent(token)}`;
 
 async function ownedEvent(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
   const { id } = await params;
-  const event = isUuid(id) ? await findOwnedEvent(id, auth.user.id) : null;
+  const event = isUuid(id) ? await findOwnedEvent(id, auth.workspaceId) : null;
   return event ?? Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 }
 

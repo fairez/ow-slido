@@ -1,7 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid, parseEventInput } from "@/lib/events";
 
@@ -9,26 +9,26 @@ type Context = { params: Promise<{ id: string }> };
 
 const notFound = (request: Request) => Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 
-async function findOwned(id: string, ownerId: string) {
+async function findOwned(id: string, workspaceId: string) {
   if (!isUuid(id)) return null;
   const [event] = await getDb()
     .select()
     .from(events)
-    .where(and(eq(events.id, id), eq(events.ownerId, ownerId)));
+    .where(and(eq(events.id, id), eq(events.workspaceId, workspaceId)));
   return event ?? null;
 }
 
 export async function GET(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const event = await findOwned((await params).id, auth.user.id);
+  const event = await findOwned((await params).id, auth.workspaceId);
   return event ? Response.json({ event }) : notFound(request);
 }
 
 export async function PATCH(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const current = await findOwned((await params).id, auth.user.id);
+  const current = await findOwned((await params).id, auth.workspaceId);
   if (!current) return notFound(request);
 
   const parsed = parseEventInput(await request.json().catch(() => null), true);
@@ -49,9 +49,9 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(request: Request, { params }: Context) {
-  const auth = await requireAdmin(request);
+  const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
-  const current = await findOwned((await params).id, auth.user.id);
+  const current = await findOwned((await params).id, auth.workspaceId);
   if (!current) return notFound(request);
   await getDb().delete(events).where(eq(events.id, current.id));
   return new Response(null, { status: 204 });

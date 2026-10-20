@@ -66,3 +66,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `npx eslint db lib app tests components e2e` is clean; whole-repo `npm run lint` only fails on generated files and scripts/ralph/screens (pre-existing).
   - No UI change, no browser check.
 ---
+
+## 2026-10-20 - US-006
+- `AuthUser` now carries `memberships`. `requireMember(request, workspaceId?)` and `getSessionMember` (lib/auth/require-admin.ts) resolve the active workspace from cookie `workspace` (fallback: first active membership); no active membership gives 403 (`api.forbidden`). Pure helpers `resolveActiveMembership`, `readCookie`, `workspaceSetCookie` live in lib/auth/workspace.ts.
+- Event/interaction routes, dashboard, /dashboard/events/[id], /present, moderation auth, rating/responses/words/questions host reads and the socket host check now match on `events.workspace_id`. `findOwnedEvent(id, workspaceId)`; `firstWorkspaceId` removed. `POST /api/workspaces/active` sets the cookie for active memberships only. `/api/ai/*` still uses `requireAdmin`.
+- Files: lib/auth/{require-admin,workspace,require-moderation}.ts, lib/{polls,rating,open-text}.ts, lib/realtime/socket-server.ts, app/api/**, app/{dashboard,present}, app/api/workspaces/active/route.ts, tests/workspace-access.test.ts, 5 existing tests, CLAUDE.md
+- **Learnings for future iterations:**
+  - A `string` arg swap (user id to workspace id) is invisible to typecheck; grep `auth.user.id` and `user.id)` after changing a helper's meaning (it hid a bug in app/api/responses/[id]).
+  - Test "stranger" users need `workspaceFor(db, id)` or they get 403 instead of 404.
+  - `events.owner_id` is still written on create/duplicate (creator); `interaction-state` uses it for `firstInteractionLiveAt`.
+  - No UI change, no browser check. Workspace switcher UI is US-011.
+---

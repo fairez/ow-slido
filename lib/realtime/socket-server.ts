@@ -4,6 +4,7 @@ import { Server, type Socket } from "socket.io";
 import { events, participants } from "@/db/schema";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { verifyModeratorToken } from "@/lib/moderator-token";
@@ -36,10 +37,12 @@ async function authorize(socket: Socket): Promise<{ role: SocketRole; participan
   if (role === "host") {
     const user = await getUserFromToken(cookies.get(SESSION_COOKIE));
     if (!user) return null;
+    const membership = resolveActiveMembership(user.memberships, cookies.get(WORKSPACE_COOKIE));
+    if (!membership) return null;
     const [event] = await db
       .select({ id: events.id })
       .from(events)
-      .where(and(eq(events.id, eventId), eq(events.ownerId, user.id)));
+      .where(and(eq(events.id, eventId), eq(events.workspaceId, membership.workspaceId)));
     return event ? { role: "host" } : null;
   }
 
