@@ -2,6 +2,7 @@ import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { isUuid, parseEventInput } from "@/lib/events";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
@@ -61,5 +62,13 @@ export async function DELETE(request: Request, { params }: Context) {
   const denied = denyUnlessCan(request, auth.role, "event.delete", { ownsContent: current.createdBy === auth.user.id });
   if (denied) return denied;
   await getDb().delete(events).where(eq(events.id, current.id));
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "event.deleted",
+    targetType: "event",
+    targetId: current.id,
+    metadata: { eventName: current.name },
+  });
   return new Response(null, { status: 204 });
 }

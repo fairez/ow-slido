@@ -2,6 +2,7 @@ import { serverT } from "@/lib/i18n/server";
 import { requireMember } from "@/lib/auth/require-admin";
 import { buildEventCsv } from "@/lib/export";
 import { PlanLimitError, assertReportFormat, planLimitResponse } from "@/lib/limits";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { findOwnedEvent } from "@/lib/polls";
 
 type Context = { params: Promise<{ id: string }> };
@@ -19,6 +20,15 @@ export async function GET(request: Request, { params }: Context) {
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;
   }
+
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "event.exported",
+    targetType: "event",
+    targetId: event.id,
+    metadata: { format: "csv", eventName: event.name },
+  });
 
   const filename = `${event.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "event"}-results.csv`;
   return new Response(await buildEventCsv(event.id), {

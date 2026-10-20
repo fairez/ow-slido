@@ -1,4 +1,5 @@
 import { requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { apiMessage, serverT } from "@/lib/i18n/server";
@@ -15,5 +16,12 @@ export async function POST(request: Request, { params }: Context) {
 
   const result = await resetMemberPassword(getDb(), auth.workspaceId, { userId: auth.user.id, role: auth.role }, userId);
   if (!result.ok) return Response.json({ error: apiMessage(request, result), reason: result.reason }, { status: result.status });
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "member.password_reset",
+    targetType: "user",
+    targetId: userId,
+  });
   return Response.json({ temporaryPassword: result.temporaryPassword }, { headers: { "cache-control": "no-store" } });
 }

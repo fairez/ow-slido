@@ -1,4 +1,5 @@
 import { requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { apiMessage, serverT } from "@/lib/i18n/server";
@@ -33,6 +34,19 @@ export async function PATCH(request: Request, { params }: Context) {
     throw error;
   }
   if (!result.ok) return failure(request, result);
+  const audit = { ...auditContext(request, auth.user), workspaceId: auth.workspaceId, targetType: "user", targetId: userId };
+  if ("fromRole" in result && "role" in parsed.value) {
+    await recordAudit(undefined, {
+      ...audit,
+      action: "member.role_changed",
+      metadata: { fromRole: result.fromRole, toRole: parsed.value.role },
+    });
+  } else if ("status" in parsed.value) {
+    await recordAudit(undefined, {
+      ...audit,
+      action: parsed.value.status === "suspended" ? "member.suspended" : "member.reactivated",
+    });
+  }
   return Response.json({ ok: true });
 }
 
@@ -44,6 +58,14 @@ export async function DELETE(request: Request, { params }: Context) {
 
   const result = await removeMember(getDb(), auth.workspaceId, { userId: auth.user.id, role: auth.role }, userId);
   if (!result.ok) return failure(request, result);
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "member.removed",
+    targetType: "user",
+    targetId: userId,
+    metadata: { role: result.role },
+  });
   return Response.json({ ok: true });
 }
 

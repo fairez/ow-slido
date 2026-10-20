@@ -4,6 +4,7 @@ import { parsePendingTwoFactorToken } from "@/lib/auth/pending-two-factor";
 import { setSessionsValidAfter } from "@/lib/auth/password-reset";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { TwoFactorNotConfiguredError, verifySecondFactor } from "@/lib/auth/two-factor";
+import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { serverT } from "@/lib/i18n/server";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   if (!userId) return invalid(request);
 
   const db = getDb();
-  const [user] = await db.select({ id: users.id, active: users.active }).from(users).where(eq(users.id, userId));
+  const [user] = await db.select({ id: users.id, email: users.email, active: users.active }).from(users).where(eq(users.id, userId));
   if (!user?.active) return invalid(request);
 
   let result;
@@ -48,7 +49,10 @@ export async function POST(request: Request) {
     }
     throw error;
   }
-  if (!result.ok) return result.reason === "rate_limited" ? tooMany(request, result.retryAfterSeconds ?? 60) : invalid(request);
+  if (!result.ok) {
+    await recordAuditForUser(request, user, { action: "auth.login_failed", metadata: { step: "second_factor", reason: result.reason } });
+    return result.reason === "rate_limited" ? tooMany(request, result.retryAfterSeconds ?? 60) : invalid(request);
+  }
 
   if (result.method === "recovery") await setSessionsValidAfter(db, userId);
   await db
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
     .set({ firstLoginAt: sql`coalesce(${users.firstLoginAt}, now())`, lastLoginAt: sql`now()` })
     .where(eq(users.id, userId));
 
+  await recordAuditForUser(request, user, { action: "auth.login", metadata: { secondFactor: true, method: result.method } });
   return Response.json(
     { user: { id: user.id } },
     { headers: { "set-cookie": sessionSetCookie(userId, isSecureRequest(request)) } },

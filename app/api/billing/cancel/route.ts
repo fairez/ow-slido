@@ -1,6 +1,7 @@
 import { getBillingProvider } from "@/lib/billing";
 import { getSubscriptionRow, billingErrorResponse } from "@/lib/billing/http";
 import { requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { serverT } from "@/lib/i18n/server";
 
 /** Stops renewal. Access stays until the period end; the state change arrives as a webhook. */
@@ -29,6 +30,14 @@ export async function POST(request: Request) {
       plan: row.plan,
       interval: row.interval,
       currentPeriodEnd: row.currentPeriodEnd,
+    });
+    await recordAudit(undefined, {
+      ...auditContext(request, auth.user),
+      workspaceId: auth.workspaceId,
+      action: "billing.cancel_requested",
+      targetType: "subscription",
+      targetId: auth.workspaceId,
+      metadata: { plan: row.plan },
     });
     return Response.json({ ok: true });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { denyUnlessVerified, requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { createInvitation, listInvitations, parseInviteInput, sendInvitationEmail } from "@/lib/invitations";
@@ -48,6 +49,15 @@ export async function POST(request: Request) {
     invitedBy: auth.user.id,
   });
   if (!created.ok) return Response.json({ error: apiMessage(request, created) }, { status: created.status });
+
+  await recordAudit(db, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "invitation.created",
+    targetType: "invitation",
+    targetId: created.invitation.id,
+    metadata: { role: created.invitation.role },
+  });
 
   const link = `${new URL(request.url).origin}/invite?token=${encodeURIComponent(created.token)}`;
   const emailSent = await sendInvitationEmail(

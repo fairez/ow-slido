@@ -103,7 +103,7 @@ export async function changeMemberRole(db: Db, workspaceId: string, actor: Actor
       .update(memberships)
       .set({ role })
       .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetId)));
-    return { ok: true as const };
+    return { ok: true as const, fromRole: target.role };
   });
   if (result.ok) revokeMemberSockets(targetId, workspaceId);
   return result;
@@ -126,7 +126,7 @@ export async function setMemberStatus(
       // A manual change replaces any plan-driven reason; the plan only lifts suspensions it made itself.
       .set({ status, suspendedReason: null })
       .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetId)));
-    return { ok: true as const };
+    return { ok: true as const, fromStatus: target.status };
   });
   if (result.ok && status === "suspended") {
     revokeMemberSockets(targetId, workspaceId);
@@ -138,10 +138,10 @@ export async function setMemberStatus(
 
 /** Deletes the membership only. Events and everything under them belong to the workspace and stay. */
 export async function removeMember(db: Db, workspaceId: string, actor: Actor, targetId: string) {
-  const result = await withTarget(db, workspaceId, actor, targetId, async (tx, _target, lastActiveOwner) => {
+  const result = await withTarget(db, workspaceId, actor, targetId, async (tx, target, lastActiveOwner) => {
     if (lastActiveOwner) throw new Abort(fail("api.memberLastOwner", 409, "last_owner"));
     await tx.delete(memberships).where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetId)));
-    return { ok: true as const };
+    return { ok: true as const, role: target.role };
   });
   if (result.ok) {
     revokeMemberSockets(targetId, workspaceId);

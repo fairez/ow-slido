@@ -1,6 +1,8 @@
+import { and, eq } from "drizzle-orm";
 import type { createDb } from "@/db/client";
-import { auditLog } from "@/db/schema";
+import { auditLog, memberships } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { clientIp } from "@/lib/rate-limit";
 
 /** Inserts only, so a transaction works as well as the pool. */
 type Db = Pick<ReturnType<typeof createDb>["db"], "insert">;
@@ -70,5 +72,42 @@ export async function recordAudit(db: Db | undefined, entry: AuditEntry) {
     const code = (error as { code?: string } | null)?.code;
     console.error("> audit write failed:", entry.action, code ?? (error instanceof Error ? error.name : "error"));
     return false;
+  }
+}
+
+type Actor = { id: string; email: string };
+
+/** Who and from where, for entries about something a signed-in person did through a route. */
+export function auditContext(request: Request, actor: Actor) {
+  return { actorUserId: actor.id, actorLabel: actor.email, ip: clientIp(request) };
+}
+
+/**
+ * For account-level events (login, password, 2FA) that belong to no single workspace: one entry in every
+ * workspace the person is an active member of, so each owner sees it. A person without a workspace gets none.
+ */
+export async function recordAuditForUser(
+  request: Request,
+  actor: Actor,
+  entry: Pick<AuditEntry, "action" | "metadata">,
+  db: Pick<ReturnType<typeof createDb>["db"], "insert" | "select"> = getDb(),
+) {
+  try {
+    const rows = await db
+      .select({ workspaceId: memberships.workspaceId })
+      .from(memberships)
+      .where(and(eq(memberships.userId, actor.id), eq(memberships.status, "active")));
+    for (const { workspaceId } of rows) {
+      await recordAudit(db, {
+        ...entry,
+        ...auditContext(request, actor),
+        workspaceId,
+        targetType: "user",
+        targetId: actor.id,
+      });
+    }
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    console.error("> audit write failed:", entry.action, code ?? (error instanceof Error ? error.name : "error"));
   }
 }

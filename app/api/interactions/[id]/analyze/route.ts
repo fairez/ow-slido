@@ -5,6 +5,7 @@ import { PlanLimitError, assertAiCallsAvailable, planLimitResponse } from "@/lib
 import { findNotesInteractionEvent, startAnalysis } from "@/lib/note-analysis";
 import "@/lib/note-analysis-ai";
 import { findOwnedEvent } from "@/lib/polls";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { events } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
@@ -38,9 +39,24 @@ export async function POST(request: Request, { params }: Context) {
       .update(events)
       .set({ aiNoticeAcceptedAt: new Date() })
       .where(and(eq(events.id, event.id), isNull(events.aiNoticeAcceptedAt)));
+    await recordAudit(undefined, {
+      ...auditContext(request, auth.user),
+      workspaceId: auth.workspaceId,
+      action: "ai.notice_accepted",
+      targetType: "event",
+      targetId: event.id,
+    });
   }
 
   const result = await startAnalysis(event.id, id);
   if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "ai.analysis_started",
+    targetType: "interaction",
+    targetId: id,
+    metadata: { eventId: event.id },
+  });
   return Response.json({ analysis: result.analysis }, { status: 202 });
 }

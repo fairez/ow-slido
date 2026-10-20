@@ -6,6 +6,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { setPassword } from "@/lib/auth/password-reset";
 import { getSessionUser } from "@/lib/auth/require-admin";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
+import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -39,5 +40,6 @@ export async function POST(request: Request) {
   }
 
   await setPassword(db, user.id, next);
+  await recordAuditForUser(request, user, { action: "auth.password_changed", metadata: { otherSessionsEnded: true } });
   return Response.json({ ok: true }, { headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } });
 }

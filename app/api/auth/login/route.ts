@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createPendingTwoFactorToken } from "@/lib/auth/pending-two-factor";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { getTwoFactorStatus, isTwoFactorConfigured } from "@/lib/auth/two-factor";
+import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -37,7 +38,11 @@ export async function POST(request: Request) {
 
   const [user] = await getDb().select().from(users).where(eq(users.email, creds.email));
   const passwordOk = await verifyPassword(creds.password, user?.passwordHash ?? (await dummyHash));
-  if (!user || !user.active || !passwordOk) return invalid(request);
+  if (!user || !user.active || !passwordOk) {
+    // An unknown email has no workspace to record against, so only known accounts are logged.
+    if (user?.active) await recordAuditForUser(request, user, { action: "auth.login_failed", metadata: { step: "password" } });
+    return invalid(request);
+  }
 
   // With 2FA on, the password alone never makes a session: hand out a short-lived pending token instead.
   if ((await getTwoFactorStatus(getDb(), user.id)).enabled) {
@@ -52,6 +57,7 @@ export async function POST(request: Request) {
     .set({ firstLoginAt: sql`coalesce(${users.firstLoginAt}, now())`, lastLoginAt: sql`now()` })
     .where(eq(users.id, user.id));
 
+  await recordAuditForUser(request, user, { action: "auth.login", metadata: { secondFactor: false } });
   return Response.json(
     { user: { id: user.id, email: user.email } },
     { headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } },

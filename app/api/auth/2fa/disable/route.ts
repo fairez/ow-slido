@@ -5,6 +5,7 @@ import { setSessionsValidAfter } from "@/lib/auth/password-reset";
 import { denyIfPasswordChangeRequired, getSessionUser } from "@/lib/auth/require-admin";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { TwoFactorNotConfiguredError, disableTwoFactor, getTwoFactorStatus, verifySecondFactor } from "@/lib/auth/two-factor";
+import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { serverT } from "@/lib/i18n/server";
 import { rateLimit } from "@/lib/rate-limit";
@@ -59,5 +60,6 @@ export async function POST(request: Request) {
 
   await disableTwoFactor(db, user.id);
   await setSessionsValidAfter(db, user.id);
+  await recordAuditForUser(request, user, { action: "auth.2fa_disabled", metadata: { otherSessionsEnded: true } });
   return Response.json({ ok: true }, { headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } });
 }

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { workspaces } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { isTwoFactorConfigured } from "@/lib/auth/two-factor";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { serverT } from "@/lib/i18n/server";
 import { PlanLimitError, assertCanEnforceTwoFactor, planLimitResponse } from "@/lib/limits";
@@ -28,6 +29,17 @@ export async function PATCH(request: Request) {
   if (body.require2fa && !isTwoFactorConfigured()) {
     return Response.json({ error: serverT(request, "api.twoFactorUnavailable") }, { status: 503 });
   }
+  const [before] = await getDb().select({ require2fa: workspaces.require2fa }).from(workspaces).where(eq(workspaces.id, auth.workspaceId));
   await getDb().update(workspaces).set({ require2fa: body.require2fa }).where(eq(workspaces.id, auth.workspaceId));
+  if (before?.require2fa !== body.require2fa) {
+    await recordAudit(undefined, {
+      ...auditContext(request, auth.user),
+      workspaceId: auth.workspaceId,
+      action: "workspace.settings_changed",
+      targetType: "workspace",
+      targetId: auth.workspaceId,
+      metadata: { setting: "require_2fa", from: before?.require2fa ?? false, to: body.require2fa },
+    });
+  }
   return Response.json({ require2fa: body.require2fa });
 }

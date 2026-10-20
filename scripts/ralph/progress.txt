@@ -74,3 +74,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Hand-written SQL in a generated migration is fine: `drizzle-kit generate` snapshots only tables, so triggers are not diffed. Keep `--> statement-breakpoint` between statements.
   - US-006 should pass `clientIp(request)` as `ip` and an email as `actorLabel`; US-007 gates the page on the `auditLog` entitlement (not yet in `PLANS`? check lib/plans.ts first).
 ---
+
+## 2026-10-21 - US-006
+- `recordAudit` is now called for: login success/failure (`auth.login`, `auth.login_failed`, incl. the 2FA step), `auth.password_changed`, `auth.password_reset`, `auth.2fa_enabled`/`auth.2fa_disabled`, `member.role_changed|suspended|reactivated|removed|password_reset|added` (added = invitation accepted), `invitation.created|revoked`, `billing.plan_changed|canceled` (from billing events) and `billing.cancel_requested` (the owner's click), `event.deleted`, `template.deleted`, `event.exported` (csv or zip in metadata), `ai.notice_accepted`, `ai.analysis_started`, `workspace.settings_changed` (the 2FA requirement; only when the value changes).
+- Files: lib/audit.ts (`auditContext`, `recordAuditForUser`), the routes under app/api (auth, 2fa, members, invitations, billing/cancel, events/[id], templates/[id], exports, analyze, workspaces/active/security), lib/billing/webhook.ts, lib/members.ts (results now carry `fromRole`/`fromStatus`/`role`), tests/audit-actions.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - Account-level events have no workspace, so `recordAuditForUser` writes one entry per active membership. Unknown-email login failures are not logged at all (nothing to scope them to; null-workspace rows are undeletable).
+  - Audit writes inside a transaction are unsafe: a failed insert aborts the whole transaction even though `recordAudit` swallows the error. Collect entries and write after commit (see `applyBillingEvent`).
+  - A password change calls `setSessionsValidAfter`, so the cookie used for it is dead afterwards; in tests make that call last.
+  - US-007 (audit page) can rely on these action names; there is no entry for seat-limit suspensions done by `reconcileSeats` (system action, not in the story list).
+  - Not instrumented (outside the story list): logout, template create/rename, event create, member suspensions by the plan, operator actions (US-016 should add its own with `operator:<email>` labels).
+---

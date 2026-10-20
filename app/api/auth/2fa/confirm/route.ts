@@ -1,5 +1,6 @@
 import { denyIfPasswordChangeRequired, getSessionUser } from "@/lib/auth/require-admin";
 import { TwoFactorNotConfiguredError, confirmEnrolment } from "@/lib/auth/two-factor";
+import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { serverT } from "@/lib/i18n/server";
 
@@ -22,7 +23,10 @@ export async function POST(request: Request) {
     }
     throw error;
   }
-  if (result.ok) return Response.json({ recoveryCodes: result.recoveryCodes });
+  if (result.ok) {
+    await recordAuditForUser(request, user, { action: "auth.2fa_enabled" });
+    return Response.json({ recoveryCodes: result.recoveryCodes });
+  }
   if (result.reason === "rate_limited") {
     return Response.json(
       { error: serverT(request, "api.tooManyAttempts") },

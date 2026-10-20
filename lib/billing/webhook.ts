@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { billingEvents, subscriptions, workspaces } from "@/db/schema";
+import { recordAudit, type AuditEntry } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { reconcileSeats } from "@/lib/seats";
 import type { BillingEvent, BillingProvider } from "./types";
@@ -19,6 +20,8 @@ export async function applyBillingEvent(
   db: Db = getDb(),
   now: Date = new Date(),
 ): Promise<WebhookResult> {
+  // Written after the commit: a failed audit insert would otherwise abort the subscription update itself.
+  const audits: AuditEntry[] = [];
   const result = await db.transaction(async (tx) => {
     const [workspace] = await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, event.workspaceId));
     if (!workspace) return "ignored";
@@ -32,7 +35,7 @@ export async function applyBillingEvent(
 
     // The grace clock starts when the subscription first turns past_due and stops with any other status.
     const [existing] = await tx
-      .select({ pastDueSince: subscriptions.pastDueSince })
+      .select({ pastDueSince: subscriptions.pastDueSince, plan: subscriptions.plan, status: subscriptions.status })
       .from(subscriptions)
       .where(eq(subscriptions.workspaceId, event.workspaceId))
       .for("update");
@@ -53,11 +56,27 @@ export async function applyBillingEvent(
       .insert(subscriptions)
       .values({ workspaceId: event.workspaceId, ...state })
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: state });
+
+    // A workspace with no row was on Free.
+    const fromPlan = existing?.plan ?? "free";
+    const entry = {
+      workspaceId: event.workspaceId,
+      actorLabel: `billing:${provider}`,
+      targetType: "subscription",
+      targetId: event.workspaceId,
+    };
+    if (fromPlan !== event.plan) {
+      audits.push({ ...entry, action: "billing.plan_changed", metadata: { fromPlan, toPlan: event.plan, status: event.status } });
+    }
+    if (event.status === "canceled" && existing?.status !== "canceled") {
+      audits.push({ ...entry, action: "billing.canceled", metadata: { plan: event.plan } });
+    }
     return "applied" as const;
   });
   // A plan change can leave members without a seat, or give suspended ones theirs back. The event is stored
   // by now, so a failure here must not make the provider retry; the daily sweep and the members page repeat it.
   if (result === "applied") {
+    for (const entry of audits) await recordAudit(db, entry);
     await reconcileSeats(event.workspaceId, { db, now }).catch((error) =>
       console.error("> seat reconcile failed:", error instanceof Error ? error.message : error),
     );

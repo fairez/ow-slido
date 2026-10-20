@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { templates } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { findTemplate, parseTemplateName } from "@/lib/templates";
@@ -28,5 +29,13 @@ export async function DELETE(request: Request, { params }: Context) {
   const template = await findTemplate((await params).id, auth.workspaceId);
   if (!template) return notFound(request);
   await getDb().delete(templates).where(eq(templates.id, template.id));
+  await recordAudit(undefined, {
+    ...auditContext(request, auth.user),
+    workspaceId: auth.workspaceId,
+    action: "template.deleted",
+    targetType: "template",
+    targetId: template.id,
+    metadata: { templateName: template.name },
+  });
   return Response.json({ ok: true });
 }

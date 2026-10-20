@@ -1,6 +1,9 @@
 import { getSessionUser } from "@/lib/auth/require-admin";
 import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { workspaceSetCookie } from "@/lib/auth/workspace";
+import { eq } from "drizzle-orm";
+import { users } from "@/db/schema";
+import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { acceptInvitation } from "@/lib/invitations";
@@ -45,6 +48,18 @@ export async function POST(request: Request) {
       { error: apiMessage(request, result), ...(result.reason ? { reason: result.reason } : {}) },
       { status: result.status },
     );
+  }
+
+  const [joined] = await getDb().select({ id: users.id, email: users.email }).from(users).where(eq(users.id, result.userId));
+  if (joined) {
+    await recordAudit(undefined, {
+      ...auditContext(request, joined),
+      workspaceId: result.workspaceId,
+      action: "member.added",
+      targetType: "user",
+      targetId: joined.id,
+      metadata: { role: result.role, via: "invitation" },
+    });
   }
 
   const secure = isSecureRequest(request);
