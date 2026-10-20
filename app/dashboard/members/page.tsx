@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { getT } from "@/lib/i18n/server";
 import { listInvitations } from "@/lib/invitations";
 import { listMembers } from "@/lib/members";
+import { reconcileSeats } from "@/lib/seats";
 import { PLAN_IDS, PLANS, getEntitlements } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function MembersPage() {
   if (!can(membership.role, "members.manage")) redirect("/dashboard");
 
   const db = getDb();
+  await reconcileSeats(membership.workspaceId, { db });
   const [members, invitations, entitlements] = await Promise.all([
     listMembers(db, membership.workspaceId),
     listInvitations(db, membership.workspaceId),

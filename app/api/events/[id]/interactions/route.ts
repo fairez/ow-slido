@@ -4,6 +4,7 @@ import { interactions } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { PlanLimitError, assertTypeAllowed, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import { eventNotFound, findOwnedEvent, parsePollInput, pollConfig } from "@/lib/polls";
 import { parseWordcloudInput, wordcloudConfig } from "@/lib/wordclouds";
@@ -39,6 +40,7 @@ export async function POST(request: Request, { params }: Context) {
   }
   try {
     await assertTypeAllowed(auth.workspaceId, type);
+    await assertNotOverLimit(auth.workspaceId, { eventId: event.id });
   } catch (error) {
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;

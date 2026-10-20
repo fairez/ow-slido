@@ -789,6 +789,16 @@ a.ui-button:not([data-variant]) {
   margin: 0 0 var(--space-1);
 }
 
+/* A plan lock, not a success: neutral border, and room before the list it explains. */
+.notice[data-tone="locked"] {
+  border-color: var(--border);
+  margin-bottom: var(--space-5);
+}
+
+.notice[data-tone="locked"] .notice-title {
+  font-weight: 600;
+}
+
 .notice code {
   overflow-wrap: anywhere;
 }

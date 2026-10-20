@@ -14,9 +14,13 @@ export type LimitReason =
   | "participant_limit"
   | "ai_event_limit"
   | "ai_month_limit"
-  | "report_format";
+  | "report_format"
+  | "over_limit";
 
-/** A server-enforced plan limit. Routes answer 402 `{error, reason, requiredPlan}` via `planLimitResponse`. */
+/**
+ * A server-enforced plan limit. Routes answer 402 `{error, reason, requiredPlan}` via `planLimitResponse`.
+ * `over_limit` (content kept after a downgrade) is 403: upgrading unlocks it, but the action itself is not for sale.
+ */
 export class PlanLimitError extends Error {
   constructor(
     readonly reason: LimitReason,
@@ -32,7 +36,7 @@ export class PlanLimitError extends Error {
 export function planLimitResponse(request: Request, error: PlanLimitError) {
   return Response.json(
     { error: serverT(request, error.messageKey, error.params), reason: error.reason, requiredPlan: error.requiredPlan },
-    { status: 402 },
+    { status: error.reason === "over_limit" ? 403 : 402 },
   );
 }
 

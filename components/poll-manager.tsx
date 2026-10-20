@@ -71,9 +71,13 @@ type PollManagerProps = {
   lockedTypes?: Partial<Record<Kind, Lock>>;
   /** Set when the plan has no AI calls: the analysis button turns into a pointer to the plan page. */
   aiLock?: Lock;
+  /** Interactions a downgrade left read-only, by id: they keep their results but cannot be started, edited or duplicated. */
+  itemLocks?: Record<string, Lock>;
+  /** Set when the whole event is past the plan's monthly limit: nothing new can be added to it. */
+  eventLock?: Lock;
 };
 
-export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock }: PollManagerProps) {
+export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock }: PollManagerProps) {
   const t = useT();
   const typeLabel = (kind: Kind) => t(TYPE_LABELS[kind]);
   const base = `/api/events/${eventId}/interactions`;
@@ -223,21 +227,25 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
         <EmptyState title={t("pollMgr.emptyTitle")}>{t("pollMgr.emptyBody")}</EmptyState>
       ) : (
         <ul className="row-list">
-          {items.map((item, index) => (
+          {items.map((item, index) => {
+            const lock = itemLocks[item.id];
+            return (
             <li key={item.id} className="interaction-row" data-state={item.state}>
               <div className="interaction-head">
                 <div className="event-main">
                   <h3 className="event-name">{item.title}</h3>
                   <div className="row-meta">
                     {typeLabel(item.type)} <Badge tone={item.state === "live" ? "accent" : "neutral"}><span data-testid="state">{item.state}</span></Badge>
+                    {lock && <> <Badge>{t("pollMgr.readOnly")}</Badge></>}
                   </div>
                 </div>
                 {item.state !== "closed" && (
                   <div className="row-actions">
-                    {item.state === "draft" && (
+                    {lock && item.state !== "live" && <PlanHint lock={lock}>{t("pollMgr.unlock")}</PlanHint>}
+                    {!lock && item.state === "draft" && (
                       <Button variant="primary" onClick={() => transition(item, "start")}>{t("pollMgr.start")}</Button>
                     )}
-                    {item.state === "paused" && (
+                    {!lock && item.state === "paused" && (
                       <Button variant="primary" onClick={() => transition(item, "start")}>{t("pollMgr.resume")}</Button>
                     )}
                     {item.state === "live" && (
@@ -257,15 +265,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               ))}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
-                  <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>
-                  <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>
+                  {!lock && <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>}
+                  {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                   <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>
-                  <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
-                  <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>
+                  {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
+                  {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>}
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
@@ -349,7 +358,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
             </div>
           </form>
         </Card>
-      ) : (
+      ) : eventLock ? null : (
         <div className="add-bar">
           <p className="row-meta">{t("pollMgr.addBar")}</p>
           <div className="row-actions">

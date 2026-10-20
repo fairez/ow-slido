@@ -78,6 +78,8 @@ export const memberships = pgTable(
     status: text("status", { enum: ["active", "suspended"] })
       .notNull()
       .default("active"),
+    /** Why a suspended member is suspended. `seat_limit` is set by the plan and lifted when a seat frees up; null is a manual suspension. */
+    suspendedReason: text("suspended_reason", { enum: ["seat_limit"] }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -85,6 +87,7 @@ export const memberships = pgTable(
     index("memberships_user_idx").on(t.userId),
     check("memberships_role", sql`${t.role} in ('owner', 'admin', 'editor', 'moderator', 'viewer')`),
     check("memberships_status", sql`${t.status} in ('active', 'suspended')`),
+    check("memberships_suspended_reason", sql`${t.suspendedReason} is null or ${t.suspendedReason} in ('seat_limit')`),
   ],
 );
 

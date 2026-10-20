@@ -1,0 +1,2 @@
+ALTER TABLE "memberships" ADD COLUMN "suspended_reason" text;--> statement-breakpoint
+ALTER TABLE "memberships" ADD CONSTRAINT "memberships_suspended_reason" CHECK ("memberships"."suspended_reason" is null or "memberships"."suspended_reason" in ('seat_limit'));

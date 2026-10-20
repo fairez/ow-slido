@@ -97,8 +97,9 @@ test("a type outside allowedTypes is refused with 402 and the plan that has it",
     req("POST", "/x", undefined, owner.cookie),
     { params: Promise.resolve({ id: event.id, interactionId: interaction.id }) },
   );
-  expect(copy.status).toBe(402);
-  expect((await copy.json()).reason).toBe("type_not_allowed");
+  // Content already in the workspace is kept read-only rather than sold as a new limit (see downgrade.test.ts).
+  expect(copy.status).toBe(403);
+  expect(await copy.json()).toMatchObject({ reason: "over_limit", requiredPlan: "pro" });
 
   await setPlan(db, owner.workspaceId, "pro");
   expect((await newPoll(owner.cookie, event.id)).status).toBe(201);

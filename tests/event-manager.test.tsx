@@ -28,6 +28,17 @@ describe("EventManager", () => {
     expect(names).toEqual(["Sooner", "Later"]);
   });
 
+  it("marks an event a downgrade left read-only and drops rename and duplicate", () => {
+    const locked = { ...ev("a", "Over", "2030-01-01T00:00:00.000Z"), lock: { requiredPlan: "pro" as const } };
+    render(<EventManager initialEvents={[locked, ev("b", "Fine", "2030-02-01T00:00:00.000Z")]} />);
+    const [over, fine] = screen.getAllByRole("listitem");
+    expect(over.textContent).toContain("Read-only");
+    expect(over.querySelector('a[href="/dashboard/plan"]')?.textContent).toContain("Pro plan");
+    const names = (li: HTMLElement) => [...li.querySelectorAll("button")].map((b) => b.textContent);
+    expect(names(over)).toEqual(["Delete"]);
+    expect(names(fine)).toEqual(["Rename", "Duplicate", "Delete"]);
+  });
+
   it("shows the join code and URL after creating", async () => {
     const saved = ev("n", "New", "2030-01-01T00:00:00.000Z", "654321");
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ event: saved }, { status: 201 })));

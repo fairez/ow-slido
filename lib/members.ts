@@ -4,7 +4,7 @@ import type { createDb } from "@/db/client";
 import { memberships, users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { ROLES, type Role } from "@/lib/auth/permissions";
-import { assertSeatAvailable } from "@/lib/seats";
+import { assertSeatAvailable, reconcileSeats } from "@/lib/seats";
 import type { MessageKey } from "@/lib/i18n/en";
 import { revokeMemberSockets } from "@/lib/realtime/publisher";
 
@@ -41,6 +41,7 @@ export async function listMembers(db: Db, workspaceId: string) {
       email: users.email,
       role: memberships.role,
       status: memberships.status,
+      suspendedReason: memberships.suspendedReason,
       joinedAt: memberships.createdAt,
       lastLoginAt: users.lastLoginAt,
     })
@@ -120,11 +121,16 @@ export async function setMemberStatus(
     if (status === "active") await assertSeatAvailable(workspaceId, { db: tx });
     await tx
       .update(memberships)
-      .set({ status })
+      // A manual change replaces any plan-driven reason; the plan only lifts suspensions it made itself.
+      .set({ status, suspendedReason: null })
       .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetId)));
     return { ok: true as const };
   });
-  if (result.ok && status === "suspended") revokeMemberSockets(targetId, workspaceId);
+  if (result.ok && status === "suspended") {
+    revokeMemberSockets(targetId, workspaceId);
+    // A seat just freed up, which may bring back someone the plan had suspended.
+    await reconcileSeats(workspaceId, { db });
+  }
   return result;
 }
 
@@ -135,7 +141,10 @@ export async function removeMember(db: Db, workspaceId: string, actor: Actor, ta
     await tx.delete(memberships).where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, targetId)));
     return { ok: true as const };
   });
-  if (result.ok) revokeMemberSockets(targetId, workspaceId);
+  if (result.ok) {
+    revokeMemberSockets(targetId, workspaceId);
+    await reconcileSeats(workspaceId, { db });
+  }
   return result;
 }
 

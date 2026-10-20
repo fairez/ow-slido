@@ -151,6 +151,8 @@ export const en = {
   "eventMgr.manage": "Manage",
   "eventMgr.rename": "Rename",
   "eventMgr.duplicate": "Duplicate",
+  "eventMgr.readOnly": "Read-only",
+  "eventMgr.unlock": "Unlock",
   "eventMgr.delete": "Delete",
   "eventMgr.deleteTitle": "Delete this event?",
   "eventMgr.deleteBody":
@@ -171,6 +173,8 @@ export const en = {
   "pollMgr.close": "Close",
   "pollMgr.edit": "Edit",
   "pollMgr.duplicate": "Duplicate",
+  "pollMgr.readOnly": "Read-only",
+  "pollMgr.unlock": "Unlock",
   "pollMgr.delete": "Delete",
   "pollMgr.moveUp": "Move {title} up",
   "pollMgr.moveDown": "Move {title} down",
@@ -568,6 +572,7 @@ export const en = {
   "api.planAiEventLimit": "This event has used all {limit} AI calls your plan allows. Upgrade for more.",
   "api.planAiMonthLimit": "Your workspace has used all {limit} AI calls your plan allows this month. Upgrade for more.",
   "api.planReportFormat": "Your plan does not include {format} reports. Upgrade to export them.",
+  "api.overLimit": "This is kept on your plan but is read-only now. Upgrade to start, edit or duplicate it.",
   "api.memberNotFound": "Member not found",
   "api.memberOwnerOnly": "Only an owner can change an owner or give someone the owner role.",
   "api.memberLastOwner": "A workspace needs at least one active owner. Make someone else an owner first.",
@@ -586,6 +591,7 @@ export const en = {
   "members.neverLoggedIn": "Has not logged in yet",
   "members.status.active": "Active",
   "members.status.suspended": "Suspended",
+  "members.suspendedSeatLimit": "Your plan has fewer seats. Returns when a seat frees up.",
   "members.roleFor": "Role for {email}",
   "members.suspend": "Suspend",
   "members.suspendFor": "Suspend {email}",
@@ -695,6 +701,8 @@ export const en = {
   "plan.hint.tier": "{plan} plan",
   "plan.hint.limit": "Limit reached",
   "dash.exportPdf": "Export PDF",
+  "dash.eventReadOnlyTitle": "This event is past your plan's monthly limit",
+  "dash.eventReadOnlyBody": "Results and CSV export still work. Starting, editing and duplicating are locked until you upgrade.",
   "dash.exportXlsx": "Export XLSX",
 };
 

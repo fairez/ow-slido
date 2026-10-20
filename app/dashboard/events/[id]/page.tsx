@@ -12,8 +12,9 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
+import { combineOverLimit, overLimitEvents } from "@/lib/over-limit";
 import { aiLock, lockedFormats, lockedTypes } from "@/lib/plan-hints";
-import { getEntitlements } from "@/lib/plans";
+import { getEntitlements, type PlanId } from "@/lib/plans";
 import { findOwnedEvent } from "@/lib/polls";
 import { getT } from "@/lib/i18n/server";
 
@@ -41,6 +42,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     .where(eq(interactions.eventId, event.id))
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
 
+  // After a downgrade, content the plan no longer covers stays here as read-only.
+  const typeLocks = lockedTypes(limits);
+  const eventLock = (await overLimitEvents(membership.workspaceId)).get(event.id) ?? null;
+  const itemLocks: Record<string, { requiredPlan: PlanId | null }> = {};
+  for (const item of list) {
+    const lock = combineOverLimit(eventLock, typeLocks[item.type] ?? null);
+    if (lock) itemLocks[item.id] = lock;
+  }
+
   return (
     <main id="main" className="page">
       <Link href="/dashboard" className="back-link">{t("dash.backToEvents")}</Link>
@@ -67,12 +77,23 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {formatLocks.xlsx && <PlanHint lock={formatLocks.xlsx}>{t("dash.exportXlsx")}</PlanHint>}
         </div>
       </header>
+      {eventLock && (
+        <div role="status" className="notice" data-tone="locked">
+          <p className="notice-title">{t("dash.eventReadOnlyTitle")}</p>
+          <p>{t("dash.eventReadOnlyBody")}</p>
+          <p>
+            <PlanHint lock={eventLock}>{t("pollMgr.unlock")}</PlanHint>
+          </p>
+        </div>
+      )}
       <PollManager
         eventId={event.id}
         initialInteractions={list as InteractionItem[]}
         aiEnabled={isAiConfigured()}
-        lockedTypes={lockedTypes(limits)}
+        lockedTypes={typeLocks}
         aiLock={aiLock(limits)}
+        itemLocks={itemLocks}
+        eventLock={eventLock ?? undefined}
       />
     </main>
   );

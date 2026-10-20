@@ -4,6 +4,8 @@ import { interactions } from "@/db/schema";
 import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
 import type { Action } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import {
   eventNotFound,
@@ -42,6 +44,12 @@ export async function PATCH(request: Request, context: Context) {
   if (!loaded.interaction) return loaded.response;
   const current = loaded.interaction;
   if (current.state !== "draft") return notDraft(request);
+  try {
+    await assertNotOverLimit(loaded.auth.workspaceId, { eventId: current.eventId, type: current.type });
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
 
   let title: string | undefined;
   let config: Record<string, unknown>;

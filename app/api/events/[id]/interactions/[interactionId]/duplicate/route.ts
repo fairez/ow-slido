@@ -13,7 +13,8 @@ import {
 } from "@/lib/polls";
 
 import { isNewInteractionType, newInteractionConfig } from "@/lib/interaction-config";
-import { PlanLimitError, assertTypeAllowed, planLimitResponse } from "@/lib/limits";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
 type Context = { params: Promise<{ id: string; interactionId: string }> };
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: Context) {
   const source = await findInteraction(event.id, interactionId);
   if (!source) return interactionNotFound(request);
   try {
-    await assertTypeAllowed(auth.workspaceId, source.type);
+    await assertNotOverLimit(auth.workspaceId, { eventId: event.id, type: source.type });
   } catch (error) {
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;

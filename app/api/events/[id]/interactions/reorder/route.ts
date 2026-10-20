@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
 import { eventNotFound, findOwnedEvent } from "@/lib/polls";
 
 type Context = { params: Promise<{ id: string }> };
@@ -13,6 +15,12 @@ export async function POST(request: Request, { params }: Context) {
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.workspaceId);
   if (!event) return eventNotFound(request);
+  try {
+    await assertNotOverLimit(auth.workspaceId, { eventId: event.id });
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
 
   const body = (await request.json().catch(() => null)) as { ids?: unknown } | null;
   const ids = body?.ids;

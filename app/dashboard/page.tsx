@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { EventManager } from "@/components/event-manager";
 import { getDb } from "@/lib/db";
+import { overLimitEvents } from "@/lib/over-limit";
 import { LogoutButton } from "@/components/logout-button";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
@@ -26,12 +27,14 @@ export default async function DashboardPage() {
     .from(events)
     .where(eq(events.workspaceId, membership.workspaceId))
     .orderBy(asc(events.startsAt), asc(events.createdAt));
+  const locks = await overLimitEvents(membership.workspaceId);
   const initialEvents = list.map((e) => ({
     id: e.id,
     name: e.name,
     startsAt: e.startsAt.toISOString(),
     endsAt: e.endsAt.toISOString(),
     joinCode: e.joinCode,
+    lock: locks.get(e.id) ?? null,
   }));
 
   return (

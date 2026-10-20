@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { billingEvents, subscriptions, workspaces } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { reconcileSeats } from "@/lib/seats";
 import type { BillingEvent, BillingProvider } from "./types";
 
 type Db = ReturnType<typeof getDb>;
@@ -18,7 +19,7 @@ export async function applyBillingEvent(
   db: Db = getDb(),
   now: Date = new Date(),
 ): Promise<WebhookResult> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [workspace] = await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, event.workspaceId));
     if (!workspace) return "ignored";
 
@@ -52,8 +53,16 @@ export async function applyBillingEvent(
       .insert(subscriptions)
       .values({ workspaceId: event.workspaceId, ...state })
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: state });
-    return "applied";
+    return "applied" as const;
   });
+  // A plan change can leave members without a seat, or give suspended ones theirs back. The event is stored
+  // by now, so a failure here must not make the provider retry; the daily sweep and the members page repeat it.
+  if (result === "applied") {
+    await reconcileSeats(event.workspaceId, { db, now }).catch((error) =>
+      console.error("> seat reconcile failed:", error instanceof Error ? error.message : error),
+    );
+  }
+  return result;
 }
 
 /** Verify, then apply. Everything that changes a subscription from a provider goes through here. */

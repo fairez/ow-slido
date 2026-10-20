@@ -17,6 +17,8 @@ export type MemberRow = {
   email: string;
   role: Role;
   status: "active" | "suspended";
+  /** Set when the plan suspended this member for lack of a seat; null for a manual suspension. */
+  suspendedReason?: "seat_limit" | null;
   joinedAt: string;
   lastLoginAt: string | null;
 };
@@ -190,6 +192,9 @@ export function MembersManager({
               <li key={m.userId} className="member-row" data-status={m.status}>
                 <div className="member-main">
                   <p className="member-email">{m.email}</p>
+                  {m.status === "suspended" && m.suspendedReason === "seat_limit" && (
+                    <p className="row-meta">{t("members.suspendedSeatLimit")}</p>
+                  )}
                   <p className="row-meta">
                     {m.lastLoginAt ? t("members.lastLogin", { date: day(m.lastLoginAt) }) : t("members.neverLoggedIn")}
                   </p>

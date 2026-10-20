@@ -2,6 +2,7 @@ import { and, inArray, ne } from "drizzle-orm";
 import { subscriptions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { resolveEntitlements } from "@/lib/plans";
+import { reconcileSeats } from "@/lib/seats";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -41,7 +42,9 @@ const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** Runs `expireSubscriptions` now and then once a day. The timer does not keep the process alive. */
 export function startSubscriptionSweep(db: Db = getDb()): () => void {
   const run = () =>
-    expireSubscriptions(db).catch((error) => console.error("> subscription sweep failed:", error instanceof Error ? error.message : error));
+    expireSubscriptions(db)
+      .then((lapsed) => Promise.all(lapsed.map((workspaceId) => reconcileSeats(workspaceId, { db }))))
+      .catch((error) => console.error("> subscription sweep failed:", error instanceof Error ? error.message : error));
   void run();
   const timer = setInterval(run, SWEEP_INTERVAL_MS);
   timer.unref();

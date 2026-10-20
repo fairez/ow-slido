@@ -4,6 +4,8 @@ import { events } from "@/db/schema";
 import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid, parseEventInput } from "@/lib/events";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -30,6 +32,12 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!auth.ok) return auth.response;
   const current = await findOwned((await params).id, auth.workspaceId);
   if (!current) return notFound(request);
+  try {
+    await assertNotOverLimit(auth.workspaceId, { eventId: current.id });
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
 
   const parsed = parseEventInput(await request.json().catch(() => null), true);
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });

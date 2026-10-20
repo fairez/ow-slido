@@ -8,7 +8,9 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField } from "@/components/ui/field";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { PlanHint } from "@/components/plan-hint";
 import { useT } from "@/lib/i18n/client";
+import type { Lock } from "@/lib/plan-hints";
 
 export type EventSummary = {
   id: string;
@@ -16,6 +18,8 @@ export type EventSummary = {
   startsAt: string;
   endsAt: string;
   joinCode: string;
+  /** Set when a downgrade left this event past the plan's monthly limit: it is read-only. */
+  lock?: Lock | null;
 };
 
 const byStart = (a: EventSummary, b: EventSummary) =>
@@ -175,6 +179,11 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                   ) : (
                     <h3 className="event-name">{e.name}</h3>
                   )}
+                  {e.lock && (
+                    <div className="row-meta">
+                      <Badge>{t("eventMgr.readOnly")}</Badge>
+                    </div>
+                  )}
                   <p className="row-meta">
                     {new Date(e.startsAt).toLocaleString()} {t("eventMgr.to")} {new Date(e.endsAt).toLocaleString()}
                   </p>
@@ -189,8 +198,14 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                   <Link href={`/dashboard/events/${e.id}`} className="ui-button" data-variant="primary">
                     {t("eventMgr.manage")}
                   </Link>
-                  <Button variant="quiet" onClick={() => setRenaming(e.id)}>{t("eventMgr.rename")}</Button>
-                  <Button variant="quiet" onClick={() => duplicate(e)}>{t("eventMgr.duplicate")}</Button>
+                  {e.lock ? (
+                    <PlanHint lock={e.lock}>{t("eventMgr.unlock")}</PlanHint>
+                  ) : (
+                    <>
+                      <Button variant="quiet" onClick={() => setRenaming(e.id)}>{t("eventMgr.rename")}</Button>
+                      <Button variant="quiet" onClick={() => duplicate(e)}>{t("eventMgr.duplicate")}</Button>
+                    </>
+                  )}
                   <Button variant="quiet" onClick={() => setDeleting(e)}>{t("eventMgr.delete")}</Button>
                 </div>
               </li>

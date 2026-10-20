@@ -5,6 +5,8 @@ import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { EVENT_NAME_MAX, generateUniqueJoinCode, isUuid } from "@/lib/events";
 import { PlanLimitError, assertCanCreateEvent, planLimitResponse } from "@/lib/limits";
+import { assertNotOverLimit } from "@/lib/over-limit";
+import { getEntitlements } from "@/lib/plans";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -29,17 +31,22 @@ export async function POST(request: Request, { params }: Context) {
     : [];
   if (!source) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
   try {
+    await assertNotOverLimit(auth.workspaceId, { eventId: source.id });
     await assertCanCreateEvent(auth.workspaceId);
   } catch (error) {
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;
   }
 
-  const copies = await getDb()
-    .select()
-    .from(interactions)
-    .where(eq(interactions.eventId, source.id))
-    .orderBy(asc(interactions.position), asc(interactions.createdAt));
+  // Types the plan no longer includes are not carried over: a copy would be read-only from the start.
+  const { limits } = await getEntitlements(auth.workspaceId);
+  const copies = (
+    await getDb()
+      .select()
+      .from(interactions)
+      .where(eq(interactions.eventId, source.id))
+      .orderBy(asc(interactions.position), asc(interactions.createdAt))
+  ).filter((i) => limits.allowedTypes.includes(i.type));
   const name = `${source.name} (copy)`.slice(0, EVENT_NAME_MAX);
 
   for (let attempt = 0; attempt < 3; attempt++) {

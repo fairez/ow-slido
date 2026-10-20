@@ -55,6 +55,28 @@ describe("gated actions in the host screens", () => {
     expect(screen.getByLabelText("Question")).toBeTruthy();
   });
 
+  it("shows a downgraded interaction as read-only with a pointer to the plan that unlocks it", () => {
+    const poll = { id: "p", type: "poll" as const, title: "Lunch?", state: "draft" as const, position: 0, config: { options: [] } };
+    const other = { ...poll, id: "q", title: "Dinner?" };
+    render(<PollManager eventId="e" initialInteractions={[poll, other]} itemLocks={{ p: { requiredPlan: "pro" } }} />);
+    const [locked, open] = screen.getAllByRole("listitem");
+    expect(locked.textContent).toContain("Read-only");
+    expect(locked.querySelector('a[href="/dashboard/plan"]')?.textContent).toContain("Pro plan");
+    const labels = (li: HTMLElement) => [...li.querySelectorAll("button")].map((b) => b.textContent);
+    expect(labels(locked)).not.toContain("Start");
+    expect(labels(locked)).toContain("Delete");
+    expect(labels(locked)).not.toContain("Edit");
+    expect(labels(locked)).not.toContain("Duplicate");
+    expect(labels(open)).toContain("Start");
+  });
+
+  it("hides the add bar and reordering when the whole event is read-only", () => {
+    const poll = { id: "p", type: "poll" as const, title: "Lunch?", state: "draft" as const, position: 0, config: { options: [] } };
+    render(<PollManager eventId="e" initialInteractions={[poll]} eventLock={{ requiredPlan: "pro" }} itemLocks={{ p: { requiredPlan: "pro" } }} />);
+    expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Move Lunch\? up/ })).toBeNull();
+  });
+
   it("swaps the analysis panel for a hint when the plan has no AI, and does nothing when AI is off", () => {
     const notes = { id: "n", type: "sharedNotes" as const, title: "Notes", state: "live" as const, position: 0, config: {} };
     render(<PollManager eventId="e" initialInteractions={[notes]} aiEnabled aiLock={{ requiredPlan: "pro" }} />);
