@@ -468,3 +468,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `IconKind` now includes `quiz` (icon, label, i18n); the host builder's narrower kind list and the quiz UI come with US-043.
   - No UI change, no browser check. Full suite 1022 tests green, typecheck and eslint (source dirs) clean. Dev DB migrated to 0034.
 ---
+
+## 2026-10-20 - US-041
+- Quiz answer endpoint `POST /api/interactions/[id]/quiz-answer {optionIds}` (`submitQuizAnswer` in lib/quiz.ts, same shape as the ranking route: IP and token rate limits, participant token, share lock on the interaction). Live only; one answer per participant (409 `api.alreadyAnswered`); after `deadline_at` + grace (`QUIZ_GRACE_MS`, default 300) it answers 409 `api.quizTimeUp` ("Time is up"); bad/unknown/repeated option ids are 400 `api.quizAnswerInvalid`.
+- `scoreQuizAnswer({correct, elapsedMs, timeLimitMs, points})`: 0 if wrong, else points scaled linearly to 50% at the deadline (clamped, so a grace answer earns 50%). `isCorrectSelection` compares the selected set with `correctOptionIds`. Elapsed ms and the late check come from the database `clock_timestamp()` in the same transaction.
+- Quiz module now has real `results` (`QuizResults`: per-option count + `correct` flag, `correctPercent`), `csv` (`QUIZ_EXPORT_HEADER`: option, correct, count, answers, correct_percent) and `responseCount`. Host-only `quiz:results` is published on each answer and refreshes the content library.
+- Files: lib/{quiz,interaction-modules}.ts, app/api/interactions/[id]/quiz-answer/route.ts, components/poll-manager.tsx, lib/i18n/{en,id}.ts, tests/quiz-answer.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Use `clock_timestamp()` rather than `now()` for time inside a transaction that takes a lock: `now()` is the transaction start.
+  - `tx.execute` returns `{ rows }` with node-postgres.
+  - A quiz test can put a question mid-window by setting `started_at`/`deadline_at` with SQL (`now() - interval`); see `startedAgo` in tests/quiz-answer.test.ts.
+  - `presenter` and `live` for quiz are still null (US-042 participant screen, US-043 presenter and builder). Nicknames and the leaderboard come with US-044+; `quiz_answers.points` is what they sum.
+  - No UI change, no browser check.
+---

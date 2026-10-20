@@ -21,7 +21,7 @@ import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
-import { countQuizAnswers } from "@/lib/quiz";
+import { computeQuizResults, countQuizAnswers } from "@/lib/quiz";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
 import { RANKING_MAX_OPTIONS } from "@/lib/ranking-limits";
 import { computeResults, getPresenterResults } from "@/lib/rating";
@@ -46,6 +46,7 @@ export const RANKING_EXPORT_HEADER = [
   "rankings",
   ...Array.from({ length: RANKING_MAX_OPTIONS }, (_, i) => `position_${i + 1}`),
 ] as const;
+export const QUIZ_EXPORT_HEADER = ["section", "title", "option", "correct", "count", "answers", "correct_percent"] as const;
 export const ANALYSIS_EXPORT_HEADER = ["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"] as const;
 
 /**
@@ -410,13 +411,32 @@ const rankingModule: InteractionModule = {
   },
 };
 
-// Counts, results and the CSV arrive with the answer endpoint (US-041); the screens with US-042/043.
+// The participant and presenter screens arrive with US-042/043.
 const quizModule: InteractionModule = {
   type: "quiz",
   presentWhenClosed: false,
   validateConfig: (body, partial) => parseNewInteractionInput("quiz", body, partial),
-  results: async (interactionId) => ({ interactionId, total: await countQuizAnswers(interactionId) }),
-  csv: async () => [],
+  async results(interactionId) {
+    return computeQuizResults(db(), interactionId, (await loadRow(interactionId)).config);
+  },
+  async csv(interactionId) {
+    const row = await loadRow(interactionId);
+    const results = await computeQuizResults(db(), interactionId, row.config);
+    return [
+      {
+        header: QUIZ_EXPORT_HEADER,
+        rows: results.options.map((o) => [
+          "quiz",
+          row.title,
+          o.text,
+          o.correct ? "yes" : "no",
+          o.count,
+          results.total,
+          results.correctPercent ?? "",
+        ]),
+      },
+    ];
+  },
   responseCount: countQuizAnswers,
   presenter: async () => null,
   live: async () => null,

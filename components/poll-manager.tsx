@@ -62,6 +62,7 @@ const REFRESH_EVENTS = [
   "wordcloud:words",
   "rating:results",
   "ranking:results",
+  "quiz:results",
   "response:added",
   "response:removed",
   "note:added",
