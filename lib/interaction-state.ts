@@ -1,5 +1,5 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { applyScoreDeltas, persistClosedQuestion } from "@/lib/leaderboard";
@@ -28,12 +28,16 @@ export async function startInteraction(eventId: string, id: string): Promise<Res
       .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId)))
       .for("update");
     if (!current || (current.state !== "draft" && current.state !== "paused")) return { current };
-    // Pause the old live one first so the one-live-per-event index is never violated.
-    const paused = await tx
-      .update(interactions)
-      .set({ state: "paused" })
-      .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")))
-      .returning({ id: interactions.id });
+    // Pause the old live one first so the one-live-per-event index is never violated. A survey neither
+    // pauses the interaction on screen nor gets paused by the next one: it is open on its own link.
+    const paused =
+      current.type === "survey"
+        ? []
+        : await tx
+            .update(interactions)
+            .set({ state: "paused" })
+            .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live"), ne(interactions.type, "survey")))
+            .returning({ id: interactions.id });
     // A quiz question gets its answer window from the server clock each time it starts (or resumes).
     const timed =
       current.type === "quiz"

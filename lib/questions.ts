@@ -1,5 +1,5 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { events, interactions, participants, questionVotes, questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
@@ -101,7 +101,7 @@ export async function ensureQaInteraction(db: ReturnType<typeof getDb>, eventId:
     const [liveNow] = await tx
       .select({ id: interactions.id })
       .from(interactions)
-      .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")));
+      .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live"), ne(interactions.type, "survey")));
     const [created] = await tx
       .insert(interactions)
       .values({

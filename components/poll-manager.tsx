@@ -27,6 +27,7 @@ import {
 import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
 import { SaveTemplateDialog, type SaveTarget } from "@/components/save-template-dialog";
+import { SurveyLinkButton } from "@/components/survey-link";
 import { SurveyBuilder, blankSurvey, surveyDraftFrom, type StoredSurveyQuestion, type SurveyDraft, type surveyBody } from "@/components/survey-builder";
 import { TemplatePicker } from "@/components/template-picker";
 import { GripIcon, TypeIcon } from "@/components/type-icon";
@@ -297,7 +298,11 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     // Starting pauses the previously live interaction on the server; it can be resumed.
     setItems((list) =>
       list.map((i) =>
-        i.id === interaction.id ? interaction : action === "start" && i.state === "live" ? { ...i, state: "paused" } : i,
+        i.id === interaction.id
+          ? interaction
+          : action === "start" && i.state === "live" && i.type !== "survey" && interaction.type !== "survey"
+            ? { ...i, state: "paused" }
+            : i,
       ),
     );
   }
@@ -481,6 +486,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               <div className="row-actions row-actions-quiet">
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>}
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => { setError(null); setRenaming({ id: item.id, name: item.title }); }}>{t("pollMgr.rename")}</Button>}
+                {item.type === "survey" && <SurveyLinkButton interactionId={item.id} title={item.title} />}
                 {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                 {canManageTemplates && (
                   <Button variant="quiet" aria-label={t("templates.saveItemFor", { title: item.title })} onClick={() => setSaveTarget({ interactionId: item.id, defaultName: item.title })}>

@@ -1,0 +1,2 @@
+DROP INDEX "interactions_one_live_per_event";--> statement-breakpoint
+CREATE UNIQUE INDEX "interactions_one_live_per_event" ON "interactions" USING btree ("event_id") WHERE "interactions"."state" = 'live' and "interactions"."type" <> 'survey';

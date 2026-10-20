@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { RankingOption, RatingConfig } from "@/lib/interaction-config";
@@ -104,6 +104,6 @@ export async function getLiveInteraction(
   const [row] = await getDb()
     .select()
     .from(interactions)
-    .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")));
+    .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live"), ne(interactions.type, "survey")));
   return row ? interactionModule(row.type).live(row, participantId) : null;
 }

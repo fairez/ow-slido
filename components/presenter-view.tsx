@@ -110,11 +110,13 @@ export function PresenterView({
 
   const go = useCallback(
     async (step: 1 | -1) => {
-      if (busy.current || list.length === 0) return;
-      const liveIdx = list.findIndex((i) => i.state === "live");
-      const curIdx = liveIdx >= 0 ? liveIdx : list.findIndex((i) => i.id === cursor.current);
-      const next = curIdx < 0 ? (step === 1 ? 0 : list.length - 1) : curIdx + step;
-      const target = list[next];
+      // A survey is opened from its own link, not stepped through on the projector.
+      const steps = list.filter((i) => i.type !== "survey");
+      if (busy.current || steps.length === 0) return;
+      const liveIdx = steps.findIndex((i) => i.state === "live");
+      const curIdx = liveIdx >= 0 ? liveIdx : steps.findIndex((i) => i.id === cursor.current);
+      const next = curIdx < 0 ? (step === 1 ? 0 : steps.length - 1) : curIdx + step;
+      const target = steps[next];
       if (!target) return;
       if (target.state === "live") return;
       if (target.state === "closed") {

@@ -16,6 +16,7 @@ let collection: { POST: (req: Request, ctx: Ctx) => Promise<Response> };
 let item: { PATCH: (req: Request, ctx: ItemCtx) => Promise<Response> };
 let duplicate: { POST: (req: Request, ctx: ItemCtx) => Promise<Response> };
 let survey: { POST: (r: Request, c: Ctx) => Promise<Response> };
+let surveyJoin: { POST: (r: Request, c: Ctx) => Promise<Response> };
 let signup: (req: Request) => Promise<Response>;
 let tokens: typeof import("@/lib/participant-token");
 let publisher: typeof import("@/lib/realtime/publisher");
@@ -38,6 +39,7 @@ beforeAll(async () => {
   item = await import("@/app/api/events/[id]/interactions/[interactionId]/route");
   duplicate = await import("@/app/api/events/[id]/interactions/[interactionId]/duplicate/route");
   survey = await import("@/app/api/interactions/[id]/survey/route");
+  surveyJoin = await import("@/app/api/interactions/[id]/survey/join/route");
   signup = (await import("@/app/api/auth/signup/route")).POST;
   tokens = await import("@/lib/participant-token");
   publisher = await import("@/lib/realtime/publisher");
@@ -372,4 +374,92 @@ test("deleting a participant removes their submission and its answers", async ()
   await db.delete(participants);
   expect(await db.select().from(surveySubmissions)).toHaveLength(0);
   expect(await db.select().from(surveyAnswers)).toHaveLength(0);
+});
+
+const anonymous = (id = surveyId, c: string | null = null) =>
+  surveyJoin.POST(new Request("http://localhost/api", { method: "POST", headers: c ? { cookie: c } : {} }), ctx(id));
+const cookieOf = (res: Response) => (res.headers.get("set-cookie") ?? "").split(";")[0];
+
+test("a second submission answers 409 with the already-submitted reason", async () => {
+  expect((await submit(valid())).status).toBe(201);
+  const again = await submit(valid());
+  expect(again.status).toBe(409);
+  expect(await again.json()).toMatchObject({ reason: "alreadySubmitted" });
+});
+
+test("a live survey stays live beside another interaction, in both start orders", async () => {
+  const { startInteraction } = await import("@/lib/interaction-state");
+  const { getLiveInteraction } = await import("@/lib/live-view");
+  const poll = (await (await collection.POST(req("POST", { type: "poll", question: "Q?", options: ["a", "b"] }), ctx(eventId))).json()).interaction;
+  const other = (await (await collection.POST(req("POST", { type: "rating", prompt: "r" }), ctx(eventId))).json()).interaction;
+  const state = async (id: string) => (await db.select().from(interactions).where(eq(interactions.id, id)))[0].state;
+
+  expect((await startInteraction(eventId, poll.id)).ok).toBe(true);
+  expect(await state(surveyId)).toBe("live");
+  expect(await state(poll.id)).toBe("live");
+  // The participants' live screen is the poll; the survey has its own link.
+  expect((await getLiveInteraction(eventId))?.id).toBe(poll.id);
+
+  expect((await startInteraction(eventId, other.id)).ok).toBe(true);
+  expect(await state(poll.id)).toBe("paused");
+  expect(await state(surveyId)).toBe("live");
+
+  await db.update(interactions).set({ state: "paused" }).where(eq(interactions.id, surveyId));
+  expect((await startInteraction(eventId, surveyId)).ok).toBe(true);
+  expect(await state(other.id)).toBe("live");
+});
+
+test("two live non-survey interactions are still refused by the database", async () => {
+  const a = (await (await collection.POST(req("POST", { type: "rating", prompt: "a" }), ctx(eventId))).json()).interaction;
+  const b = (await (await collection.POST(req("POST", { type: "rating", prompt: "b" }), ctx(eventId))).json()).interaction;
+  await db.update(interactions).set({ state: "live" }).where(eq(interactions.id, a.id));
+  await expect(db.update(interactions).set({ state: "live" }).where(eq(interactions.id, b.id))).rejects.toThrow();
+});
+
+test("the survey link creates a participant and a cookie, then reuses it", async () => {
+  const first = await anonymous();
+  expect(first.status).toBe(200);
+  expect(await first.json()).toEqual({ submitted: false });
+  const fresh = cookieOf(first);
+  expect(fresh).toMatch(new RegExp(`^${tokens.participantCookieName(eventId)}=`));
+  const before = await db.select().from(participants).where(eq(participants.eventId, eventId));
+
+  const again = await anonymous(surveyId, fresh);
+  expect(await again.json()).toEqual({ submitted: false });
+  expect(await db.select().from(participants).where(eq(participants.eventId, eventId))).toHaveLength(before.length);
+
+  // The cookie it set is enough to submit.
+  expect((await submit(valid(), fresh)).status).toBe(201);
+  expect(await (await anonymous(surveyId, fresh)).json()).toEqual({ submitted: true });
+});
+
+test("the survey link refuses a survey that is not live and anything that is not a survey", async () => {
+  await db.update(interactions).set({ state: "paused" }).where(eq(interactions.id, surveyId));
+  expect((await anonymous()).status).toBe(409);
+  await db.update(interactions).set({ state: "closed" }).where(eq(interactions.id, surveyId));
+  expect((await anonymous()).status).toBe(409);
+  const rating = (await (await collection.POST(req("POST", { type: "rating", prompt: "r" }), ctx(eventId))).json()).interaction;
+  expect((await anonymous(rating.id)).status).toBe(404);
+  expect((await anonymous("nope")).status).toBe(404);
+  expect(await db.select().from(participants).where(eq(participants.eventId, eventId))).toHaveLength(1);
+});
+
+test("the survey page data follows the state and only sends questions while live", async () => {
+  const { getSurveyPage } = await import("@/lib/survey-page");
+  const token = (c: string) => () => c.split("=").slice(1).join("=");
+  const live = await getSurveyPage(surveyId, token(cookie));
+  expect(live).toMatchObject({ status: "open", title: "Feedback", eventName: "E", submitted: false });
+  expect(live?.status === "open" && live.questions).toHaveLength(5);
+
+  await submit(valid());
+  expect(await getSurveyPage(surveyId, token(cookie))).toMatchObject({ status: "open", submitted: true });
+  expect(await getSurveyPage(surveyId, () => undefined)).toMatchObject({ status: "open", submitted: false });
+
+  for (const [state, status] of [["draft", "notOpen"], ["paused", "notOpen"], ["closed", "closed"]] as const) {
+    await db.update(interactions).set({ state }).where(eq(interactions.id, surveyId));
+    const page = await getSurveyPage(surveyId, token(cookie));
+    expect(page).toMatchObject({ status, title: "Feedback" });
+    expect(page).not.toHaveProperty("questions");
+  }
+  expect(await getSurveyPage("nope", () => undefined)).toBeNull();
 });

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { INTERACTION_MODULES, interactionModule } from "@/lib/interaction-modules";
@@ -91,7 +91,7 @@ export async function getPresenterState(eventId: string, closedNotesId?: string)
   let [row] = await db
     .select()
     .from(interactions)
-    .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")));
+    .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live"), ne(interactions.type, "survey")));
   if (!row && closedNotesId) {
     [row] = await db
       .select()

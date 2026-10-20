@@ -1,15 +1,10 @@
 import { serverT } from "@/lib/i18n/server";
-import { and, eq, sql } from "drizzle-orm";
-import { events, participants } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { events } from "@/db/schema";
 import { isSecureRequest } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { isUuid } from "@/lib/events";
-import { PlanLimitError, assertParticipantSlot } from "@/lib/limits";
-import {
-  participantSetCookie,
-  readParticipantToken,
-  verifyParticipantToken,
-} from "@/lib/participant-token";
+import { ensureParticipant } from "@/lib/participants";
+import { participantSetCookie } from "@/lib/participant-token";
 import { JOIN_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 const JOIN_WINDOW_SECONDS = 60;
@@ -35,36 +30,15 @@ export async function POST(request: Request) {
   const [event] = await db.select().from(events).where(eq(events.joinCode, code));
   if (!event) return notFound(request);
 
-  let participantId: string | null = null;
-  const token = readParticipantToken(request, event.id);
-  const tokenParticipantId = token ? verifyParticipantToken(token, event.id) : null;
-  if (tokenParticipantId && isUuid(tokenParticipantId)) {
-    const [existing] = await db
-      .select({ id: participants.id })
-      .from(participants)
-      .where(and(eq(participants.id, tokenParticipantId), eq(participants.eventId, event.id)));
-    participantId = existing?.id ?? null;
+  const ensured = await ensureParticipant(request, event);
+  // Participants get the message only: the upgrade hint is for the host.
+  if (!ensured.ok) {
+    return Response.json(
+      { error: serverT(request, ensured.limit.messageKey, ensured.limit.params), reason: ensured.limit.reason },
+      { status: 403 },
+    );
   }
-  if (!participantId) {
-    try {
-      participantId = await db.transaction(async (tx) => {
-        // One lock per event, so two joins cannot both take the last slot.
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${event.id}))`);
-        await assertParticipantSlot(event.workspaceId, event.id, tx);
-        const [created] = await tx.insert(participants).values({ eventId: event.id }).returning({ id: participants.id });
-        return created.id;
-      });
-    } catch (error) {
-      // Participants get the message only: the upgrade hint is for the host.
-      if (error instanceof PlanLimitError) {
-        return Response.json(
-          { error: serverT(request, error.messageKey, error.params), reason: error.reason },
-          { status: 403 },
-        );
-      }
-      throw error;
-    }
-  }
+  const participantId = ensured.participantId;
 
   return Response.json(
     {

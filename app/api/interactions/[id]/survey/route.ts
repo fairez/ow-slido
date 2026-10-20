@@ -51,7 +51,12 @@ export async function POST(request: Request, { params }: Context) {
   if (!result.ok) {
     const { questionId, missing } = result;
     return Response.json(
-      { error: apiMessage(request, result), ...(questionId && { questionId }), ...(missing && { missing }) },
+      {
+        error: apiMessage(request, result),
+        ...(result.error === "api.alreadySubmitted" && { reason: "alreadySubmitted" }),
+        ...(questionId && { questionId }),
+        ...(missing && { missing }),
+      },
       { status: result.status },
     );
   }

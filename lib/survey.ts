@@ -200,7 +200,7 @@ export async function submitSurvey(interactionId: string, participantId: string,
       .from(participants)
       .where(eq(participants.id, participantId));
     if (!participant || participant.eventId !== interaction.eventId) return fail(404, "api.interactionNotFound");
-    if (interaction.state !== "live") return fail(409, "api.questionNotOpen");
+    if (interaction.state !== "live") return fail(409, "api.surveyNotOpen");
 
     const checked = validateAnswers(questionsOf(interaction.config), rawAnswers);
     if (!checked.ok) return { failure: { ...checked, status: 400 } };

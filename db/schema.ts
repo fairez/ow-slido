@@ -252,9 +252,10 @@ export const interactions = pgTable(
     check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa', 'ranking', 'quiz', 'survey')`),
     check("interactions_state", sql`${t.state} in ('draft', 'live', 'paused', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
+    // A survey has its own link and may be live beside the one interaction on screen.
     uniqueIndex("interactions_one_live_per_event")
       .on(t.eventId)
-      .where(sql`${t.state} = 'live'`),
+      .where(sql`${t.state} = 'live' and ${t.type} <> 'survey'`),
   ],
 );
 
