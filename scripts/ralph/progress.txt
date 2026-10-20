@@ -177,3 +177,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - tests/setup.ts sets `JOB_RETRY_BACKOFF_MS=0,0,0`, so existing "failing runner" tests do not wait; tests of the delays pass `delays`/`sleep` explicitly.
   - Full `npm test` took 591 s (1390 tests). No UI change, so no browser check.
 ---
+
+## 2026-10-21 - US-015
+- Platform operator console, first part. `OPERATOR_EMAILS` (comma list, any case, in `.env.example`) plus a verified email makes a user an operator (`isOperator`, lib/operator.ts; a pending temporary-password change also disqualifies). `/ops` calls `notFound()` and `/api/ops/workspaces` answers 404 with the same body for anonymous visitors, members and unverified operators. The "Operator" nav link shows only for operators. `/ops` lists workspaces (plan, status, seats used, members, events and AI calls this month, owner email), searchable by workspace name or owner email, 25 per page.
+- Files: lib/operator.ts, lib/ops-workspaces.ts, lib/audit-query.ts (`escapeLike` exported), app/ops/page.tsx, app/api/ops/workspaces/route.ts, components/ops-workspaces.tsx, components/ui/app-shell.tsx, app/globals.css (`.ops-*`), lib/i18n en/id (`ops.*`), .env.example, tests/ops-workspaces.test.ts, tests/ops-workspaces-ui.test.tsx, tests/no-inline-strings.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - New operator routes use `requireOperator` (404 for everyone else), not `requireMember`; operators sit outside the workspace role model, so 2FA workspace policy does not apply to them.
+  - "Status" is the stored subscription status (null = never subscribed). There is no workspace suspension yet: US-016 adds it and should extend `OpsWorkspace.status` or add a `suspended` field and the i18n keys `ops.status.*`.
+  - AI calls per workspace go through events (same as `getUsage`), so calls of deleted events are not attributed. The operator console has no AI cost or global-cap view yet (the PRD's US-035 lists it; not in US-015's criteria).
+  - The list is cards with a `dl`, not a table, so 360px needs no horizontal scroll. Reuses `.audit-pager`.
+  - Browser check: production build on `.next-shot` against the test DB, started with `OPERATOR_EMAILS` set; the signup route is rate limited per IP (429 after a few runs), restart the server to reset the in-memory limiter. Do not use `pkill`; kill by pid. Script scripts/ralph/screens/us015.mjs [360|1280] [dark]; screens in us015-*.png. A full-page screenshot of a long list is shrunk when read; use the `-top.png` clip.
+  - Full `npm test` took 607 s (1408 tests) before a final label tweak; the affected files were rerun afterwards.
+---

@@ -11,6 +11,8 @@ const MIGRATED = [
   "app/dashboard/plan/page.tsx",
   "components/members-manager.tsx",
   "components/audit-log.tsx",
+  "components/ops-workspaces.tsx",
+  "app/ops/page.tsx",
   "app/dashboard/audit/page.tsx",
   "components/invite-accept-form.tsx",
   "app/dashboard/members/page.tsx",

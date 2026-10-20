@@ -55,7 +55,7 @@ export function parseAuditFilters(params: URLSearchParams): { ok: true; value: A
   return { ok: true, value };
 }
 
-function escapeLike(text: string) {
+export function escapeLike(text: string) {
   return text.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
