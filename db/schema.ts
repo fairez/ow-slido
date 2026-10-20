@@ -92,8 +92,10 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   /** Members without 2FA are held at the security page. Only enforced while the plan has `enforced2fa`. */
   require2fa: boolean("require_2fa").notNull().default(false),
+  /** Events are deleted this many days after they end. Null keeps everything. */
+  retentionDays: integer("retention_days"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [check("workspaces_retention_days", sql`${t.retentionDays} is null or ${t.retentionDays} in (30, 90, 365)`)]);
 
 /**
  * Append-only: triggers reject UPDATE and DELETE, except the delete a workspace removal cascades.
@@ -250,6 +252,8 @@ export const events = pgTable(
     peakParticipants: integer("peak_participants").notNull().default(0),
     /** When the host accepted that approved note text is sent to a third-party AI service. */
     aiNoticeAcceptedAt: timestamp("ai_notice_accepted_at", { withTimezone: true }),
+    /** When the 7-day warning before an automatic delete went out; cleared when the workspace retention changes. */
+    deletionNoticeSentAt: timestamp("deletion_notice_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

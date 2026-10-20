@@ -870,6 +870,8 @@ export const id: Record<MessageKey, string> = {
   "api.memberStatusInvalid": "Status harus 'active' atau 'suspended'.",
   "email.invite.subject": "Anda diundang ke {workspace}",
   "email.invite.body": "Anda diundang untuk bergabung dengan {workspace} sebagai {role}.\n\nBuka tautan ini untuk menerima:\n\n{link}\n\nTautan hanya berlaku sekali dan kedaluwarsa dalam {days} hari. Jika Anda tidak mengharapkannya, abaikan pesan ini.",
+  "email.retention.subject": "{event} akan dihapus pada {date}",
+  "email.retention.body": "Acara \"{event}\" di {workspace} sudah berakhir cukup lama sehingga masa retensi Anda berlaku. Acara beserta semua tanggapannya akan dihapus permanen pada {date}.\n\nUntuk menyimpan salinan, ekspor acara dari halamannya sebelum tanggal itu. Untuk menyimpan acara lebih lama, pemilik dapat mengubah masa retensi workspace.",
   "members.title": "Anggota",
   "members.lead": "Undang orang, tentukan apa yang boleh dilakukan masing-masing, dan cabut akses saat tidak diperlukan lagi.",
   "members.nav": "Anggota",

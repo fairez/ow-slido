@@ -96,3 +96,13 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - The dev server needed `npm run db:migrate` for 0042 on the dev DB; script `scripts/ralph/screens/us007.mjs [width]` seeds 120 entries via SQL and cleans up.
   - The audit page lists raw action names (`member.role_changed`); US-024 (API errors and emails) or US-022 can add labels if wanted.
 ---
+
+## 2026-10-21 - US-008
+- `workspaces.retention_days` (null, 30, 90, 365; check constraint) and `events.deletion_notice_sent_at` (migration 0043). `PATCH /api/workspaces/active/retention {retentionDays}` (+ GET) needs `members.manage` and is audited as `workspace.settings_changed` (only on change). `lib/retention.ts`: `runRetention(db, now)` warns owners and admins once per event (email via the adapter) from 7 days before the delete date and deletes events past `ends_at + days` once the warning is at least 7 days old; `startRetentionSweep` runs it daily from server.ts beside the subscription sweep. Deleting writes `event.retention_deleted` (actor `system`, ids and period only).
+- Files: db/schema.ts, db/migrations/0043_*, lib/retention.ts, app/api/workspaces/active/retention/route.ts, server.ts, lib/i18n en/id (`email.retention.*`), tests/retention.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - Design choice beyond the criteria: an event is never deleted until a warning at least 7 days old exists, so turning retention on for a workspace with old events warns first instead of wiping them; changing the period clears all notices of that workspace (the date in the mail would no longer hold). A failed send to every recipient leaves the notice unset, so the job retries and never deletes unwarned.
+  - Do not run `prettier --write` on db/schema.ts: it reformats the whole file. Also delete a stray `meta/00NN_snapshot.json` if you remove a generated migration, or the next `db:generate` says "no changes".
+  - The mail uses `DEFAULT_LOCALE`; US-019 (event audience language) may switch it per workspace/event. US-009 builds the settings UI on `GET/PATCH /api/workspaces/active/retention` and should offer the export prompt the email mentions.
+  - A full `npm test` took 545 s; `tests/two-factor-routes.test.ts` "rate limits repeated wrong attempts" timed out once under load and passes alone. No Images exist yet, so the job deletes rows only (no files).
+---

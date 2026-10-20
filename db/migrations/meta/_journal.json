@@ -302,6 +302,13 @@
       "when": 1792522997628,
       "tag": "0042_slimy_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792525670339,
+      "tag": "0043_numerous_juggernaut",
+      "breakpoints": true
     }
   ]
 }

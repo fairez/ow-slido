@@ -5,6 +5,7 @@ import next from "next";
 import { startSubscriptionSweep } from "./lib/billing/expire";
 import { rebuildLeaderboard } from "./lib/leaderboard";
 import { attachSocketServer } from "./lib/realtime/socket-server";
+import { startRetentionSweep } from "./lib/retention";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -28,6 +29,7 @@ app.prepare().then(async () => {
   });
   attachSocketServer(httpServer);
   startSubscriptionSweep();
+  startRetentionSweep();
   const restored = await rebuildLeaderboard();
   console.log(`> Leaderboard restored (${restored} scores)`);
   httpServer.listen(port, () => {

@@ -867,6 +867,8 @@ export const en = {
   "api.memberStatusInvalid": "Status must be 'active' or 'suspended'.",
   "email.invite.subject": "You are invited to {workspace}",
   "email.invite.body": "You have been invited to join {workspace} as {role}.\n\nOpen this link to accept:\n\n{link}\n\nThe link works once and expires in {days} days. If you were not expecting it, ignore this message.",
+  "email.retention.subject": "{event} will be deleted on {date}",
+  "email.retention.body": "The event \"{event}\" in {workspace} ended long enough ago that your retention period applies. It and all its responses will be deleted permanently on {date}.\n\nTo keep a copy, export the event from its page before then. To keep events longer, an owner can change the workspace's retention period.",
   "members.title": "Members",
   "members.lead": "Invite people, choose what each person can do, and remove access when it is no longer needed.",
   "members.nav": "Members",
