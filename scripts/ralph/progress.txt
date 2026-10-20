@@ -98,3 +98,13 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Test users who create content need an edit-capable role (a `viewer` membership now gets 403 on create).
   - No UI change, no browser check.
 ---
+
+## 2026-10-20 - US-009
+- Moderation (queue read, question/note PATCH/DELETE via `authorizeModeration`, open-text `responses/[id]`) now needs `moderate`; CSV export `export`; analyze, analysis PATCH and `/api/ai/test` `insights.manage`; presenter state, presenter questions and analysis GET `results.view`. Host fallbacks on the shared audience GETs (rating, responses, words, questions) check `results.view` after the session lookup. `/api/ai/status` takes any active member.
+- Files: lib/auth/require-moderation.ts, app/api/{ai,events,interactions,responses}/**, tests/route-permissions-host.test.ts
+- **Learnings for future iterations:**
+  - `requireAdmin` has no callers left; use `requireMember(request, action)`.
+  - Moderator-token path of `authorizeModeration` is untouched; US-010 removes it.
+  - Every role holds `results.view`, so the audience-GET host fallback can only be denied by being anonymous (401).
+  - No UI change, no browser check.
+---

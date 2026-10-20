@@ -6,7 +6,7 @@ import { findOwnedEvent } from "@/lib/polls";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "export");
   if (!auth.ok) return auth.response;
 
   const event = await findOwnedEvent((await params).id, auth.workspaceId);

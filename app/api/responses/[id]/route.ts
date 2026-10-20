@@ -7,7 +7,7 @@ type Context = { params: Promise<{ id: string }> };
 
 /** Owning host only: highlight or hide a response. */
 export async function PATCH(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "moderate");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   if (!isUuid(id)) return Response.json({ error: serverT(request, "api.responseNotFound") }, { status: 404 });
@@ -19,7 +19,7 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "moderate");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   if (!isUuid(id) || !(await deleteResponseAsHost(id, auth.workspaceId))) {

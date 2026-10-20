@@ -1,5 +1,6 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
-import { getSessionMember } from "@/lib/auth/require-admin";
+import { forbidden, getSessionMember } from "@/lib/auth/require-admin";
+import { can } from "@/lib/auth/permissions";
 import { isUuid } from "@/lib/events";
 import { findOwnedEvent } from "@/lib/polls";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
@@ -59,6 +60,7 @@ export async function GET(request: Request, { params }: Context) {
   if (!participantId) {
     const member = await getSessionMember(request);
     if (!member) return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
+    if (!can(member.role, "results.view")) return forbidden(request);
     if (!(await findOwnedEvent(id, member.workspaceId))) return notFound(request);
   }
   return Response.json({ questions: await listApprovedQuestions(id, participantId ?? undefined) });

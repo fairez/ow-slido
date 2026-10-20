@@ -14,7 +14,7 @@ export async function authorizeModeration(request: Request, eventId: string): Pr
     if (await verifyModeratorToken(eventId, token)) return null;
     return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
   }
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "moderate");
   if (!auth.ok) return auth.response;
   if (!isUuid(eventId) || !(await findOwnedEvent(eventId, auth.workspaceId))) {
     return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });

@@ -8,7 +8,7 @@ import { findOwnedEvent } from "@/lib/polls";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "results.view");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
@@ -27,7 +27,7 @@ export async function GET(request: Request, { params }: Context) {
 
 /** Publish or unpublish the latest finished analysis, or apply a host edit (`{op, ...}`) to it. */
 export async function PATCH(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "insights.manage");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;

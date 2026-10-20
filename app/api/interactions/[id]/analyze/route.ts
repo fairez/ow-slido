@@ -11,7 +11,7 @@ import { and, eq, isNull } from "drizzle-orm";
 type Context = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Context) {
-  const auth = await requireMember(request);
+  const auth = await requireMember(request, "insights.manage");
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
