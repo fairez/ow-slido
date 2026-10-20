@@ -45,6 +45,7 @@ describe("EventManager deletion badge", () => {
     startsAt: "2030-01-01T00:00:00.000Z",
     endsAt,
     joinCode: "123456",
+    audienceLocale: "en",
   });
 
   it("shows the delete date on each event once retention is set", () => {

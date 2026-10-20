@@ -80,6 +80,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <p className="row-meta">
             {t("dash.joinCode")} <Badge>{event.joinCode}</Badge>
           </p>
+          <p className="row-meta">{t("language.audienceMeta", { language: t(`language.name.${event.audienceLocale}`) })}</p>
           {deleteOn && !deletionSoon && (
             <p className="row-meta">{t("retention.eventMeta", { date: formatDeletionDay(deleteOn) })}</p>
           )}

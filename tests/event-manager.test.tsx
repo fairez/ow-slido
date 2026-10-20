@@ -10,6 +10,7 @@ const ev = (id: string, name: string, startsAt: string, joinCode = "123456"): Ev
   startsAt,
   endsAt: "2030-01-02T00:00:00.000Z",
   joinCode,
+  audienceLocale: "en",
 });
 
 afterEach(() => {

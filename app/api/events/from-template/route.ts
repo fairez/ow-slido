@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   const parsed = parseEventInput(body, false);
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
-  const { name, startsAt, endsAt, moderationMode } = parsed.value;
+  const { name, startsAt, endsAt, moderationMode, audienceLocale } = parsed.value;
 
   try {
     await assertCanCreateEvent(auth.workspaceId);
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       const event = await getDb().transaction(async (tx) => {
         const [created] = await tx
           .insert(events)
-          .values({ ownerId: auth.user.id, createdBy: auth.user.id, workspaceId: auth.workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, joinCode })
+          .values({ ownerId: auth.user.id, createdBy: auth.user.id, workspaceId: auth.workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, audienceLocale, joinCode })
           .returning();
         await insertTemplateItems(tx, created.id, auth.user.id, items);
         return created;

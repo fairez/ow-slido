@@ -42,6 +42,7 @@ export default async function DashboardPage() {
     startsAt: e.startsAt.toISOString(),
     endsAt: e.endsAt.toISOString(),
     joinCode: e.joinCode,
+    audienceLocale: e.audienceLocale,
     lock: locks.get(e.id) ?? null,
     deletionNoticeSentAt: e.deletionNoticeSentAt?.toISOString() ?? null,
   }));

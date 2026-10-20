@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { workspaces } from "@/db/schema";
 import { BrandingSettings } from "@/components/branding-settings";
 import { DeleteWorkspace } from "@/components/delete-workspace";
+import { LanguageSettings } from "@/components/language-settings";
 import { RetentionSettings } from "@/components/retention-settings";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
@@ -27,7 +28,7 @@ export default async function SettingsPage() {
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
   await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
-  if (!can(membership.role, "members.manage")) redirect("/dashboard");
+  const canManage = can(membership.role, "members.manage");
 
   const [workspace] = await getDb()
     .select({ name: workspaces.name, retentionDays: workspaces.retentionDays, brandAccent: workspaces.brandAccent })
@@ -44,15 +45,16 @@ export default async function SettingsPage() {
       <header className="page-head">
         <div>
           <h1>{t("settings.title")}</h1>
-          <p className="row-meta">{t("settings.lead")}</p>
+          <p className="row-meta">{t(canManage ? "settings.lead" : "settings.leadPersonal")}</p>
         </div>
       </header>
       <div className="stack">
-        <RetentionSettings initial={workspace?.retentionDays ?? null} />
-        {can(membership.role, "branding.manage") && (
+        <LanguageSettings />
+        {canManage && <RetentionSettings initial={workspace?.retentionDays ?? null} />}
+        {canManage && can(membership.role, "branding.manage") && (
           <BrandingSettings initial={workspace?.brandAccent ?? null} lock={brandingLock(limits)} />
         )}
-        {workspace && can(membership.role, "workspace.delete") && <DeleteWorkspace name={workspace.name} />}
+        {canManage && workspace && can(membership.role, "workspace.delete") && <DeleteWorkspace name={workspace.name} />}
       </div>
     </main>
   );

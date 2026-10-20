@@ -3,7 +3,7 @@ import { id } from "./id";
 import type { Locale } from "./locale";
 
 export type { MessageKey } from "./en";
-export { DEFAULT_LOCALE, LOCALES, LOCALE_COOKIE, resolveLocale, type Locale } from "./locale";
+export { DEFAULT_LOCALE, LOCALES, LOCALE_COOKIE, parseLocale, resolveLocale, resolveLocaleFrom, type Locale } from "./locale";
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { en, id };
 

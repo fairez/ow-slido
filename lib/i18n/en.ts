@@ -1280,6 +1280,21 @@ export const en = {
   "ops.activityLabel": "Operator actions",
   "ops.activityEmptyTitle": "No operator actions yet",
   "ops.activityEmptyBody": "Suspensions, plan overrides and 2FA resets show up here.",
+  "language.name.en": "English",
+  "language.name.id": "Bahasa Indonesia",
+  "language.settingsTitle": "Your language",
+  "language.settingsLead": "The language of your dashboard and account pages. It follows you to other devices. Each event has its own audience language.",
+  "language.label": "Interface language",
+  "language.save": "Save language",
+  "language.saving": "Saving",
+  "language.saved": "Language saved.",
+  "language.audienceLabel": "Audience language",
+  "language.audienceHint": "Used on the join, participant and presenter screens. Participants can switch it on their own phone.",
+  "language.audienceMeta": "Audience language: {language}",
+  "language.switchLabel": "Language",
+  "settings.leadPersonal": "Your own preferences.",
+  "api.localeInvalid": "Choose English or Bahasa Indonesia.",
+  "api.audienceLocaleInvalid": "The audience language must be English or Bahasa Indonesia.",
 };
 
 export type MessageKey = keyof typeof en;

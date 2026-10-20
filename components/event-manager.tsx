@@ -11,7 +11,8 @@ import { PlanError } from "@/components/plan-error";
 import { PlanHint } from "@/components/plan-hint";
 import { TypedConfirmDialog } from "@/components/typed-confirm-dialog";
 import { apiError, type ApiError } from "@/lib/api-error";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
+import { LOCALES, type Locale } from "@/lib/i18n/locale";
 import type { Lock } from "@/lib/plan-hints";
 import { deletionDate, deletionIsNear, formatDeletionDay } from "@/lib/retention-schedule";
 
@@ -21,6 +22,8 @@ export type EventSummary = {
   startsAt: string;
   endsAt: string;
   joinCode: string;
+  /** The language of the join, participant and presenter screens. */
+  audienceLocale: Locale;
   /** Set when a downgrade left this event past the plan's monthly limit: it is read-only. */
   lock?: Lock | null;
   /** When the retention job warned about deleting this event, if it did. */
@@ -52,6 +55,7 @@ export function EventManager({
   retentionDays?: number | null;
 }) {
   const t = useT();
+  const hostLocale = useLocale();
   const [now] = useState(() => new Date());
   const [events, setEvents] = useState([...initialEvents].sort(byStart));
   const [created, setCreated] = useState<EventSummary | null>(null);
@@ -79,6 +83,7 @@ export function EventManager({
           name: data.get("name"),
           startsAt: new Date(String(data.get("startsAt"))).toISOString(),
           endsAt: new Date(String(data.get("endsAt"))).toISOString(),
+          audienceLocale: data.get("audienceLocale"),
           ...(templateId ? { templateId } : {}),
         }),
       });
@@ -100,13 +105,14 @@ export function EventManager({
 
   async function rename(target: EventSummary, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = String(new FormData(event.currentTarget).get("name"));
+    const data = new FormData(event.currentTarget);
+    const name = String(data.get("name"));
     setError(null);
     try {
       const response = await fetch(`/api/events/${target.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, audienceLocale: data.get("audienceLocale") }),
       });
       if (!response.ok) {
         setError(await errorFrom(response));
@@ -159,6 +165,7 @@ export function EventManager({
             <TextField label={t("eventMgr.start")} name="startsAt" type="datetime-local" required />
             <TextField label={t("eventMgr.end")} name="endsAt" type="datetime-local" required />
           </div>
+          <AudienceSelect defaultValue={hostLocale} />
           {templates.length > 0 && (
             <Select label={t("eventMgr.fromTemplate")} hint={t("eventMgr.fromTemplateHint")} name="templateId" defaultValue="">
               <option value="">{t("eventMgr.fromTemplateBlank")}</option>
@@ -207,6 +214,7 @@ export function EventManager({
                   {renaming === e.id ? (
                     <form onSubmit={(ev) => rename(e, ev)} className="inline-form">
                       <TextField label={t("eventMgr.newName")} name="name" defaultValue={e.name} required maxLength={80} />
+                      <AudienceSelect defaultValue={e.audienceLocale} />
                       <Button type="submit" variant="primary">{t("eventMgr.save")}</Button>
                       <Button onClick={() => setRenaming(null)}>{t("eventMgr.cancel")}</Button>
                     </form>
@@ -225,6 +233,7 @@ export function EventManager({
                   <div className="row-meta">
                     {t("dash.joinCode")} <Badge>{e.joinCode}</Badge>
                   </div>
+                  <p className="row-meta">{t("language.audienceMeta", { language: t(`language.name.${e.audienceLocale}`) })}</p>
                   <div className="row-meta">
                     <LiveParticipantCount eventId={e.id} />
                   </div>
@@ -275,5 +284,18 @@ function DeletionBadge({ event, retentionDays, now }: { event: EventSummary; ret
     <div className="row-meta">
       <Badge tone={deletionIsNear(date, now) ? "accent" : "neutral"}>{t("retention.badge", { date: formatDeletionDay(date) })}</Badge>
     </div>
+  );
+}
+
+function AudienceSelect({ defaultValue }: { defaultValue: Locale }) {
+  const t = useT();
+  return (
+    <Select label={t("language.audienceLabel")} hint={t("language.audienceHint")} name="audienceLocale" defaultValue={defaultValue}>
+      {LOCALES.map((locale) => (
+        <option key={locale} value={locale} lang={locale}>
+          {t(`language.name.${locale}`)}
+        </option>
+      ))}
+    </Select>
   );
 }

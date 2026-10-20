@@ -20,6 +20,8 @@ const MIGRATED = [
   "components/ops-workspace-manager.tsx",
   "components/ops-ai-panel.tsx",
   "components/ops-activity.tsx",
+  "components/audience-language.tsx",
+  "components/language-settings.tsx",
   "app/dashboard/audit/page.tsx",
   "components/invite-accept-form.tsx",
   "app/dashboard/members/page.tsx",

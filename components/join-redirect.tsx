@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AudienceLanguage } from "@/components/audience-language";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
 import { useT } from "@/lib/i18n/client";
@@ -11,7 +12,7 @@ import { joinEvent, participantPath } from "@/lib/join-client";
 /** After a successful join, how long to wait for the participant page before offering a manual link. */
 export const NAVIGATION_STALL_MS = 12_000;
 
-export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; cookiesBlocked?: boolean }) {
+export function JoinRedirect({ code, eventId, cookiesBlocked = false }: { code: string; eventId?: string; cookiesBlocked?: boolean }) {
   const router = useRouter();
   const t = useT();
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,8 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
     };
   }, [code, router, cookiesBlocked]);
 
+  const language = eventId ? <AudienceLanguage eventId={eventId} /> : null;
+
   if (cookiesBlocked) {
     return (
       <>
@@ -42,6 +45,7 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
         <p className="entry-alt">
           <a href={`/join/${code}`}>{t("join.tryAgain")}</a>
         </p>
+        {language}
       </>
     );
   }
@@ -59,6 +63,7 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
         <p className="entry-alt">
           <Link href="/">{t("join.enterCode")}</Link>
         </p>
+        {language}
       </>
     );
   }
@@ -82,6 +87,7 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
       <noscript>
         <p className="join-noscript">{t("join.noscript")}</p>
       </noscript>
+      {language}
     </>
   );
 }

@@ -63,6 +63,7 @@ export async function POST(request: Request, { params }: Context) {
             startsAt: source.startsAt,
             endsAt: source.endsAt,
             moderationMode: source.moderationMode,
+            audienceLocale: source.audienceLocale,
             joinCode,
           })
           .returning();

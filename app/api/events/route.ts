@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   const parsed = parseEventInput(await request.json().catch(() => null), false);
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
-  const { name, startsAt, endsAt, moderationMode } = parsed.value;
+  const { name, startsAt, endsAt, moderationMode, audienceLocale } = parsed.value;
 
   const { workspaceId } = auth;
   try {
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       const event = await getDb().transaction(async (tx) => {
         const [created] = await tx
           .insert(events)
-          .values({ ownerId: auth.user.id, createdBy: auth.user.id, workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, joinCode })
+          .values({ ownerId: auth.user.id, createdBy: auth.user.id, workspaceId, name: name!, startsAt: startsAt!, endsAt: endsAt!, moderationMode, audienceLocale, joinCode })
           .returning();
         // Every event starts with a Q&A the host can open; it stays a draft until then.
         await tx.insert(interactions).values({

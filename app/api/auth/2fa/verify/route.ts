@@ -6,6 +6,7 @@ import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { TwoFactorNotConfiguredError, verifySecondFactor } from "@/lib/auth/two-factor";
 import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
+import { localeSetCookie } from "@/lib/i18n/cookie";
 import { serverT } from "@/lib/i18n/server";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   if (!userId) return invalid(request);
 
   const db = getDb();
-  const [user] = await db.select({ id: users.id, email: users.email, active: users.active }).from(users).where(eq(users.id, userId));
+  const [user] = await db.select({ id: users.id, email: users.email, active: users.active, locale: users.locale }).from(users).where(eq(users.id, userId));
   if (!user?.active) return invalid(request);
 
   let result;
@@ -61,8 +62,8 @@ export async function POST(request: Request) {
     .where(eq(users.id, userId));
 
   await recordAuditForUser(request, user, { action: "auth.login", metadata: { secondFactor: true, method: result.method } });
-  return Response.json(
-    { user: { id: user.id } },
-    { headers: { "set-cookie": sessionSetCookie(userId, isSecureRequest(request)) } },
-  );
+  const secure = isSecureRequest(request);
+  const headers = new Headers({ "set-cookie": sessionSetCookie(userId, secure) });
+  if (user.locale) headers.append("set-cookie", localeSetCookie(user.locale, secure));
+  return Response.json({ user: { id: user.id } }, { headers });
 }

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { EventUnavailable } from "@/components/event-unavailable";
+import { AudienceLanguage } from "@/components/audience-language";
 import { BrandStyle, brandAttrs } from "@/components/brand-style";
 import { eventAccent } from "@/lib/branding";
 import { eventUnavailable } from "@/lib/workspace-suspension";
@@ -53,6 +54,7 @@ export default async function ParticipantPage({
         initial={await getLiveInteraction(event.id, participantId)}
         initialQa={await getParticipantQa(event.id, participantId)}
       />
+      <AudienceLanguage eventId={event.id} />
     </main>
   );
 }

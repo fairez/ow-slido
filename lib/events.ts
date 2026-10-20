@@ -1,5 +1,6 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
 import { randomInt } from "node:crypto";
+import { LOCALES, type Locale } from "@/lib/i18n/locale";
 
 export const EVENT_NAME_MAX = 80;
 export const MODERATION_MODES = ["open", "moderated"] as const;
@@ -35,6 +36,7 @@ export type EventInput = {
   startsAt?: Date;
   endsAt?: Date;
   moderationMode?: ModerationMode;
+  audienceLocale?: Locale;
 };
 
 function parseDate(value: unknown) {
@@ -69,6 +71,12 @@ export function parseEventInput(body: unknown, partial: boolean): Parsed<EventIn
       return { ok: false, error: "api.moderationModeInvalid" };
     }
     value.moderationMode = b.moderationMode as ModerationMode;
+  }
+  if (b.audienceLocale !== undefined) {
+    // Exact codes only: this is a stored setting, not an Accept-Language guess.
+    const locale = LOCALES.find((l) => l === b.audienceLocale);
+    if (!locale) return { ok: false, error: "api.audienceLocaleInvalid" };
+    value.audienceLocale = locale;
   }
   if (value.startsAt && value.endsAt && value.endsAt < value.startsAt) {
     return { ok: false, error: "api.endBeforeStart" };

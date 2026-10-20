@@ -98,7 +98,7 @@ it("presenter page: poll results, word cloud and idle", async () => {
 
 it("dashboard: event list, poll builder, moderation, auth and join forms", async () => {
   const events = [
-    { id: "a", name: "Sooner", startsAt: "2030-01-01T00:00:00.000Z", endsAt: "2030-01-02T00:00:00.000Z", joinCode: "123456" },
+    { id: "a", name: "Sooner", startsAt: "2030-01-01T00:00:00.000Z", endsAt: "2030-01-02T00:00:00.000Z", joinCode: "123456", audienceLocale: "en" as const },
   ];
   expect(await violations(<EventManager initialEvents={events} />)).toEqual([]);
   cleanup();

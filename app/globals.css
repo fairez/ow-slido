@@ -3494,3 +3494,16 @@ button.quiz-option[aria-disabled="true"] {
   gap: var(--space-3);
   max-width: 40rem;
 }
+
+/* Participant language switch: two quiet buttons, the current one pressed. */
+.audience-language {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.audience-language [aria-pressed="true"] {
+  background: var(--border);
+  font-weight: 600;
+}

@@ -37,10 +37,13 @@ export const users = pgTable(
     // Defaults to now() so existing users and rows inserted directly count as verified; sign-up sets null.
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }).defaultNow(),
     firstInteractionLiveAt: timestamp("first_interaction_live_at", { withTimezone: true }),
+    /** The host's interface language; null means follow the browser. */
+    locale: text("locale", { enum: ["en", "id"] }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
+    check("users_locale", sql`${t.locale} in ('en', 'id')`),
   ],
 );
 
@@ -329,9 +332,12 @@ export const events = pgTable(
     aiNoticeAcceptedAt: timestamp("ai_notice_accepted_at", { withTimezone: true }),
     /** When the 7-day warning before an automatic delete went out; cleared when the workspace retention changes. */
     deletionNoticeSentAt: timestamp("deletion_notice_sent_at", { withTimezone: true }),
+    /** The language of the join, participant and presenter screens. */
+    audienceLocale: text("audience_locale", { enum: ["en", "id"] }).notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check("events_audience_locale", sql`${t.audienceLocale} in ('en', 'id')`),
     check("events_name_length", sql`char_length(${t.name}) between 1 and 80`),
     check("events_join_code_format", sql`${t.joinCode} ~ '^[0-9]{4,6}$'`),
     check("events_moderation_mode", sql`${t.moderationMode} in ('open', 'moderated')`),

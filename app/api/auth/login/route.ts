@@ -8,6 +8,7 @@ import { isSecureRequest, sessionSetCookie } from "@/lib/auth/session";
 import { getTwoFactorStatus, isTwoFactorConfigured } from "@/lib/auth/two-factor";
 import { recordAuditForUser } from "@/lib/audit";
 import { getDb } from "@/lib/db";
+import { localeSetCookie } from "@/lib/i18n/cookie";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 const LOGIN_LIMIT = 10;
@@ -58,8 +59,8 @@ export async function POST(request: Request) {
     .where(eq(users.id, user.id));
 
   await recordAuditForUser(request, user, { action: "auth.login", metadata: { secondFactor: false } });
-  return Response.json(
-    { user: { id: user.id, email: user.email } },
-    { headers: { "set-cookie": sessionSetCookie(user.id, isSecureRequest(request)) } },
-  );
+  const secure = isSecureRequest(request);
+  const headers = new Headers({ "set-cookie": sessionSetCookie(user.id, secure) });
+  if (user.locale) headers.append("set-cookie", localeSetCookie(user.locale, secure));
+  return Response.json({ user: { id: user.id, email: user.email } }, { headers });
 }
