@@ -486,6 +486,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               <div className="row-actions row-actions-quiet">
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>}
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => { setError(null); setRenaming({ id: item.id, name: item.title }); }}>{t("pollMgr.rename")}</Button>}
+                {item.type === "survey" && item.state !== "draft" && (
+                  <a
+                    href={`/present/${eventId}?view=survey&survey=${item.id}`}
+                    className="ui-button"
+                    data-variant="quiet"
+                    aria-label={t("survey.showResultsFor", { title: item.title })}
+                  >
+                    {t("survey.showResults")}
+                  </a>
+                )}
                 {item.type === "survey" && <SurveyLinkButton interactionId={item.id} title={item.title} />}
                 {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                 {canManageTemplates && (

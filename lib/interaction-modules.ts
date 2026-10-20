@@ -518,7 +518,8 @@ const quizModule: InteractionModule = {
 
 const surveyModule: InteractionModule = {
   type: "survey",
-  presentWhenClosed: true,
+  // A survey is opened by id on the projector, never picked up as the one that was just shown.
+  presentWhenClosed: false,
   validateConfig: (body, partial) => parseNewInteractionInput("survey", body, partial),
   async results(interactionId) {
     const row = await loadRow(interactionId);
@@ -540,8 +541,11 @@ const surveyModule: InteractionModule = {
     ];
   },
   responseCount: countSurveySubmissions,
-  // The presenter and participant screens arrive with the survey UI stories.
-  presenter: async () => null,
+  async presenter(row) {
+    if (row.state === "draft") return null;
+    return { type: "survey", id: row.id, title: row.title, state: row.state, results: await computeSurveyResults(db(), row.id, row.config) };
+  },
+  // Participants reach a survey through its own link (lib/survey-page.ts), not the event screen.
   live: async () => null,
 };
 

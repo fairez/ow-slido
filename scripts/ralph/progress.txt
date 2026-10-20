@@ -595,3 +595,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-form.mjs): not open, empty, errors with focus on the first question, filled, thanks, reload shows already submitted, closed, a live poll still shown on the event screen while the survey is live, link copied to the clipboard; no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0039.
   - Full suite: 1165 tests; one failure came from the empty status span (fixed); the rest were green.
 ---
+
+## 2026-10-21 - US-051
+- Survey results on the projector. `/present/<eventId>?view=survey&survey=<id>` opens `PresenterSurvey` (new `survey` presenter screen, `getSurveyPresenter`, `GET /api/events/[id]/present?survey=`): response and completed counts on top, then a card per question: choice bars with printed count and percent, rating average plus distribution (`RatingChart`), latest open-text answers. It follows host-only `survey:results` live and refetches on `state-changed`; a closed survey says "(closed)"; an unknown or draft id falls back to the plain screen. The survey module's `presenter` now returns the state (`presentWhenClosed: false`). The library row gets "Show results" once the survey is not a draft; its response count already came from the registry.
+- `e2e/interactions.spec.ts`: ranking submit and presenter result; quiz with two players, close, leaderboard, rank on the phones and podium; survey sent, second submit refused (page and API 409 `alreadySubmitted`), library count and results screen. All run on the test DB.
+- Files: lib/{presenter,interaction-modules}.ts, app/{present/[eventId]/page.tsx,api/events/[id]/present/route.ts,globals.css}, components/{presenter-survey,presenter-view,poll-manager}.tsx, lib/i18n/{en,id}.ts, tests/{survey.test.ts,presenter-survey.test.tsx,no-inline-strings.test.ts}, e2e/interactions.spec.ts, scripts/ralph/screens/survey-results.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - A quiz leaderboard lists everyone who answered, so a wrong answer still ranks (0 points, rank 2 of 2).
+  - E2E setup through `page.request.post` to the API shares the host's cookies and is much faster and steadier than building content in the UI; the participant side stays in the UI.
+  - "Completed" in survey results means every question answered, so a survey with optional questions shows few completed; the screen prints both numbers.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-results.mjs): empty, six responses arriving live, closed, reload keeps the screen, back button, bad id fallback, library row; no horizontal overflow, no console errors. The fixed presenter buttons overlap content in full-page captures (as on other presenter screens). Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---

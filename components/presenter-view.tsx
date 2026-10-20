@@ -9,21 +9,23 @@ import { PresenterOpenText } from "@/components/presenter-open-text";
 import { PresenterQuiz } from "@/components/presenter-quiz";
 import { PresenterRanking } from "@/components/presenter-ranking";
 import { PresenterRating } from "@/components/presenter-rating";
+import { PresenterSurvey } from "@/components/presenter-survey";
 import { PresenterNotes } from "@/components/presenter-notes";
 import { PresenterQa } from "@/components/presenter-qa";
 import { Button } from "@/components/ui/button";
 import { WordCloud } from "@/components/word-cloud";
-import type { PresenterState } from "@/lib/presenter";
+import type { PresenterState, PresenterSurvey as SurveyState } from "@/lib/presenter";
 import { applyQuestionEvent, type QaSort } from "@/lib/question-order";
 import type { PublicQuestion } from "@/lib/question-types";
 import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
+import type { SurveyResults } from "@/lib/survey";
 import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
 export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed"; type?: string; title?: string };
-export type PresenterScreen = "interaction" | "qa" | "podium";
+export type PresenterScreen = "interaction" | "qa" | "podium" | "survey";
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 type Words = { interactionId: string; words: WordCount[]; total: number };
@@ -37,6 +39,7 @@ export function PresenterView({
   initialQuestions = [],
   initialQaId = null,
   initialScreen = "interaction",
+  initialSurvey = null,
 }: {
   eventId: string;
   initial: PresenterState | null;
@@ -46,6 +49,8 @@ export function PresenterView({
   /** The Q&A `initialQuestions` belongs to: the live one, else the first. */
   initialQaId?: string | null;
   initialScreen?: PresenterScreen;
+  /** The survey named by `?survey=` on the page; its results screen follows it. */
+  initialSurvey?: SurveyState | null;
 }) {
   const t = useT();
   const { socket } = useEventSocket(eventId, "host");
@@ -55,6 +60,7 @@ export function PresenterView({
   const [qr, setQr] = useState("");
   // Which screen the projector shows. It only changes this page: participants and interaction states are untouched.
   const [screen, setScreen] = useState<PresenterScreen>(initialScreen);
+  const [survey, setSurvey] = useState<SurveyState | null>(initialSurvey);
   const [questions, setQuestions] = useState<PublicQuestion[]>(initialQuestions);
   const [qaId, setQaId] = useState<string | null>(initialQaId);
   const [qaSort, setQaSort] = useState<QaSort>("popular");
@@ -90,11 +96,25 @@ export function PresenterView({
       const url = new URL(window.location.href);
       if (next !== "interaction") url.searchParams.set("view", next);
       else url.searchParams.delete("view");
+      if (next !== "survey") url.searchParams.delete("survey");
       window.history.replaceState(null, "", url);
     } catch {
       // The URL is only a convenience.
     }
   }, []);
+
+  const surveyId = survey?.id;
+  const refetchSurvey = useCallback(async () => {
+    if (!surveyId) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}/present?survey=${encodeURIComponent(surveyId)}`);
+      if (!res.ok) return;
+      const next = ((await res.json()) as { interaction: SurveyState | null }).interaction;
+      if (next) setSurvey(next);
+    } catch {
+      // Keep the last known results.
+    }
+  }, [eventId, surveyId]);
 
   const refetchQuestions = useCallback(async () => {
     try {
@@ -180,6 +200,7 @@ export function PresenterView({
     const onChange = () => {
       void refetch();
       void refetchList();
+      void refetchSurvey();
       // Starting or pausing a Q&A can change which one the Q&A screen shows.
       void refetchQuestions();
     };
@@ -187,6 +208,7 @@ export function PresenterView({
     const onConnect = () => {
       void refetch();
       void refetchList();
+      void refetchSurvey();
       void refetchQuestions();
     };
     const forNotes = (id: string, fn: (notes: PublicNote[]) => PublicNote[]) =>
@@ -217,6 +239,8 @@ export function PresenterView({
     // Live, only the number of answers is shown; the per-option counts wait for the close.
     const onQuiz = (msg: { results: { interactionId: string; total: number } }) =>
       setPoll((cur) => (cur && cur.type === "quiz" && cur.id === msg.results.interactionId ? { ...cur, total: msg.results.total } : cur));
+    const onSurvey = (msg: { results: SurveyResults }) =>
+      setSurvey((cur) => (cur && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
     const onRanking = (msg: { results: RankingResults }) =>
       setPoll((cur) => (cur && cur.type === "ranking" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
     // Only the shown Q&A's messages apply; another Q&A of the event stays off this screen.
@@ -233,6 +257,7 @@ export function PresenterView({
     socket.on("question:removed", onQuestionRemoved);
     socket.on("rating:results", onRating);
     socket.on("ranking:results", onRanking);
+    socket.on("survey:results", onSurvey);
     socket.on("quiz:results", onQuiz);
     socket.on("response:added", onResponse);
     socket.on("response:updated", onResponse);
@@ -252,6 +277,7 @@ export function PresenterView({
       socket.off("question:removed", onQuestionRemoved);
       socket.off("rating:results", onRating);
       socket.off("ranking:results", onRanking);
+      socket.off("survey:results", onSurvey);
       socket.off("quiz:results", onQuiz);
       socket.off("response:added", onResponse);
       socket.off("response:updated", onResponse);
@@ -265,7 +291,7 @@ export function PresenterView({
       socket.off("state-changed", onChange);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch, refetchList, refetchQuestions, qaId]);
+  }, [socket, refetch, refetchList, refetchSurvey, refetchQuestions, qaId]);
 
   const corner = (
     <aside className="present-join" aria-label={t("presenter.joinLabel")}>
@@ -316,7 +342,10 @@ export function PresenterView({
             {t("presQuiz.reveal")}
           </Button>
         )}
-        {!qaFillsScreen && screen !== "podium" && (
+        {screen === "survey" && (
+          <Button onClick={() => changeScreen("interaction")}>{t("presenter.hideSurvey")}</Button>
+        )}
+        {!qaFillsScreen && screen !== "podium" && screen !== "survey" && (
           <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
             {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
           </Button>
@@ -336,6 +365,16 @@ export function PresenterView({
       <section aria-labelledby="present-title">
         {head(t("podium.title"))}
         <PresenterPodium eventId={eventId} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (screen === "survey") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(survey?.title ?? t("presSurvey.notFound"))}
+        {survey && <PresenterSurvey results={survey.results} state={survey.state} />}
         {extras}
       </section>
     );
@@ -381,6 +420,16 @@ export function PresenterView({
       <section aria-labelledby="present-title">
         {head(poll.title)}
         <PresenterRating results={poll.results} closed={poll.state === "closed"} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (poll.type === "survey") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterSurvey results={poll.results} state={poll.state} />
         {extras}
       </section>
     );

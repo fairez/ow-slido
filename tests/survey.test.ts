@@ -463,3 +463,33 @@ test("the survey page data follows the state and only sends questions while live
   }
   expect(await getSurveyPage("nope", () => undefined)).toBeNull();
 });
+
+test("the survey results screen has the counts per question, any state but draft, and only for this event's surveys", async () => {
+  const { getSurveyPresenter } = await import("@/lib/presenter");
+  const presentRoute = await import("@/app/api/events/[id]/present/route");
+  const other = await join();
+  expect((await submit(valid())).status).toBe(201);
+  expect((await submit({ ...valid(), [q.many.id]: [q.many.options![0].id], [q.scale.id]: 7, [q.text.id]: "More coffee" }, other)).status).toBe(201);
+
+  const shown = await getSurveyPresenter(eventId, surveyId);
+  expect(shown).toMatchObject({ type: "survey", id: surveyId, title: "Feedback", state: "live" });
+  expect(shown?.results).toMatchObject({ total: 2, completed: 1 });
+  expect(shown?.results.questions.find((x) => x.id === q.text.id)).toMatchObject({ kind: "openText", latest: ["More coffee"] });
+
+  // The host's route returns it with `?survey=`; the plain route does not treat a live survey as "the live one".
+  const get = (query: string) => presentRoute.GET(new Request(`http://localhost/api?${query}`, { headers: { cookie: hostCookie } }), ctx(eventId));
+  expect((await (await get(`survey=${surveyId}`)).json()).interaction).toMatchObject({ type: "survey", id: surveyId });
+  expect((await (await presentRoute.GET(req("GET"), ctx(eventId))).json()).interaction).toBeNull();
+
+  await db.update(interactions).set({ state: "closed" }).where(eq(interactions.id, surveyId));
+  expect(await getSurveyPresenter(eventId, surveyId)).toMatchObject({ state: "closed" });
+  await db.update(interactions).set({ state: "draft" }).where(eq(interactions.id, surveyId));
+  expect(await getSurveyPresenter(eventId, surveyId)).toBeNull();
+
+  const rating = (await (await collection.POST(req("POST", { type: "rating", prompt: "r" }), ctx(eventId))).json()).interaction;
+  expect(await getSurveyPresenter(eventId, rating.id)).toBeNull();
+  const otherHost = await newHost("other@example.com");
+  const otherEvent = (await (await eventsRoute.POST(req("POST", { name: "O", startsAt: "2026-11-01T09:00:00Z", endsAt: "2026-11-01T10:00:00Z" }, otherHost))).json()).event.id;
+  expect(await getSurveyPresenter(otherEvent, surveyId)).toBeNull();
+  expect((await presentRoute.GET(new Request(`http://localhost/api?survey=${surveyId}`, { headers: { cookie: otherHost } }), ctx(eventId))).status).toBe(404);
+});

@@ -7,6 +7,7 @@ import type { Standing } from "@/lib/leaderboard/standings";
 import type { QuizResults } from "@/lib/quiz";
 import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
+import type { SurveyResults } from "@/lib/survey";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 import type { PollOption } from "@/lib/polls";
@@ -76,6 +77,15 @@ export type PresenterQuiz = {
   leaderboard: Standing[] | null;
 };
 
+/** Per-question results of a survey. Surveys are never "the live one", so the host opens this screen by id. */
+export type PresenterSurvey = {
+  type: "survey";
+  id: string;
+  title: string;
+  state: "live" | "paused" | "closed";
+  results: SurveyResults;
+};
+
 export type PresenterState =
   | PresenterPoll
   | PresenterWordcloud
@@ -83,7 +93,8 @@ export type PresenterState =
   | PresenterOpenText
   | PresenterRating
   | PresenterRanking
-  | PresenterQuiz;
+  | PresenterQuiz
+  | PresenterSurvey;
 
 /** The live interaction, or the shared-notes, open-text or rating interaction named by `closedNotesId` once it has closed. */
 export async function getPresenterState(eventId: string, closedNotesId?: string): Promise<PresenterState | null> {
@@ -109,4 +120,15 @@ export async function getPresenterState(eventId: string, closedNotesId?: string)
       );
   }
   return row ? interactionModule(row.type).presenter(row) : null;
+}
+
+/** A survey of the event in any state but draft, for its results screen; null for any other id. */
+export async function getSurveyPresenter(eventId: string, surveyId: string): Promise<PresenterSurvey | null> {
+  const [row] = await getDb()
+    .select()
+    .from(interactions)
+    .where(and(eq(interactions.id, surveyId), eq(interactions.eventId, eventId), eq(interactions.type, "survey"), ne(interactions.state, "draft")));
+  if (!row) return null;
+  const state = await interactionModule("survey").presenter(row);
+  return state?.type === "survey" ? state : null;
 }
