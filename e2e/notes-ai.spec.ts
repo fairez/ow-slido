@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { verifyEmail } from "./verify-email";
+import { setPlanFor, verifyEmail } from "./verify-email";
 
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
@@ -11,6 +11,7 @@ async function createEvent(page: Page) {
   await page.getByRole("button", { name: "Create account" }).click();
   await page.waitForURL("**/dashboard");
   await verifyEmail(email);
+  await setPlanFor(email, "pro");
   const now = Date.now();
   await page.getByLabel("Event name").fill("Notes e2e");
   await page.getByLabel("Start").fill(localInput(new Date(now - 3_600_000)));

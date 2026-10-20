@@ -8,7 +8,7 @@ import {
   participants,
   sharedNotes,
 } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, setPlan, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -102,6 +102,9 @@ beforeEach(async () => {
     }),
   );
   eventId = (await ev.json()).event.id;
+  // Analysis needs AI calls in the plan; Free has none.
+  const [{ workspaceId }] = await db.select({ workspaceId: events.workspaceId }).from(events).where(eq(events.id, eventId));
+  await setPlan(db, workspaceId, "pro");
   const res = await collection.POST(
     req("POST", { type: "sharedNotes", prompt: "Thoughts?" }),
     ctx(eventId),

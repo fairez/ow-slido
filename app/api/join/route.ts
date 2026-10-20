@@ -1,9 +1,10 @@
 import { serverT } from "@/lib/i18n/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { events, participants } from "@/db/schema";
 import { isSecureRequest } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
+import { PlanLimitError, assertParticipantSlot } from "@/lib/limits";
 import {
   participantSetCookie,
   readParticipantToken,
@@ -45,11 +46,24 @@ export async function POST(request: Request) {
     participantId = existing?.id ?? null;
   }
   if (!participantId) {
-    const [created] = await db
-      .insert(participants)
-      .values({ eventId: event.id })
-      .returning({ id: participants.id });
-    participantId = created.id;
+    try {
+      participantId = await db.transaction(async (tx) => {
+        // One lock per event, so two joins cannot both take the last slot.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${event.id}))`);
+        await assertParticipantSlot(event.workspaceId, event.id, tx);
+        const [created] = await tx.insert(participants).values({ eventId: event.id }).returning({ id: participants.id });
+        return created.id;
+      });
+    } catch (error) {
+      // Participants get the message only: the upgrade hint is for the host.
+      if (error instanceof PlanLimitError) {
+        return Response.json(
+          { error: serverT(request, error.messageKey, error.params), reason: error.reason },
+          { status: 403 },
+        );
+      }
+      throw error;
+    }
   }
 
   return Response.json(

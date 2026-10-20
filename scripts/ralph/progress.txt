@@ -219,3 +219,13 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `getEntitlements`/seat helpers take `Pick<Db, "select">` so a transaction works as well as the pool.
   - No UI change, no browser check (the plan page and locked hints are US-021). Full suite: 729 tests, ~290s.
 ---
+## 2026-10-20 - US-020
+- Added to lib/limits.ts: `assertParticipantSlot` (join route; new participants only, so a token holder at the cap rejoins; runs in a transaction under `pg_advisory_xact_lock(hashtext(eventId))` so parallel joins cannot pass the cap), `assertAiCallsAvailable` (analyze route, before the AI notice is stored; per-event and per-month from entitlements, Free gets 402 `ai_event_limit` with its own "not part of your plan" text) and `assertReportFormat` (CSV export). New reasons: `participant_limit`, `ai_event_limit`, `ai_month_limit`, `report_format`. Join answers 403 `{error, reason}` with no `requiredPlan`: participants should not see billing hints.
+- Files: lib/limits.ts, app/api/{join,interactions/[id]/analyze,events/[id]/export.csv}/route.ts, lib/i18n/{en,id}.ts, tests/plan-limits-usage.test.ts, tests/note-analysis.test.ts, e2e/{verify-email,notes-ai.spec}.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests that start an analysis through the route now need a Pro workspace; e2e uses `setPlanFor(email, "pro")` from e2e/verify-email.ts (writes a plan override straight into the test DB).
+  - The monthly AI count joins `ai_calls` to `events`, and `ai_calls.event_id` is set null when an event is deleted, so deleting an event gives its calls back to the month. Same kind of loophole as events per month; a usage counter table would close both.
+  - One analysis can make several AI calls (batches over 200 notes), so the start check is "used < cap", not "used + needed <= cap"; a job may overshoot by a few calls.
+  - Do not write `open(path, "w").write(open(path).read()...)` in a one-off script: the write handle truncates the file first (wiped en.ts and id.ts; restored with git checkout since they were clean).
+  - No UI change, so no browser check. The locked hints and the participant message styling on the join form are US-021 / not needed: the join form already shows `error` text.
+---
