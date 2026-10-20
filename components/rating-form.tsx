@@ -6,10 +6,12 @@ import { EmptyState } from "@/components/ui/card";
 import { InlineError } from "@/components/ui/field";
 import { RATING_SCALE_MAX } from "@/lib/rating-limits";
 import type { LiveRating } from "@/lib/live-view";
+import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 /** Participant rating: a keyboard-operable radio group (arrow keys move the choice) shown as stars or numbers. */
 export function RatingForm({ rating }: { rating: LiveRating }) {
+  const t = useT();
   const max = RATING_SCALE_MAX[rating.scale];
   const stars = rating.scale === "stars5";
   const [selected, setSelected] = useState<number | null>(rating.mine);
@@ -44,8 +46,8 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
 
   if (closed) {
     return (
-      <EmptyState title="Rating closed" role="status">
-        {selected !== null ? `You gave ${selected} out of ${max}.` : "The host is no longer taking ratings."}
+      <EmptyState title={t("rating.closedTitle")} role="status">
+        {selected !== null ? t("rating.gave", { value: selected, max }) : t("rating.closedBody")}
       </EmptyState>
     );
   }
@@ -54,7 +56,7 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
   return (
     <form onSubmit={submit} className="live-form">
       <fieldset className="rating-scale" disabled={locked}>
-        <legend>{stars ? "Your rating, 1 to 5 stars" : "Your rating, 1 to 10"}</legend>
+        <legend>{stars ? t("rating.legendStars") : t("rating.legendNumbers")}</legend>
         {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
           const on = stars ? selected !== null && n <= selected : selected === n;
           return (
@@ -65,7 +67,13 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
                 value={n}
                 checked={selected === n}
                 onChange={() => setSelected(n)}
-                aria-label={stars ? `${n} ${n === 1 ? "star" : "stars"}` : `${n}`}
+                aria-label={
+                  stars
+                    ? t(n === 1 ? "rating.star.one" : "rating.star.other", {
+                        n,
+                      })
+                    : String(n)
+                }
               />
               <span aria-hidden="true">{stars ? (on ? "★" : "☆") : n}</span>
             </label>
@@ -74,10 +82,14 @@ export function RatingForm({ rating }: { rating: LiveRating }) {
       </fieldset>
       {!done && (
         <Button type="submit" variant="primary" busy={submitting} disabled={selected === null}>
-          {submitting ? "Sending" : "Send rating"}
+          {submitting ? t("common.sending") : t("rating.send")}
         </Button>
       )}
-      {done && !error && <p role="status" className="confirm">Thanks, you rated this {selected} out of {max}.</p>}
+      {done && !error && (
+        <p role="status" className="confirm">
+          {t("rating.thanks", { value: selected ?? "", max })}
+        </p>
+      )}
       {error && <InlineError>{error}</InlineError>}
     </form>
   );

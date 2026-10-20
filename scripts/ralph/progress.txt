@@ -22,3 +22,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - The root layout reads cookies/headers, so every page is now dynamic.
   - Browser check not needed (no visible UI change).
 ---
+
+## 2026-10-20 - US-002
+- Moved participant-facing text (join form/redirect, participant view, live view, Q&A tab, shared notes, open text, rating, published analysis, word cloud) to `en.ts`/`id.ts` keys via `useT()`. English output unchanged.
+- Added tests/no-inline-strings.test.ts: TypeScript-AST scan for JSX text, string literals in JSX expressions and text props (`aria-label`, `title`, `placeholder`...). Add a file to its MIGRATED list once its strings move.
+- Files: components/{join-form,join-redirect,participant-view,live-view,qa-tab,shared-notes-panel,open-text-form,rating-form,published-analysis,word-cloud}.tsx, lib/i18n/{en,id}.ts, tests/no-inline-strings.test.ts
+- **Learnings for future iterations:**
+  - Running `npm run dev` with NEXT_DIST_DIR=.next-shot rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
+  - `npm run lint` fails on generated files in a nested `ow-slido/.next` dir and on scripts/ralph/screens/*.mjs; these errors predate this story and none are in source files.
+  - Full `npm test` now takes ~180s; run it in the background.
+  - Never `pkill -f` a pattern that appears in your own command line; it kills the shell.
+  - Screenshots at 360/1280 of the join page checked: no overflow.
+---

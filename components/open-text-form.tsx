@@ -6,10 +6,12 @@ import { EmptyState } from "@/components/ui/card";
 import { InlineError, TextArea } from "@/components/ui/field";
 import { OPEN_TEXT_RESPONSE_MAX } from "@/lib/open-text-limits";
 import type { LiveOpenText } from "@/lib/live-view";
+import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 /** Participant answer box for an open question: counter, remaining count, confirmation after each send. */
 export function OpenTextForm({ question }: { question: LiveOpenText }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [remaining, setRemaining] = useState(question.remaining);
   const [submitting, setSubmitting] = useState(false);
@@ -47,8 +49,8 @@ export function OpenTextForm({ question }: { question: LiveOpenText }) {
 
   if (closed) {
     return (
-      <EmptyState title="Responses closed" role="status">
-        The host is no longer taking answers.
+      <EmptyState title={t("openText.closedTitle")} role="status">
+        {t("openText.closedBody")}
       </EmptyState>
     );
   }
@@ -56,7 +58,7 @@ export function OpenTextForm({ question }: { question: LiveOpenText }) {
   return (
     <form onSubmit={submit} className="live-form">
       <TextArea
-        label="Your response"
+        label={t("openText.label")}
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={OPEN_TEXT_RESPONSE_MAX}
@@ -65,14 +67,18 @@ export function OpenTextForm({ question }: { question: LiveOpenText }) {
         hint={`${text.length}/${OPEN_TEXT_RESPONSE_MAX}`}
       />
       <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !text.trim()}>
-        {submitting ? "Sending" : "Send"}
+        {submitting ? t("common.sending") : t("openText.send")}
       </Button>
       <p role="status" className="field-meta">
         {remaining > 0
-          ? `${remaining} ${remaining === 1 ? "response" : "responses"} remaining`
-          : "You have used all your responses."}
+          ? t(remaining === 1 ? "openText.remaining.one" : "openText.remaining.other", { n: remaining })
+          : t("openText.used")}
       </p>
-      {sent && !error && <p role="status" className="confirm">Thanks, your response was sent.</p>}
+      {sent && !error && (
+        <p role="status" className="confirm">
+          {t("openText.thanks")}
+        </p>
+      )}
       {error && <InlineError>{error}</InlineError>}
     </form>
   );

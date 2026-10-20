@@ -10,12 +10,17 @@ import { OpenTextForm } from "@/components/open-text-form";
 import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
+import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
-type StateChanged = { interactionId: string; state: "draft" | "live" | "paused" | "closed" };
+type StateChanged = {
+  interactionId: string;
+  state: "draft" | "live" | "paused" | "closed";
+};
 
 /** Participant's live area: shows the live poll, "Waiting for the host", or "Voting closed". */
 export function LiveView({ eventId, initial }: { eventId: string; initial: LiveInteraction | null }) {
+  const t = useT();
   const { socket } = useEventSocket(eventId, "participant");
   const [current, setCurrent] = useState<LiveInteraction | null>(initial);
   const currentId = useRef<string | null>(initial?.id ?? null);
@@ -29,9 +34,12 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
     try {
       const res = await fetch(`/api/events/${eventId}/live`);
       if (!res.ok) return;
-      const body = (await res.json()) as { interaction: LiveInteraction | null };
+      const body = (await res.json()) as {
+        interaction: LiveInteraction | null;
+      };
       // A closed or paused interaction stays on screen until the host starts another one.
-      if (body.interaction === null) setCurrent((cur) => (cur?.state === "closed" || cur?.state === "paused" ? cur : null));
+      if (body.interaction === null)
+        setCurrent((cur) => (cur?.state === "closed" || cur?.state === "paused" ? cur : null));
       else apply(body.interaction);
     } catch {
       // Offline: the next reconnect refetches.
@@ -60,8 +68,8 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
 
   if (!current) {
     return (
-      <EmptyState title="Waiting for the host" role="status">
-        The next question will appear here as soon as it starts.
+      <EmptyState title={t("live.waitingTitle")} role="status">
+        {t("live.waitingBody")}
       </EmptyState>
     );
   }
@@ -70,8 +78,8 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
     <section aria-labelledby="live-title" className="live-panel">
       <h2 id="live-title">{current.title}</h2>
       {current.state === "paused" ? (
-        <EmptyState title="Paused" role="status">
-          The host has paused this one. It will come back here if they resume it.
+        <EmptyState title={t("live.pausedTitle")} role="status">
+          {t("live.pausedBody")}
         </EmptyState>
       ) : current.type === "sharedNotes" ? (
         <SharedNotesPanel key={current.id} notes={current} socket={socket} />
@@ -80,8 +88,11 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
       ) : current.type === "rating" ? (
         <RatingForm key={current.id} rating={current} />
       ) : current.state === "closed" ? (
-        <EmptyState title={current.type === "wordcloud" ? "Submissions closed" : "Voting closed"} role="status">
-          The host has closed this one. Stay here for the next.
+        <EmptyState
+          title={current.type === "wordcloud" ? t("live.submissionsClosed") : t("live.votingClosed")}
+          role="status"
+        >
+          {t("live.closedBody")}
         </EmptyState>
       ) : current.type === "wordcloud" ? (
         <WordForm key={current.id} cloud={current} />
@@ -95,6 +106,7 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
 type Counts = { counts: Record<string, number>; total: number };
 
 function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof useEventSocket>["socket"] }) {
+  const t = useT();
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [voted, setVoted] = useState(false);
@@ -113,9 +125,7 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
   }, [socket, poll.id, poll.showResultsToParticipants]);
 
   const toggle = (id: string) =>
-    setSelected((cur) =>
-      poll.multiSelect ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id],
-    );
+    setSelected((cur) => (poll.multiSelect ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id]));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +138,11 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ optionIds: selected }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; counts?: Record<string, number>; total?: number };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        counts?: Record<string, number>;
+        total?: number;
+      };
       if (res.ok) {
         setVoted(true);
         if (body.counts) setResults({ counts: body.counts, total: body.total ?? 0 });
@@ -150,12 +164,17 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
   return (
     <form onSubmit={submit} className="live-form">
       <fieldset disabled={locked} className="choice-list">
-        <legend className="sr-only">{poll.multiSelect ? "Choose one or more options" : "Choose one option"}</legend>
+        <legend className="sr-only">{poll.multiSelect ? t("live.chooseMany") : t("live.chooseOne")}</legend>
         {poll.options.map((o) => {
           const count = showResults ? (results.counts[o.id] ?? 0) : 0;
           const share = showResults && results.total > 0 ? Math.round((count / results.total) * 100) : 0;
           return (
-            <label key={o.id} className="choice" data-locked={locked} data-leading={showResults && top > 0 && count === top}>
+            <label
+              key={o.id}
+              className="choice"
+              data-locked={locked}
+              data-leading={showResults && top > 0 && count === top}
+            >
               {showResults && <span className="choice-bar" aria-hidden="true" style={{ width: `${share}%` }} />}
               <input
                 type={type}
@@ -177,17 +196,28 @@ function PollForm({ poll, socket }: { poll: LivePoll; socket: ReturnType<typeof 
       </fieldset>
       {!voted && (
         <Button type="submit" variant="primary" busy={submitting} disabled={selected.length === 0}>
-          {submitting ? "Submitting" : "Submit"}
+          {submitting ? t("live.submitting") : t("live.submit")}
         </Button>
       )}
       {error && <InlineError>{error}</InlineError>}
-      {voted && !error && <p role="status" className="confirm">Thanks, your vote was recorded.</p>}
-      {showResults && <p className="field-meta">{results.total} {results.total === 1 ? "vote" : "votes"} so far</p>}
+      {voted && !error && (
+        <p role="status" className="confirm">
+          {t("live.voted")}
+        </p>
+      )}
+      {showResults && (
+        <p className="field-meta">
+          {t(results.total === 1 ? "live.votes.one" : "live.votes.other", {
+            n: results.total,
+          })}
+        </p>
+      )}
     </form>
   );
 }
 
 function WordForm({ cloud }: { cloud: LiveWordcloud }) {
+  const t = useT();
   const [word, setWord] = useState("");
   const [remaining, setRemaining] = useState(cloud.remaining);
   const [submitting, setSubmitting] = useState(false);
@@ -206,7 +236,10 @@ function WordForm({ cloud }: { cloud: LiveWordcloud }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ word }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; remaining?: number };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        remaining?: number;
+      };
       if (res.ok) {
         setRemaining(body.remaining ?? Math.max(0, remaining - 1));
         setWord("");
@@ -225,7 +258,7 @@ function WordForm({ cloud }: { cloud: LiveWordcloud }) {
   return (
     <form onSubmit={submit} className="live-form">
       <TextField
-        label="Your word"
+        label={t("live.wordLabel")}
         value={word}
         onChange={(e) => setWord(e.target.value)}
         maxLength={WORDCLOUD_WORD_MAX}
@@ -233,14 +266,20 @@ function WordForm({ cloud }: { cloud: LiveWordcloud }) {
         autoComplete="off"
       />
       <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !word.trim()}>
-        {submitting ? "Submitting" : "Submit"}
+        {submitting ? t("live.submitting") : t("live.submit")}
       </Button>
       <p role="status" className="field-meta">
         {remaining > 0
-          ? `${remaining} ${remaining === 1 ? "entry" : "entries"} remaining`
-          : "You have used all your entries."}
+          ? t(remaining === 1 ? "live.entries.one" : "live.entries.other", {
+              n: remaining,
+            })
+          : t("live.entriesUsed")}
       </p>
-      {sent && !error && <p role="status" className="confirm">Thanks, your word was added.</p>}
+      {sent && !error && (
+        <p role="status" className="confirm">
+          {t("live.wordAdded")}
+        </p>
+      )}
       {error && <InlineError>{error}</InlineError>}
     </form>
   );

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/card";
 import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
+import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type SortMode = "popular" | "recent";
@@ -21,6 +22,7 @@ const sortQuestions = (list: PublicQuestion[], mode: SortMode = "recent") =>
 
 /** Participant Q&A: ask a question (optionally with a name) and watch approved questions arrive live. */
 export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQuestion[] }) {
+  const t = useT();
   const { socket } = useEventSocket(eventId, "participant");
   const [questions, setQuestions] = useState<PublicQuestion[]>(initial);
   const [text, setText] = useState("");
@@ -77,7 +79,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
         method: "POST",
       });
       if (!res.ok) {
-        setError(res.status === 429 ? "Slow down a little, then try again." : "Could not record your upvote.");
+        setError(res.status === 429 ? t("qa.slowDown") : t("qa.upvoteFailed"));
         return;
       }
       const body = (await res.json()) as { upvoted: boolean; upvotes: number };
@@ -106,9 +108,9 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
       };
       if (res.ok) {
         setText("");
-        if (body.status === "pending") setNotice("Your question is waiting for approval");
+        if (body.status === "pending") setNotice(t("qa.pending"));
         else {
-          setNotice("Thanks, your question was posted.");
+          setNotice(t("qa.posted"));
           const posted = body.question;
           if (posted)
             setQuestions((cur) => (cur.some((q) => q.id === posted.id) ? cur : sortQuestions([posted, ...cur])));
@@ -125,10 +127,10 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
 
   return (
     <section aria-labelledby="qa-title" className="qa-panel">
-      <h2 id="qa-title">Questions</h2>
+      <h2 id="qa-title">{t("qa.title")}</h2>
       <form onSubmit={submit} className="live-form">
         <TextArea
-          label="Your question"
+          label={t("qa.questionLabel")}
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={QUESTION_MAX_LENGTH}
@@ -137,7 +139,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
           hint={`${text.length}/${QUESTION_MAX_LENGTH}`}
         />
         <TextField
-          label="Your name (optional)"
+          label={t("common.nameOptional")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={AUTHOR_NAME_MAX_LENGTH}
@@ -145,41 +147,49 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: PublicQu
           disabled={submitting}
         />
         <Button type="submit" variant="primary" busy={submitting} disabled={!text.trim()}>
-          {submitting ? "Sending" : "Send question"}
+          {submitting ? t("common.sending") : t("qa.send")}
         </Button>
-        {notice && <p role="status" className="confirm">{notice}</p>}
+        {notice && (
+          <p role="status" className="confirm">
+            {notice}
+          </p>
+        )}
         {error && <InlineError>{error}</InlineError>}
       </form>
       {questions.length === 0 ? (
         <div className="after-form">
-          <EmptyState title="No questions yet">Be the first to ask.</EmptyState>
+          <EmptyState title={t("qa.emptyTitle")}>{t("qa.emptyBody")}</EmptyState>
         </div>
       ) : (
         <>
-          <div role="group" aria-label="Sort questions" className="sort-bar">
+          <div role="group" aria-label={t("qa.sortLabel")} className="sort-bar">
             {(["popular", "recent"] as const).map((mode) => (
               <Button key={mode} aria-pressed={sort === mode} onClick={() => setSort(mode)}>
-                {mode === "popular" ? "Popular" : "Recent"}
+                {mode === "popular" ? t("common.popular") : t("common.recent")}
               </Button>
             ))}
           </div>
-          <ul aria-label="Approved questions" className="post-list">
+          <ul aria-label={t("qa.listLabel")} className="post-list">
             {sortQuestions(questions, sort).map((q) => (
               <li key={q.id} className="post" data-pinned={q.pinned}>
                 <p className="post-text">{q.text}</p>
                 <div className="post-foot">
                   <Button
                     aria-pressed={q.upvoted}
-                    aria-label={`Upvote: ${q.text}`}
+                    aria-label={t("common.upvote", { text: q.text })}
                     onClick={() => void toggleUpvote(q.id)}
                     variant={q.upvoted ? "primary" : "secondary"}
                   >
                     ▲ <span className="vote-count">{q.upvotes}</span>
                   </Button>
                   <span className="post-meta">
-                    {q.authorName ?? "Anonymous"}
-                    {q.pinned ? " · Pinned" : ""}
-                    {q.answered ? " · Answered" : ""}
+                    {[
+                      q.authorName ?? t("common.anonymous"),
+                      q.pinned && t("common.pinned"),
+                      q.answered && t("common.answered"),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </div>
               </li>

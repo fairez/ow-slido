@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
+import { useT } from "@/lib/i18n/client";
 import { joinEvent, participantPath } from "@/lib/join-client";
 
 export function JoinForm() {
   const router = useRouter();
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -28,7 +30,7 @@ export function JoinForm() {
   return (
     <form onSubmit={onSubmit} className="entry-form">
       <TextField
-        label="Event code"
+        label={t("join.codeLabel")}
         name="code"
         className="code-input"
         inputMode="numeric"
@@ -38,7 +40,7 @@ export function JoinForm() {
         error={error ?? undefined}
       />
       <Button type="submit" variant="primary" busy={pending}>
-        {pending ? "Joining" : "Join event"}
+        {pending ? t("join.submitting") : t("join.submit")}
       </Button>
     </form>
   );

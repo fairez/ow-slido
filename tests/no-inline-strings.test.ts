@@ -1,0 +1,131 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import ts from "typescript";
+
+/** Files whose UI text has moved to the message files. Add a file here when it is migrated. */
+const MIGRATED = [
+  "app/join/[code]/page.tsx",
+  "app/e/[eventId]/page.tsx",
+  "components/join-form.tsx",
+  "components/join-redirect.tsx",
+  "components/participant-view.tsx",
+  "components/live-view.tsx",
+  "components/qa-tab.tsx",
+  "components/shared-notes-panel.tsx",
+  "components/open-text-form.tsx",
+  "components/rating-form.tsx",
+  "components/published-analysis.tsx",
+  "components/word-cloud.tsx",
+];
+
+/** Props that carry text a person reads or hears. */
+const TEXT_PROPS = new Set([
+  "aria-label",
+  "label",
+  "title",
+  "placeholder",
+  "hint",
+  "alt",
+  "aria-description",
+]);
+
+const hasLetters = (s: string) => /\p{L}/u.test(s);
+
+/** Returns "line: text" for every literal in JSX that should be a message key. */
+export function findInlineStrings(file: string, source: string): string[] {
+  const sf = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const found: string[] = [];
+  const report = (node: ts.Node, text: string) => {
+    const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+    found.push(`${file}:${line + 1}: ${text.trim().slice(0, 40)}`);
+  };
+  const literalsIn = (
+    node: ts.Node,
+    visit: (lit: ts.Node, text: string) => void,
+  ) => {
+    const walk = (n: ts.Node) => {
+      // Nested JSX is visited by the main walk; t("key") arguments are keys, not text.
+      if (
+        ts.isJsxElement(n) ||
+        ts.isJsxSelfClosingElement(n) ||
+        ts.isJsxFragment(n)
+      )
+        return;
+      if (
+        ts.isCallExpression(n) &&
+        ts.isIdentifier(n.expression) &&
+        n.expression.text === "t"
+      )
+        return;
+      // Identifiers compared or listed as constants are not shown to anyone.
+      if (ts.isAsExpression(n)) return;
+      if (
+        ts.isBinaryExpression(n) &&
+        [
+          ts.SyntaxKind.EqualsEqualsEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsEqualsToken,
+        ].includes(n.operatorToken.kind)
+      )
+        return;
+      if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n))
+        visit(n, n.text);
+      else if (
+        ts.isTemplateHead(n) ||
+        ts.isTemplateMiddle(n) ||
+        ts.isTemplateTail(n)
+      )
+        visit(n, n.text);
+      ts.forEachChild(n, walk);
+    };
+    walk(node);
+  };
+  const walk = (node: ts.Node) => {
+    if (ts.isJsxText(node) && hasLetters(node.text)) report(node, node.text);
+    if (
+      ts.isJsxExpression(node) &&
+      node.parent &&
+      (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent)) &&
+      node.expression
+    ) {
+      literalsIn(
+        node.expression,
+        (lit, text) => hasLetters(text) && report(lit, text),
+      );
+    }
+    if (
+      ts.isJsxAttribute(node) &&
+      node.initializer &&
+      TEXT_PROPS.has(node.name.getText(sf))
+    ) {
+      if (ts.isStringLiteral(node.initializer)) {
+        if (hasLetters(node.initializer.text))
+          report(node.initializer, node.initializer.text);
+      } else {
+        literalsIn(
+          node.initializer,
+          (lit, text) => hasLetters(text) && report(lit, text),
+        );
+      }
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(sf);
+  return found;
+}
+
+describe("no inline UI strings", () => {
+  it("flags text literals, expression strings and text props", () => {
+    const sample = `const a = <p aria-label="Hi">Hello {x}{"there"}{ok ? "yes" : t("k")}</p>; const b = <i>▲ {n}</i>;`;
+    expect(findInlineStrings("s.tsx", sample)).toHaveLength(4);
+  });
+
+  it.each(MIGRATED)("%s has none", (file) => {
+    expect(findInlineStrings(file, readFileSync(file, "utf8"))).toEqual([]);
+  });
+});

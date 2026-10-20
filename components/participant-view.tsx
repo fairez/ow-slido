@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LiveView } from "@/components/live-view";
 import { QaTab } from "@/components/qa-tab";
+import { useT } from "@/lib/i18n/client";
 import type { LiveInteraction } from "@/lib/live-view";
 import type { PublicQuestion } from "@/lib/question-types";
 
@@ -16,15 +17,30 @@ export function ParticipantView({
   initial: LiveInteraction | null;
   initialQuestions: PublicQuestion[];
 }) {
+  const t = useT();
   const [tab, setTab] = useState<"live" | "qa">("live");
   return (
     <>
-      <div role="tablist" aria-label="Event sections" className="tabs">
-        <button role="tab" id="tab-live" aria-selected={tab === "live"} aria-controls="panel-live" onClick={() => setTab("live")} className="tab">
-          Live
+      <div role="tablist" aria-label={t("tabs.label")} className="tabs">
+        <button
+          role="tab"
+          id="tab-live"
+          aria-selected={tab === "live"}
+          aria-controls="panel-live"
+          onClick={() => setTab("live")}
+          className="tab"
+        >
+          {t("tabs.live")}
         </button>
-        <button role="tab" id="tab-qa" aria-selected={tab === "qa"} aria-controls="panel-qa" onClick={() => setTab("qa")} className="tab">
-          Q&amp;A
+        <button
+          role="tab"
+          id="tab-qa"
+          aria-selected={tab === "qa"}
+          aria-controls="panel-qa"
+          onClick={() => setTab("qa")}
+          className="tab"
+        >
+          {t("tabs.qa")}
         </button>
       </div>
       <div role="tabpanel" id="panel-live" aria-labelledby="tab-live" hidden={tab !== "live"}>

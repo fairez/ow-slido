@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
-import { COOKIES_BLOCKED, JOIN_STUCK } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
 import { joinEvent, participantPath } from "@/lib/join-client";
 
 /** After a successful join, how long to wait for the participant page before offering a manual link. */
@@ -13,6 +13,7 @@ export const NAVIGATION_STALL_MS = 12_000;
 
 export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; cookiesBlocked?: boolean }) {
   const router = useRouter();
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [stalledAt, setStalledAt] = useState<string | null>(null);
 
@@ -36,10 +37,10 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
   if (cookiesBlocked) {
     return (
       <>
-        <h1>Cookies are blocked</h1>
-        <InlineError>{COOKIES_BLOCKED}</InlineError>
+        <h1>{t("join.cookiesTitle")}</h1>
+        <InlineError>{t("join.cookiesBlocked")}</InlineError>
         <p className="entry-alt">
-          <a href={`/join/${code}`}>Try again</a>
+          <a href={`/join/${code}`}>{t("join.tryAgain")}</a>
         </p>
       </>
     );
@@ -48,15 +49,15 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
   if (error) {
     return (
       <>
-        <h1>Could not join</h1>
+        <h1>{t("join.failedTitle")}</h1>
         <InlineError>{error}</InlineError>
         <div className="entry-actions">
           <Button variant="primary" onClick={() => window.location.reload()}>
-            Try again
+            {t("join.tryAgain")}
           </Button>
         </div>
         <p className="entry-alt">
-          <Link href="/">Enter a code instead</Link>
+          <Link href="/">{t("join.enterCode")}</Link>
         </p>
       </>
     );
@@ -64,22 +65,22 @@ export function JoinRedirect({ code, cookiesBlocked = false }: { code: string; c
 
   return (
     <>
-      <h1>Joining the event</h1>
+      <h1>{t("join.title")}</h1>
       <p role="status" className="entry-lead">
-        Checking code {code}. This takes a moment.
+        {t("join.checking", { code })}
       </p>
       {stalledAt ? (
         <p className="entry-alt">
-          <a href={stalledAt}>Taking long? Continue to the event</a>
+          <a href={stalledAt}>{t("join.continue")}</a>
         </p>
       ) : (
         // Shown by CSS after a delay, so it still appears when scripts never run (old browser, blocked bundle).
         <p className="join-stuck" role="status">
-          {JOIN_STUCK}
+          {t("join.stuck")}
         </p>
       )}
       <noscript>
-        <p className="join-noscript">This page needs JavaScript. Turn it on in your browser settings, or open the link in Chrome or Safari.</p>
+        <p className="join-noscript">{t("join.noscript")}</p>
       </noscript>
     </>
   );

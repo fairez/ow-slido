@@ -10,6 +10,7 @@ import { InlineError, TextArea, TextField } from "@/components/ui/field";
 import { PublishedAnalysis } from "@/components/published-analysis";
 import { NOTE_TEXT_MAX } from "@/lib/note-limits";
 import { AUTHOR_NAME_MAX_LENGTH } from "@/lib/question-types";
+import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 type SortMode = "popular" | "recent";
@@ -27,6 +28,7 @@ type Props = { notes: LiveNotes; socket: Socket | null };
 
 /** Participant side of a shared notes interaction: write notes, upvote others' notes, edit or delete your own. */
 export function SharedNotesPanel({ notes: config, socket }: Props) {
+  const t = useT();
   const closed = config.state === "closed";
   const [list, setList] = useState<ParticipantNote[]>([]);
   const [sort, setSort] = useState<SortMode>("popular");
@@ -73,7 +75,17 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
       if (!n || !mine(n.interactionId)) return;
       setList((cur) =>
         cur.some((x) => x.id === n.id)
-          ? cur.map((x) => (x.id === n.id ? { ...x, text: n.text, authorName: n.authorName, pinned: n.pinned, upvotes: n.upvotes } : x))
+          ? cur.map((x) =>
+              x.id === n.id
+                ? {
+                    ...x,
+                    text: n.text,
+                    authorName: n.authorName,
+                    pinned: n.pinned,
+                    upvotes: n.upvotes,
+                  }
+                : x,
+            )
           : [{ ...n, mine: ownIds.current.has(n.id), iUpvoted: false }, ...cur],
       );
     };
@@ -110,21 +122,31 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
       const res = await fetch(`/api/interactions/${config.id}/notes`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, authorName: config.showAuthorNames ? name.trim() || undefined : undefined }),
+        body: JSON.stringify({
+          text,
+          authorName: config.showAuthorNames ? name.trim() || undefined : undefined,
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
-        note?: { id: string; text: string; authorName: string | null; status: string; pinned: boolean; createdAt: string };
+        note?: {
+          id: string;
+          text: string;
+          authorName: string | null;
+          status: string;
+          pinned: boolean;
+          createdAt: string;
+        };
       };
       if (res.ok && body.note) {
         const n = body.note;
         setText("");
         setRemaining((r) => Math.max(0, r - 1));
         if (n.status === "pending") {
-          setNotice("Your note is waiting for approval. It will appear here once the host approves it.");
+          setNotice(t("notes.pendingNew"));
         } else {
           ownIds.current.add(n.id);
-          setNotice("Your note was posted.");
+          setNotice(t("notes.posted"));
           const posted: ParticipantNote = {
             id: n.id,
             interactionId: config.id,
@@ -137,12 +159,14 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
             iUpvoted: false,
           };
           setList((cur) =>
-            cur.some((x) => x.id === n.id) ? cur.map((x) => (x.id === n.id ? { ...x, mine: true } : x)) : [posted, ...cur],
+            cur.some((x) => x.id === n.id)
+              ? cur.map((x) => (x.id === n.id ? { ...x, mine: true } : x))
+              : [posted, ...cur],
           );
         }
       } else {
         if (res.status === 409 && body.error === "You have used all your notes") setRemaining(0);
-        setError(res.status === 429 ? "Too many posts in a row. Wait a moment, then try again." : (body.error ?? SERVER_ERROR));
+        setError(res.status === 429 ? t("notes.tooManyPosts") : (body.error ?? SERVER_ERROR));
       }
     } catch {
       setError(NETWORK_ERROR);
@@ -156,7 +180,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
     try {
       const res = await fetch(`/api/notes/${id}/upvote`, { method: "POST" });
       if (!res.ok) {
-        setError(res.status === 429 ? "Too many posts in a row. Wait a moment, then try again." : "Could not record your upvote.");
+        setError(res.status === 429 ? t("notes.tooManyPosts") : t("qa.upvoteFailed"));
         return;
       }
       const body = (await res.json()) as { upvoted: boolean; upvotes: number };
@@ -177,13 +201,16 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: draft }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; note?: { text: string; status: string } };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        note?: { text: string; status: string };
+      };
       if (res.ok && body.note) {
         const edited = body.note;
         setEditingId(null);
         if (edited.status === "pending") {
           setList((cur) => cur.filter((x) => x.id !== id));
-          setNotice("Your edit is waiting for approval. The note is hidden until the host approves it.");
+          setNotice(t("notes.pendingEdit"));
         } else {
           setList((cur) => cur.map((x) => (x.id === id ? { ...x, text: edited.text } : x)));
         }
@@ -220,24 +247,24 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
   };
 
   const remainingText =
-    remaining > 0 ? `${remaining} ${remaining === 1 ? "note" : "notes"} remaining` : "You have used all your notes.";
+    remaining > 0
+      ? t(remaining === 1 ? "notes.remaining.one" : "notes.remaining.other", {
+          n: remaining,
+        })
+      : t("notes.used");
 
   return (
     <div className="live-form">
       <PublishedAnalysis interactionId={config.id} socket={socket} />
-      {config.aiDisclosure && (
-        <p className="field-meta">
-          The host may have an AI service summarise these notes. Your name is never sent.
-        </p>
-      )}
+      {config.aiDisclosure && <p className="field-meta">{t("notes.aiDisclosure")}</p>}
       {closed ? (
-        <EmptyState title="Notes are closed" role="status">
-          You can still upvote.
+        <EmptyState title={t("notes.closedTitle")} role="status">
+          {t("notes.closedBody")}
         </EmptyState>
       ) : (
         <form onSubmit={submit} className="live-form">
           <TextArea
-            label="Your note"
+            label={t("notes.label")}
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={NOTE_TEXT_MAX}
@@ -247,7 +274,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
           />
           {config.showAuthorNames && (
             <TextField
-              label="Your name (optional)"
+              label={t("common.nameOptional")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={AUTHOR_NAME_MAX_LENGTH}
@@ -256,31 +283,37 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
             />
           )}
           <Button type="submit" variant="primary" busy={submitting} disabled={remaining <= 0 || !text.trim()}>
-            {submitting ? "Sending" : "Send note"}
+            {submitting ? t("common.sending") : t("notes.send")}
           </Button>
-          <p role="status" className="field-meta">{remainingText}</p>
+          <p role="status" className="field-meta">
+            {remainingText}
+          </p>
         </form>
       )}
-      {notice && <p role="status" className="confirm">{notice}</p>}
+      {notice && (
+        <p role="status" className="confirm">
+          {notice}
+        </p>
+      )}
       {error && <InlineError>{error}</InlineError>}
       {list.length === 0 ? (
-        <EmptyState title="No notes yet">Notes appear here as people post them.</EmptyState>
+        <EmptyState title={t("notes.emptyTitle")}>{t("notes.emptyBody")}</EmptyState>
       ) : (
         <div>
-          <div role="group" aria-label="Sort notes" className="sort-bar">
+          <div role="group" aria-label={t("notes.sortLabel")} className="sort-bar">
             {(["popular", "recent"] as const).map((mode) => (
               <Button key={mode} aria-pressed={sort === mode} onClick={() => setSort(mode)}>
-                {mode === "popular" ? "Popular" : "Recent"}
+                {mode === "popular" ? t("common.popular") : t("common.recent")}
               </Button>
             ))}
           </div>
-          <ul aria-label="Notes" className="post-list">
+          <ul aria-label={t("notes.listLabel")} className="post-list">
             {sortNotes(list, sort).map((n) => (
               <li key={n.id} className="post" data-pinned={n.pinned}>
                 {editingId === n.id ? (
                   <div className="live-form">
                     <TextArea
-                      label="Edit your note"
+                      label={t("notes.editLabel")}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       maxLength={NOTE_TEXT_MAX}
@@ -289,11 +322,15 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
                       hint={`${draft.length}/${NOTE_TEXT_MAX}`}
                     />
                     <div className="post-foot">
-                      <Button variant="primary" disabled={busyId === n.id || !draft.trim()} onClick={() => void saveEdit(n.id)}>
-                        Save
+                      <Button
+                        variant="primary"
+                        disabled={busyId === n.id || !draft.trim()}
+                        onClick={() => void saveEdit(n.id)}
+                      >
+                        {t("notes.save")}
                       </Button>
                       <Button disabled={busyId === n.id} onClick={() => setEditingId(null)}>
-                        Cancel
+                        {t("notes.cancel")}
                       </Button>
                     </div>
                   </div>
@@ -305,28 +342,30 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
                         !closed && (
                           <>
                             <Button
-                              aria-label={`Edit your note: ${n.text}`}
+                              aria-label={t("notes.editAria", { text: n.text })}
                               disabled={busyId === n.id}
                               onClick={() => {
                                 setEditingId(n.id);
                                 setDraft(n.text);
                               }}
                             >
-                              Edit
+                              {t("notes.edit")}
                             </Button>
                             <Button
-                              aria-label={`Delete your note: ${n.text}`}
+                              aria-label={t("notes.deleteAria", {
+                                text: n.text,
+                              })}
                               disabled={busyId === n.id}
                               onClick={() => void remove(n.id)}
                             >
-                              Delete
+                              {t("notes.delete")}
                             </Button>
                           </>
                         )
                       ) : (
                         <Button
                           aria-pressed={n.iUpvoted}
-                          aria-label={`Upvote: ${n.text}`}
+                          aria-label={t("common.upvote", { text: n.text })}
                           onClick={() => void toggleUpvote(n.id)}
                           variant={n.iUpvoted ? "primary" : "secondary"}
                         >
@@ -335,9 +374,13 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
                       )}
                       {n.mine && <span className="vote-count">▲ {n.upvotes}</span>}
                       <span className="post-meta">
-                        {n.authorName ?? "Anonymous"}
-                        {n.pinned ? " · Pinned" : ""}
-                        {n.mine ? " · You" : ""}
+                        {[
+                          n.authorName ?? t("common.anonymous"),
+                          n.pinned && t("common.pinned"),
+                          n.mine && t("common.you"),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     </div>
                   </>

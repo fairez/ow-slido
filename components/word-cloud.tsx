@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import type { WordCount } from "@/lib/wordclouds";
 
 const MIN_REM = 1.25;
@@ -14,35 +15,38 @@ export function wordSize(count: number, min: number, max: number, minRem = MIN_R
 
 /** Words sized by frequency. Size is not the only cue: hovering or focusing a word shows its count, and a text list follows. */
 export function WordCloud({ words, sizeRange }: { words: WordCount[]; sizeRange?: [number, number] }) {
+  const t = useT();
   const [active, setActive] = useState<string | null>(null);
-  if (words.length === 0) return <p className="present-empty">No words yet</p>;
+  if (words.length === 0) return <p className="present-empty">{t("wordcloud.empty")}</p>;
   const counts = words.map((w) => w.count);
   const min = Math.min(...counts);
   const max = Math.max(...counts);
   return (
     <>
-      <ul
-        aria-label="Word cloud"
-        className="word-cloud"
-      >
+      <ul aria-label={t("wordcloud.label")} className="word-cloud">
         {words.map((w) => (
           <li
             key={w.word}
             tabIndex={0}
-            aria-label={`${w.word}, ${w.count} ${w.count === 1 ? "entry" : "entries"}`}
+            aria-label={t(w.count === 1 ? "wordcloud.entry.one" : "wordcloud.entry.other", {
+              word: w.word,
+              count: w.count,
+            })}
             onMouseEnter={() => setActive(w.word)}
             onMouseLeave={() => setActive(null)}
             onFocus={() => setActive(w.word)}
             onBlur={() => setActive(null)}
             data-top={w.count === max && max > min ? true : undefined}
-            style={{ fontSize: `${wordSize(w.count, min, max, sizeRange?.[0], sizeRange?.[1])}rem` }}
+            style={{
+              fontSize: `${wordSize(w.count, min, max, sizeRange?.[0], sizeRange?.[1])}rem`,
+            }}
           >
             {w.word}
             {active === w.word && <sup>×{w.count}</sup>}
           </li>
         ))}
       </ul>
-      <ul aria-label="Word counts" className="sr-only">
+      <ul aria-label={t("wordcloud.countsLabel")} className="sr-only">
         {words.map((w) => (
           <li key={w.word}>
             {w.word}: {w.count}
