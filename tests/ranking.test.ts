@@ -263,3 +263,19 @@ test("deleting the event cascades to rankings", async () => {
   await db.delete(events).where(eq(events.id, eventId));
   expect(await db.select().from(rankingResponses)).toHaveLength(0);
 });
+
+test("the participant live view lists the options and returns the participant's own order after they submit", async () => {
+  const { getLiveInteraction } = await import("@/lib/live-view");
+  const [p] = await db.select({ id: participants.id }).from(participants);
+  const before = await getLiveInteraction(eventId, p.id);
+  expect(before).toMatchObject({ type: "ranking", prompt: "Rank these", mine: null });
+  expect(before?.type === "ranking" && before.options.map((o) => o.text)).toEqual(["Alpha", "Beta", "Gamma"]);
+
+  const order = [optionIds[2], optionIds[0], optionIds[1]];
+  expect((await post(order)).status).toBe(201);
+  const after = await getLiveInteraction(eventId, p.id);
+  expect(after?.type === "ranking" && after.mine).toEqual(order);
+  // An unknown participant sees no answer.
+  const anonymous = await getLiveInteraction(eventId);
+  expect(anonymous?.type === "ranking" && anonymous.mine).toBeNull();
+});

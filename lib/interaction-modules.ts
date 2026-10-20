@@ -15,7 +15,7 @@ import {
 import { isAiConfigured } from "@/lib/ai/config";
 import { getDb } from "@/lib/db";
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { parseNewInteractionInput, type OpenTextConfig, type RatingConfig, type SharedNotesConfig } from "@/lib/interaction-config";
+import { parseNewInteractionInput, type OpenTextConfig, type RankingConfig, type RatingConfig, type SharedNotesConfig } from "@/lib/interaction-config";
 import type { LiveInteraction } from "@/lib/live-view";
 import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
@@ -359,9 +359,28 @@ const rankingModule: InteractionModule = {
       db().select({ n: sql<number>`count(*)::int` }).from(rankingResponses).where(eq(rankingResponses.interactionId, interactionId)),
     );
   },
-  // The presenter and participant screens arrive with the ranking UI stories.
+  // The presenter screen arrives with the host-side ranking story.
   presenter: async () => null,
-  live: async () => null,
+  async live(row, participantId) {
+    const c = row.config as Partial<RankingConfig>;
+    let mine: string[] | null = null;
+    if (participantId) {
+      const [r] = await db()
+        .select({ order: rankingResponses.order })
+        .from(rankingResponses)
+        .where(and(eq(rankingResponses.interactionId, row.id), eq(rankingResponses.participantId, participantId)));
+      mine = r?.order ?? null;
+    }
+    return {
+      id: row.id,
+      type: "ranking",
+      title: row.title,
+      state: "live",
+      prompt: c.prompt ?? "",
+      options: Array.isArray(c.options) ? c.options : [],
+      mine,
+    };
+  },
 };
 
 /** Registration order is the order of tables in the combined event CSV. */

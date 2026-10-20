@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/card";
 import { InlineError, TextField } from "@/components/ui/field";
 import { OpenTextForm } from "@/components/open-text-form";
+import { RankingForm } from "@/components/ranking-form";
 import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
 import type { LiveInteraction, LivePoll, LiveWordcloud } from "@/lib/live-view";
@@ -87,6 +88,8 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
         <OpenTextForm key={current.id} question={current} />
       ) : current.type === "rating" ? (
         <RatingForm key={current.id} rating={current} />
+      ) : current.type === "ranking" ? (
+        <RankingForm key={current.id} ranking={current} />
       ) : current.state === "closed" ? (
         <EmptyState
           title={current.type === "wordcloud" ? t("live.submissionsClosed") : t("live.votingClosed")}

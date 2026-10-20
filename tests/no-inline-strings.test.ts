@@ -27,6 +27,7 @@ const MIGRATED = [
   "components/shared-notes-panel.tsx",
   "components/open-text-form.tsx",
   "components/rating-form.tsx",
+  "components/ranking-form.tsx",
   "components/published-analysis.tsx",
   "components/word-cloud.tsx",
   "app/dashboard/events/[id]/page.tsx",

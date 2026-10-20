@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import type { RatingConfig } from "@/lib/interaction-config";
+import type { RankingOption, RatingConfig } from "@/lib/interaction-config";
 import { interactionModule } from "@/lib/interaction-modules";
 import type { PollOption } from "@/lib/polls";
 
@@ -61,7 +61,19 @@ export type LiveRating = {
   mine: number | null;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating;
+export type LiveRanking = {
+  id: string;
+  type: "ranking";
+  title: string;
+  state: "live" | "paused" | "closed";
+  prompt: string;
+  /** In the host's order; the participant reorders their own copy. */
+  options: RankingOption[];
+  /** This participant's submitted order (option ids), or null; a ranking cannot be changed. */
+  mine: string[] | null;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating | LiveRanking;
 
 export async function getLiveInteraction(
   eventId: string,

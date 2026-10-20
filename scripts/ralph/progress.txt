@@ -434,3 +434,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - tests/interaction-modules.test.ts used "ranking" as its example of an unregistered type; it now uses a made-up one.
   - No UI change, so no browser check. Full suite 980 tests green, typecheck and eslint (source dirs) clean.
 ---
+
+## 2026-10-20 - US-038
+- Ranking participant screen: `RankingForm` (components/ranking-form.tsx) shows the host's options as an ordered list; reorder by a drag handle (pointer events, touch-safe) or by ↑/↓ buttons labelled "Move {text} up/down, currently position n of N"; position changes go to a polite live region. Submit posts `{order}`; afterwards "Answer sent" and the list locks. The ranking module's `live` now returns `LiveRanking` `{prompt, options, mine}` so reconnecting/reloading shows the same sent state; closed without an answer shows "Ranking closed". `LiveView` renders it for `type: "ranking"`.
+- Files: components/{ranking-form,live-view}.tsx, lib/{live-view,interaction-modules}.ts, lib/i18n/{en,id}.ts, app/globals.css, tests/{ranking-ui.test.tsx,ranking.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/ranking-ui.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - Pointer capture does not survive React reordering the captured element (the DOM move releases it); drag with window pointermove/pointerup listeners. The jsdom test caught nothing here; only the real-browser run did.
+  - The dev DB did not have migration 0033 yet (ranking inserts failed the `interactions_type` check); run `npm run db:migrate` before browser checks of a new type.
+  - Browser-check recipe for participant screens: sign up, `update users set email_verified_at`, insert a `subscriptions` plan override via SQL, create + `/start` through the API, `POST /api/join` in the participant context, open `/e/<id>` (scripts/ralph/screens/ranking-ui.mjs; it deletes its workspace and users afterwards).
+  - Options start in the host's order; a participant who submits without touching the list sends that order.
+  - Browser check done at 360 and 1280, light and dark: no horizontal overflow, drag, buttons, focus, send and reload verified.
+---

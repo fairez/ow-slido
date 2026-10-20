@@ -613,7 +613,7 @@
       ],
       "id": "US-038",
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M4"
     },
     {
