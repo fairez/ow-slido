@@ -41,6 +41,9 @@ export default async function SecurityPage() {
         enabled={enabled}
         recoveryCodesLeft={enabled ? await remainingRecoveryCodes(db, user.id) : 0}
       />
+      <p className="security-delete-link">
+        <Link href="/account/delete">{t("security.deleteLink")}</Link>
+      </p>
     </main>
   );
 }

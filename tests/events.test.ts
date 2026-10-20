@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { events, interactions, users } from "@/db/schema";
+import { events, interactions, users, workspaces } from "@/db/schema";
 import { createTestDb, qaFor, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -131,7 +131,7 @@ test("patch by another owner is 404 and changes nothing", async () => {
   expect(row.name).toBe("Town hall");
 });
 
-test("delete removes the event; owner deletion cascades to events", async () => {
+test("delete removes the event; deleting the owner account keeps it, deleting the workspace removes it", async () => {
   const { json } = await create();
   const res = await item.DELETE(req("DELETE", `/api/events/${json.event.id}`), ctx(json.event.id));
   expect(res.status).toBe(204);
@@ -141,6 +141,9 @@ test("delete removes the event; owner deletion cascades to events", async () => 
 
   await create();
   await db.delete(users);
+  const [kept] = await db.select().from(events);
+  expect(kept.ownerId).toBeNull();
+  await db.delete(workspaces);
   expect(await db.select().from(events)).toHaveLength(0);
 });
 

@@ -156,6 +156,17 @@ export const workspaceExports = pgTable(
   ],
 );
 
+/**
+ * One row per deleted workspace, with no content, name or people. It has no foreign key to `workspaces` (the row
+ * outlives it). Written only by `deleteWorkspace` (lib/workspace-deletion.ts).
+ */
+export const deletedWorkspaces = pgTable("deleted_workspaces", {
+  id: uuid("id").primaryKey(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+  /** The plan in force when it was deleted. */
+  plan: text("plan", { enum: ["free", "pro", "team"] }).notNull(),
+}, (t) => [check("deleted_workspaces_plan", sql`${t.plan} in ('free', 'pro', 'team')`)]);
+
 export const memberships = pgTable(
   "memberships",
   {
@@ -271,9 +282,8 @@ export const events = pgTable(
   "events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    /** The creator at the time; null once that account is deleted (events belong to the workspace and stay). */
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),

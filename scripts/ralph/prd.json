@@ -188,7 +188,7 @@
       ],
       "id": "US-012",
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M7"
     },
     {

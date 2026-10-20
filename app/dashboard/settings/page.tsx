@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { workspaces } from "@/db/schema";
+import { DeleteWorkspace } from "@/components/delete-workspace";
 import { RetentionSettings } from "@/components/retention-settings";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
@@ -26,7 +27,7 @@ export default async function SettingsPage() {
   if (!can(membership.role, "members.manage")) redirect("/dashboard");
 
   const [workspace] = await getDb()
-    .select({ retentionDays: workspaces.retentionDays })
+    .select({ name: workspaces.name, retentionDays: workspaces.retentionDays })
     .from(workspaces)
     .where(eq(workspaces.id, membership.workspaceId));
 
@@ -43,6 +44,7 @@ export default async function SettingsPage() {
       </header>
       <div className="stack">
         <RetentionSettings initial={workspace?.retentionDays ?? null} />
+        {workspace && can(membership.role, "workspace.delete") && <DeleteWorkspace name={workspace.name} />}
       </div>
     </main>
   );
