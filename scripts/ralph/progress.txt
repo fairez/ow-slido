@@ -495,3 +495,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - US-043 (presenter) still needs the module's `presenter`; US-045/046 will add nicknames and the leaderboard.
   - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-ui.mjs): single and multi answer, reload keeps "Answer sent", close shows result, 5 s question counts to "Time is up"; no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
 ---
+
+## 2026-10-20 - US-043
+- Quiz host side. Builder: "New quiz question" in Add content (prompt, 2-6 options with a "Correct" checkbox each, time limit 5-120, points; server validation errors such as "Mark at least one correct option" show inline; editing a draft restates option ids and correct ids). Presenter: quiz module `presenter` returns `PresenterQuiz` (live or closed); `PresenterQuiz` component shows the prompt, a countdown bar that prints "n seconds left" (client clock corrected by the payload's database time, announcements at 10 s, 5 s and zero), the options as coloured shapes, and the live answer count from host-only `quiz:results`. After close: each option with its count and a "Correct answer" tag, plus "n answers, x% correct". Host controls: start (arrow keys / content list, as before), "Close and show answer" button on the presenter (posts `/close`), Close in the content list.
+- Files: components/{presenter-quiz,presenter-view,poll-manager,quiz-form}.tsx, lib/{presenter,interaction-modules}.ts, lib/i18n/{en,id}.ts, app/globals.css, tests/{presenter,presenter-view,poll-manager,no-inline-strings}.*, scripts/ralph/screens/quiz-host.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - While live the presenter never gets per-option counts or correct ids (`results: null`), so the projector cannot give the answer away; they arrive with the closed state. `closeQuiz` is the reveal: there is no separate reveal state.
+  - `.present-bar-head span:last-child` (nowrap) matches nested spans too and made the 360px presenter 480px wide; a child needs a selector at least as specific (`.present-bar-head .present-quiz-name .present-quiz-text`).
+  - A fieldset's min-content width follows its widest row: `.option-row` now wraps (`flex-wrap`, input `flex: 1 1 8rem`) or the quiz row (input + Correct + Remove) overflowed at 360px.
+  - Add-menu button label for a type is "Save {type lower case}", so the quiz builder's submit is "Save quiz".
+  - Signup is rate limited per IP in the dev server (429 after a few runs of a browser script); restart your own dev server on :3200 (kill by PID from `ss -ltnp`) to reset it.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-host.mjs): builder with validation error, list, live presenter with seconds and answer count, time up, closed with correct option; no horizontal overflow, only the expected 400 console errors. The fixed presenter buttons overlap the last row at 360, as on other presenter screens.
+  - Full suite 1066 tests green (~540 s), typecheck and eslint (source dirs) clean.
+---

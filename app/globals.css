@@ -715,12 +715,24 @@ a.ui-button:not([data-variant]) {
 
 .option-row {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
 
 .option-row input {
-  flex: 1;
+  flex: 1 1 8rem;
   min-width: 0;
+}
+
+.option-row .option-correct {
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.option-row .option-correct input {
+  flex: none;
 }
 
 .row-list {
@@ -2426,3 +2438,82 @@ button.quiz-option[aria-disabled="true"] {
 .quiz-result-points {
   font-variant-numeric: tabular-nums;
 }
+
+.present-quiz-prompt {
+  margin: 0 0 var(--space-5);
+  font-size: clamp(1.5rem, 2.8vw, 2.5rem);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.present-quiz-timer {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.present-quiz-seconds {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The global reduced-motion rule shortens this transition to nothing. */
+.present-quiz-fill {
+  background: var(--ink);
+  transition: width 250ms linear;
+}
+
+.present-quiz-timer[data-urgent="true"] .present-quiz-fill {
+  background: var(--accent);
+}
+
+.present-quiz-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.present-quiz-options .quiz-option {
+  min-height: 6rem;
+  font-size: clamp(1.25rem, 2.2vw, 2rem);
+}
+
+.present-quiz-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Beats `.present-bar-head span:last-child`, which would keep a long option text on one line. */
+.present-bar-head .present-quiz-name .present-quiz-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+.quiz-swatch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--quiz-ink);
+}
+
+.quiz-swatch[data-n="1"] { background: var(--quiz-1); }
+.quiz-swatch[data-n="2"] { background: var(--quiz-2); }
+.quiz-swatch[data-n="3"] { background: var(--quiz-3); }
+.quiz-swatch[data-n="4"] { background: var(--quiz-4); }
+.quiz-swatch[data-n="5"] { background: var(--quiz-5); }
+.quiz-swatch[data-n="6"] { background: var(--quiz-6); }

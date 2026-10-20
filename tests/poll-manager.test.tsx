@@ -225,7 +225,7 @@ describe("PollManager content list", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const items = screen.getAllByRole("listitem").map((li) => li.textContent?.trim());
-    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New ranking", "New Q&A"]);
+    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New ranking", "New quiz question", "New Q&A"]);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
   });
@@ -280,5 +280,73 @@ describe("PollManager content list", () => {
     expect(url).toBe("/api/events/e/interactions/r1");
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(init.body as string).options).toEqual([{ id: "x", text: "Speed" }, { id: "y", text: "Cost" }]);
+  });
+
+  it("builds a quiz question with correct options, time limit and points", async () => {
+    const created: InteractionItem = {
+      id: "z1",
+      type: "quiz",
+      title: "Capital of France?",
+      state: "draft",
+      position: 0,
+      config: { prompt: "Capital of France?" },
+    };
+    const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
+    fireEvent.click(screen.getByRole("button", { name: "New quiz question" }));
+    expect(screen.queryByLabelText("Allow selecting several options")).toBeNull();
+    expect((screen.getByLabelText("Time limit (seconds)") as HTMLInputElement).value).toBe("20");
+    expect((screen.getByLabelText("Points for a correct answer") as HTMLInputElement).value).toBe("1000");
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole("button", { name: "Add option" }));
+    expect(screen.getAllByLabelText(/^Option \d+$/)).toHaveLength(6);
+    expect((screen.getByRole("button", { name: "Add option" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Capital of France?" } });
+    ["Lyon", "Paris", "Nice", "Lille", "Metz", "Brest"].forEach((text, i) =>
+      fireEvent.change(screen.getByLabelText(`Option ${i + 1}`), { target: { value: text } }),
+    );
+    fireEvent.click(screen.getByLabelText("Option 2 is correct"));
+    fireEvent.change(screen.getByLabelText("Time limit (seconds)"), { target: { value: "30" } });
+    fireEvent.change(screen.getByLabelText("Points for a correct answer"), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save quiz" }));
+    await waitFor(() => expect(screen.getByText("Capital of France?")).toBeTruthy());
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ type: "quiz", prompt: "Capital of France?", timeLimitSeconds: 30, points: 500 });
+    expect(body.options.map((o: { text: string }) => o.text)).toEqual(["Lyon", "Paris", "Nice", "Lille", "Metz", "Brest"]);
+    expect(body.correctOptionIds).toEqual([body.options[1].id]);
+    expect(new Set(body.options.map((o: { id: string }) => o.id)).size).toBe(6);
+  });
+
+  it("edits a draft quiz with its correct options marked and restates them, showing the server's error", async () => {
+    const quiz: InteractionItem = {
+      id: "z1",
+      type: "quiz",
+      title: "Pick two",
+      state: "draft",
+      position: 0,
+      config: {
+        prompt: "Pick two",
+        options: [{ id: "a", text: "One" }, { id: "b", text: "Two" }, { id: "c", text: "Three" }],
+        correctOptionIds: ["a", "c"],
+        timeLimitSeconds: 45,
+        points: 200,
+      },
+    };
+    const fetchMock = vi.fn(async () => Response.json({ error: "Time limit must be 5 to 120 seconds" }, { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[quiz]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect((screen.getByLabelText("Option 1 is correct") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Option 2 is correct") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Time limit (seconds)") as HTMLInputElement).value).toBe("45");
+    fireEvent.click(screen.getByRole("button", { name: "Save quiz" }));
+    await waitFor(() => expect(screen.getByText("Time limit must be 5 to 120 seconds")).toBeTruthy());
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/events/e/interactions/z1");
+    expect(init.method).toBe("PATCH");
+    const body = JSON.parse(init.body as string);
+    expect(body.options).toEqual([{ id: "a", text: "One" }, { id: "b", text: "Two" }, { id: "c", text: "Three" }]);
+    expect(body.correctOptionIds).toEqual(["a", "c"]);
   });
 });

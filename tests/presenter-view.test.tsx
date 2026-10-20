@@ -332,3 +332,82 @@ it("re-sorts the ranking from ranking:results and ignores another interaction", 
   const rows = screen.getAllByRole("listitem").filter((li) => li.closest(".present-ranking"));
   expect(rows.map((li) => li.textContent)).toEqual(["#1 Cost5 points", "#2 Speed4 points"]);
 });
+
+const quizState = (over: Record<string, unknown> = {}) => ({
+  type: "quiz" as const,
+  id: "z1",
+  title: "Quiz",
+  state: "live" as const,
+  prompt: "Which language runs in the browser?",
+  options: [
+    { id: "a", text: "JavaScript" },
+    { id: "b", text: "COBOL" },
+  ],
+  timeLimitSeconds: 20,
+  deadlineAt: 1_000_000 + 20_000,
+  serverNow: 1_000_000,
+  total: 0,
+  results: null,
+  ...over,
+});
+
+it("shows the live quiz question with seconds left, the answer count and no counts per option", () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  vi.setSystemTime(1_000_000);
+  try {
+    render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState({ total: 3 })} />);
+    expect(screen.getByText("Which language runs in the browser?")).toBeTruthy();
+    expect(screen.getByText("20 seconds left")).toBeTruthy();
+    expect(screen.getByText("3 answers")).toBeTruthy();
+    expect(screen.getByText("JavaScript")).toBeTruthy();
+    expect(screen.queryByText("Correct answer")).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+    // Shown on the bar and, at the 5 s step, announced to screen readers.
+    expect(screen.getAllByText("5 seconds left").length).toBe(2);
+    act(() => {
+      vi.advanceTimersByTime(6_000);
+    });
+    expect(screen.getAllByText("Time is up").length).toBeGreaterThan(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("updates the quiz answer count from quiz:results and ignores another question", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState()} />);
+  act(() => {
+    fake.emit("quiz:results", { results: { interactionId: "other", total: 9, options: [] } });
+  });
+  expect(screen.getByText("0 answers")).toBeTruthy();
+  act(() => {
+    fake.emit("quiz:results", { results: { interactionId: "z1", total: 1, options: [] } });
+  });
+  expect(screen.getByText("1 answer")).toBeTruthy();
+});
+
+it("closes the live quiz question from the reveal button", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ interaction: {} })));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Close and show answer" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/interactions/z1/close", { method: "POST" }));
+});
+
+it("shows the correct options and the count per option once the quiz is closed", () => {
+  const results = {
+    interactionId: "z1",
+    total: 3,
+    correctPercent: 67,
+    options: [
+      { id: "a", text: "JavaScript", correct: true, count: 2 },
+      { id: "b", text: "COBOL", correct: false, count: 1 },
+    ],
+  };
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState({ state: "closed", deadlineAt: null, total: 3, results })} />);
+  const rows = screen.getAllByRole("listitem").filter((li) => li.closest(".present-quiz-results"));
+  expect(rows.map((li) => li.textContent)).toEqual(["JavaScriptCorrect answer2 answers", "COBOL1 answer"]);
+  expect(screen.getByText(/3 answers, 67% correct \(closed\)/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Close and show answer" })).toBeNull();
+});

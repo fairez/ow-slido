@@ -60,6 +60,7 @@ const MIGRATED = [
   "components/presenter-open-text.tsx",
   "components/presenter-qa.tsx",
   "components/presenter-ranking.tsx",
+  "components/presenter-quiz.tsx",
   "components/presenter-rating.tsx",
   "components/presenter-view.tsx",
   "components/rating-chart.tsx",

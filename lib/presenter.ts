@@ -3,6 +3,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { INTERACTION_MODULES, interactionModule } from "@/lib/interaction-modules";
 import type { PublicResponse } from "@/lib/open-text";
+import type { QuizResults } from "@/lib/quiz";
 import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
 import type { PublicNote } from "@/lib/shared-notes";
@@ -53,7 +54,33 @@ export type PresenterRanking = {
   results: RankingResults;
 };
 
-export type PresenterState = PresenterPoll | PresenterWordcloud | PresenterNotes | PresenterOpenText | PresenterRating | PresenterRanking;
+/**
+ * A quiz question on the projector. While it is live only the answer count is known; `results` (per-option
+ * counts and which options are correct) arrives once the question is closed, so the screen never gives the answer away.
+ */
+export type PresenterQuiz = {
+  type: "quiz";
+  id: string;
+  title: string;
+  state: "live" | "paused" | "closed";
+  prompt: string;
+  options: { id: string; text: string }[];
+  timeLimitSeconds: number;
+  /** Database clock, epoch ms; null when the question has not started a window. */
+  deadlineAt: number | null;
+  serverNow: number;
+  total: number;
+  results: QuizResults | null;
+};
+
+export type PresenterState =
+  | PresenterPoll
+  | PresenterWordcloud
+  | PresenterNotes
+  | PresenterOpenText
+  | PresenterRating
+  | PresenterRanking
+  | PresenterQuiz;
 
 /** The live interaction, or the shared-notes, open-text or rating interaction named by `closedNotesId` once it has closed. */
 export async function getPresenterState(eventId: string, closedNotesId?: string): Promise<PresenterState | null> {

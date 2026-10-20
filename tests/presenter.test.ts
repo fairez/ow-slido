@@ -126,3 +126,52 @@ test("returns ranking scores for a live ranking and a named closed one, without 
   await db.update(interactions).set({ state: "closed" });
   expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "ranking", state: "closed" });
 });
+
+test("returns a live quiz question without the answer, and the correct options once it is closed", async () => {
+  const { participants, quizAnswers } = await import("@/db/schema");
+  const options = [
+    { id: "a", text: "Alpha" },
+    { id: "b", text: "Beta" },
+  ];
+  const [row] = await db
+    .insert(interactions)
+    .values({
+      eventId,
+      type: "quiz",
+      title: "Quiz",
+      position: 0,
+      state: "live",
+      config: { prompt: "Which?", options, correctOptionIds: ["b"], timeLimitSeconds: 20, points: 1000 },
+      startedAt: new Date(),
+      deadlineAt: new Date(Date.now() + 20_000),
+    })
+    .returning();
+  const ps = await db.insert(participants).values([{ eventId }, { eventId }]).returning();
+  await db.insert(quizAnswers).values([
+    { interactionId: row.id, participantId: ps[0].id, optionIds: ["b"], elapsedMs: 1000, correct: true, points: 950 },
+    { interactionId: row.id, participantId: ps[1].id, optionIds: ["a"], elapsedMs: 2000, correct: false, points: 0 },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({ type: "quiz", state: "live", prompt: "Which?", timeLimitSeconds: 20, total: 2, results: null });
+  expect(live && live.type === "quiz" && live.options).toEqual(options);
+  expect(typeof (live as { serverNow: number }).serverNow).toBe("number");
+  expect((live as { deadlineAt: number }).deadlineAt).toBe(row.deadlineAt!.getTime());
+  expect(JSON.stringify(live)).not.toContain("correctOptionIds");
+  expect(JSON.stringify(live)).not.toContain(ps[0].id);
+  await db.update(interactions).set({ state: "paused" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  await db.update(interactions).set({ state: "closed" });
+  const closed = await getPresenterState(eventId, row.id);
+  expect(closed).toMatchObject({
+    type: "quiz",
+    state: "closed",
+    total: 2,
+    results: {
+      correctPercent: 50,
+      options: [
+        { text: "Alpha", correct: false, count: 1 },
+        { text: "Beta", correct: true, count: 1 },
+      ],
+    },
+  });
+});

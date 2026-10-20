@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { PresenterOpenText } from "@/components/presenter-open-text";
+import { PresenterQuiz } from "@/components/presenter-quiz";
 import { PresenterRanking } from "@/components/presenter-ranking";
 import { PresenterRating } from "@/components/presenter-rating";
 import { PresenterNotes } from "@/components/presenter-notes";
@@ -210,6 +211,9 @@ export function PresenterView({
       forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
     const onRating = (msg: { results: RatingResults }) =>
       setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
+    // Live, only the number of answers is shown; the per-option counts wait for the close.
+    const onQuiz = (msg: { results: { interactionId: string; total: number } }) =>
+      setPoll((cur) => (cur && cur.type === "quiz" && cur.id === msg.results.interactionId ? { ...cur, total: msg.results.total } : cur));
     const onRanking = (msg: { results: RankingResults }) =>
       setPoll((cur) => (cur && cur.type === "ranking" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
     // Only the shown Q&A's messages apply; another Q&A of the event stays off this screen.
@@ -226,6 +230,7 @@ export function PresenterView({
     socket.on("question:removed", onQuestionRemoved);
     socket.on("rating:results", onRating);
     socket.on("ranking:results", onRanking);
+    socket.on("quiz:results", onQuiz);
     socket.on("response:added", onResponse);
     socket.on("response:updated", onResponse);
     socket.on("response:removed", onResponseRemoved);
@@ -244,6 +249,7 @@ export function PresenterView({
       socket.off("question:removed", onQuestionRemoved);
       socket.off("rating:results", onRating);
       socket.off("ranking:results", onRanking);
+      socket.off("quiz:results", onQuiz);
       socket.off("response:added", onResponse);
       socket.off("response:updated", onResponse);
       socket.off("response:removed", onResponseRemoved);
@@ -278,9 +284,28 @@ export function PresenterView({
   );
   // A live Q&A has no results screen of its own, so with nothing else live it fills the projector.
   const qaFillsScreen = !poll && list.some((i) => i.type === "qa" && i.state === "live");
+  // Closing the live quiz question ends the answer window and shows the correct options.
+  const closeQuiz = useCallback(async () => {
+    if (busy.current || !poll || poll.type !== "quiz" || poll.state !== "live") return;
+    busy.current = true;
+    setNotice("");
+    try {
+      const res = await fetch(`/api/events/${eventId}/interactions/${poll.id}/close`, { method: "POST" });
+      if (!res.ok) setNotice(((await res.json().catch(() => ({}))) as { error?: string }).error ?? t("presQuiz.closeFailed"));
+    } catch {
+      setNotice(t("presQuiz.closeFailed"));
+    } finally {
+      busy.current = false;
+    }
+  }, [eventId, poll, t]);
   const extras = (
     <>
       <div className="present-controls">
+        {poll?.type === "quiz" && poll.state === "live" && (
+          <Button variant="primary" onClick={() => void closeQuiz()}>
+            {t("presQuiz.reveal")}
+          </Button>
+        )}
         {!qaFillsScreen && (
           <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
             {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
@@ -336,6 +361,16 @@ export function PresenterView({
       <section aria-labelledby="present-title">
         {head(poll.title)}
         <PresenterRating results={poll.results} closed={poll.state === "closed"} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (poll.type === "quiz") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterQuiz key={`${poll.id}:${poll.deadlineAt}:${poll.state}`} quiz={poll} />
         {extras}
       </section>
     );

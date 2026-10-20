@@ -435,10 +435,9 @@ const rankingModule: InteractionModule = {
   },
 };
 
-// The presenter screen arrives with US-043.
 const quizModule: InteractionModule = {
   type: "quiz",
-  presentWhenClosed: false,
+  presentWhenClosed: true,
   validateConfig: (body, partial) => parseNewInteractionInput("quiz", body, partial),
   async results(interactionId) {
     return computeQuizResults(db(), interactionId, (await loadRow(interactionId)).config);
@@ -462,7 +461,25 @@ const quizModule: InteractionModule = {
     ];
   },
   responseCount: countQuizAnswers,
-  presenter: async () => null,
+  async presenter(row) {
+    if (row.state !== "live" && row.state !== "closed") return null;
+    const c = row.config as Partial<QuizConfig>;
+    const results = await computeQuizResults(db(), row.id, row.config);
+    return {
+      type: "quiz",
+      id: row.id,
+      title: row.title,
+      state: row.state,
+      prompt: c.prompt ?? "",
+      options: (Array.isArray(c.options) ? c.options : []).map((o) => ({ id: o.id, text: o.text })),
+      timeLimitSeconds: quizTimeLimitSeconds(c),
+      deadlineAt: row.deadlineAt ? row.deadlineAt.getTime() : null,
+      serverNow: await databaseNowMs(),
+      total: results.total,
+      // Per-option counts and the correct options are held back until the host closes the question.
+      results: row.state === "closed" ? results : null,
+    };
+  },
   async live(row, participantId) {
     const c = row.config as Partial<QuizConfig>;
     let mine: string[] | null = null;

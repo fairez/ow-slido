@@ -13,6 +13,17 @@ import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 import { RANKING_MAX_OPTIONS, RANKING_MIN_OPTIONS, RANKING_OPTION_MAX } from "@/lib/ranking-limits";
+import {
+  QUIZ_MAX_OPTIONS,
+  QUIZ_MIN_OPTIONS,
+  QUIZ_OPTION_MAX,
+  QUIZ_POINTS_DEFAULT,
+  QUIZ_POINTS_MAX,
+  QUIZ_POINTS_MIN,
+  QUIZ_TIME_DEFAULT,
+  QUIZ_TIME_MAX,
+  QUIZ_TIME_MIN,
+} from "@/lib/quiz-limits";
 import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
 import { SaveTemplateDialog, type SaveTarget } from "@/components/save-template-dialog";
@@ -27,7 +38,7 @@ import { TYPE_LABELS } from "@/lib/type-labels";
 
 export type InteractionItem = {
   id: string;
-  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking";
+  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking" | "quiz";
   title: string;
   state: "draft" | "live" | "paused" | "closed";
   position: number;
@@ -43,10 +54,21 @@ export type InteractionItem = {
     showAuthorNames?: boolean;
     maxResponsesPerParticipant?: number;
     scale?: "stars5" | "numeric10";
+    correctOptionIds?: string[];
+    timeLimitSeconds?: number;
+    points?: number;
   };
 };
 
-type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking";
+type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking" | "quiz";
+
+/** Option count and text length the server accepts for a kind with an option list. */
+const OPTION_LIMITS = {
+  poll: { min: POLL_MIN_OPTIONS, max: POLL_MAX_OPTIONS, text: POLL_OPTION_MAX },
+  ranking: { min: RANKING_MIN_OPTIONS, max: RANKING_MAX_OPTIONS, text: RANKING_OPTION_MAX },
+  quiz: { min: QUIZ_MIN_OPTIONS, max: QUIZ_MAX_OPTIONS, text: QUIZ_OPTION_MAX },
+} as const;
+const optionLimits = (kind: Kind) => OPTION_LIMITS[kind as keyof typeof OPTION_LIMITS];
 const STATE_LABELS: Record<InteractionItem["state"], MessageKey> = {
   draft: "pollMgr.state.draft",
   live: "pollMgr.state.live",
@@ -84,12 +106,16 @@ const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
   { kind: "openText", label: "pollMgr.newOpenText" },
   { kind: "rating", label: "pollMgr.newRating" },
   { kind: "ranking", label: "pollMgr.newRanking" },
+  { kind: "quiz", label: "pollMgr.newQuiz" },
   { kind: "qa", label: "pollMgr.newQa" },
 ];
 
-type Draft = { qaPrompt: string; profanity: boolean; kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+type Draft = { timeLimit: number; points: number; qaPrompt: string; profanity: boolean; kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string; correct?: boolean }[]; multiSelect: boolean; showResults: boolean };
 
-const blank = (kind: Draft["kind"] = "poll", defaultModeration: "open" | "moderated" = "open"): Draft => ({ kind, qaPrompt: QA_DEFAULT_PROMPT, profanity: true, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: kind === "qa" && defaultModeration === "moderated", showAuthors: false, maxEntries: 3, id: null, question: kind === "qa" ? QA_DEFAULT_TITLE : "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
+/** A quiz option carries its id from the start: `correctOptionIds` in the same request points at it. */
+const newQuizOption = () => ({ id: `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`, label: "", correct: false });
+
+const blank = (kind: Draft["kind"] = "poll", defaultModeration: "open" | "moderated" = "open"): Draft => ({ kind, timeLimit: QUIZ_TIME_DEFAULT, points: QUIZ_POINTS_DEFAULT, qaPrompt: QA_DEFAULT_PROMPT, profanity: true, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: kind === "qa" && defaultModeration === "moderated", showAuthors: false, maxEntries: 3, id: null, question: kind === "qa" ? QA_DEFAULT_TITLE : "", options: kind === "quiz" ? [newQuizOption(), newQuizOption()] : [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
@@ -196,6 +222,15 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
             moderation: draft.moderated ? "moderated" : "open",
             profanityFilter: draft.profanity,
           }
+        : draft.kind === "quiz"
+        ? {
+            type: "quiz",
+            prompt: draft.question,
+            options: draft.options.map((o) => ({ id: o.id, text: o.label })),
+            correctOptionIds: draft.options.filter((o) => o.correct).flatMap((o) => (o.id ? [o.id] : [])),
+            timeLimitSeconds: draft.timeLimit,
+            points: draft.points,
+          }
         : draft.kind === "ranking"
         ? { type: "ranking", prompt: draft.question, options: draft.options.map((o) => ({ id: o.id, text: o.label })) }
         : draft.kind === "rating"
@@ -290,7 +325,13 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
       maxEntries: item.config.maxEntriesPerParticipant ?? 3,
       id: item.id,
       question: item.title,
-      options: (item.config.options ?? []).map((o) => ({ id: o.id, label: o.label ?? o.text ?? "" })),
+      timeLimit: item.config.timeLimitSeconds ?? QUIZ_TIME_DEFAULT,
+      points: item.config.points ?? QUIZ_POINTS_DEFAULT,
+      options: (item.config.options ?? []).map((o) => ({
+        id: o.id,
+        label: o.label ?? o.text ?? "",
+        correct: item.config.correctOptionIds?.includes(o.id) ?? false,
+      })),
       multiSelect: item.config.multiSelect ?? false,
       showResults: item.config.showResultsToParticipants ?? false,
     });
@@ -447,7 +488,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               required
               maxLength={maxLength}
             />
-            {(draft.kind === "poll" || draft.kind === "ranking") && (
+            {(draft.kind === "poll" || draft.kind === "ranking" || draft.kind === "quiz") && (
               <fieldset className="form-group">
                 <legend>{t("pollMgr.options")}</legend>
                 {draft.options.map((option, index) => (
@@ -457,12 +498,23 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                       onChange={(e) => setOption(index, e.target.value)}
                       aria-label={t("pollMgr.optionN", { n: index + 1 })}
                       required
-                      maxLength={draft.kind === "ranking" ? RANKING_OPTION_MAX : POLL_OPTION_MAX}
+                      maxLength={optionLimits(draft.kind).text}
                     />
+                    {draft.kind === "quiz" && (
+                      <label className="ui-toggle option-correct">
+                        <input
+                          type="checkbox"
+                          aria-label={t("pollMgr.correctN", { n: index + 1 })}
+                          checked={option.correct ?? false}
+                          onChange={(e) => setDraft({ ...draft, options: draft.options.map((o, i) => (i === index ? { ...o, correct: e.target.checked } : o)) })}
+                        />
+                        {t("pollMgr.correct")}
+                      </label>
+                    )}
                     <Button
                       variant="quiet"
                       aria-label={t("pollMgr.removeOptionN", { n: index + 1 })}
-                      disabled={draft.options.length <= (draft.kind === "ranking" ? RANKING_MIN_OPTIONS : POLL_MIN_OPTIONS)}
+                      disabled={draft.options.length <= optionLimits(draft.kind).min}
                       onClick={() => setDraft({ ...draft, options: draft.options.filter((_, i) => i !== index) })}
                     >
                       {t("pollMgr.remove")}
@@ -471,8 +523,8 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                 ))}
                 <div>
                   <Button
-                    disabled={draft.options.length >= (draft.kind === "ranking" ? RANKING_MAX_OPTIONS : POLL_MAX_OPTIONS)}
-                    onClick={() => setDraft({ ...draft, options: [...draft.options, { label: "" }] })}
+                    disabled={draft.options.length >= optionLimits(draft.kind).max}
+                    onClick={() => setDraft({ ...draft, options: [...draft.options, draft.kind === "quiz" ? newQuizOption() : { label: "" }] })}
                   >
                     {t("pollMgr.addOption")}
                   </Button>
@@ -504,6 +556,12 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                   </label>
                 </fieldset>
                 <Toggle label={t("pollMgr.profanityFilter")} checked={draft.profanity} onChange={(e) => setDraft({ ...draft, profanity: e.target.checked })} />
+              </>
+            )}
+            {draft.kind === "quiz" && (
+              <>
+                {numberField(t("pollMgr.timeLimit"), draft.timeLimit, QUIZ_TIME_MIN, QUIZ_TIME_MAX, (n) => setDraft({ ...draft, timeLimit: n }))}
+                {numberField(t("pollMgr.quizPoints"), draft.points, QUIZ_POINTS_MIN, QUIZ_POINTS_MAX, (n) => setDraft({ ...draft, points: n }))}
               </>
             )}
             {draft.kind === "wordcloud" && numberField(t("pollMgr.entriesPer"), draft.maxEntries, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_MAX_ENTRIES, (n) => setDraft({ ...draft, maxEntries: n }))}

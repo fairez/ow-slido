@@ -9,7 +9,7 @@ import { useT } from "@/lib/i18n/client";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 
 /** One shape per option position, drawn in a 24-unit box; the colour token is in the CSS (`--quiz-1`..`--quiz-6`). */
-const SHAPES = [
+export const QUIZ_SHAPES = [
   <polygon key="triangle" points="12,3 22,20 2,20" />,
   <circle key="circle" cx="12" cy="12" r="9" />,
   <rect key="square" x="4" y="4" width="16" height="16" />,
@@ -160,7 +160,7 @@ export function QuizForm({ quiz }: { quiz: LiveQuiz }) {
           const body = (
             <>
               <svg className="quiz-shape" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
-                {SHAPES[i % SHAPES.length]}
+                {QUIZ_SHAPES[i % QUIZ_SHAPES.length]}
               </svg>
               <span className="quiz-option-text">{o.text}</span>
               {/* Whitespace between the spans keeps the accessible name "Java Selected", not "JavaSelected". */}
