@@ -225,7 +225,7 @@ describe("PollManager content list", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const items = screen.getAllByRole("listitem").map((li) => li.textContent?.trim());
-    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New ranking", "New quiz question", "New Q&A"]);
+    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New ranking", "New quiz question", "New survey", "New Q&A"]);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
   });

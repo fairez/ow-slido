@@ -571,3 +571,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - The percent of a multi-choice question is of respondents who answered it, so the percents can add up to more than 100.
   - No UI change, no browser check. Full suite 1137 tests green (~425 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0038.
 ---
+
+## 2026-10-21 - US-049
+- Survey host builder. "New survey" in Add content (plan-locked like other types) and Edit on a draft open `SurveyBuilder`: survey name, 1-20 questions, each with a kind (choice, rating, open text), question text, required, and per kind its options (2-10, add/remove), "Allow several answers" or the scale. Questions move with ↑/↓ buttons (focus stays on the pressed button, polite status "Question moved to position n of N"), remove is disabled at one question, add at 20. "Show preview" renders `SurveyPreview`, a disabled picture of the participant form that updates as the host types. Unsaved changes warn: `beforeunload`, a confirm on in-app link clicks, and a discard dialog on Cancel. Saving posts/PATCHes `{type: "survey", title, questions}` with client-made ids; renaming sends `{title}`.
+- Files: components/{survey-builder,survey-preview,poll-manager}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{survey-builder.test.tsx,poll-manager.test.tsx,no-inline-strings.test.ts}, scripts/ralph/screens/survey-builder.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks lint forbids reading a ref during render: the "saved snapshot" for the dirty check is a lazy `useState`, not a ref.
+  - Playwright `getByLabel` matches substrings: "Option 1 of question 1" also hits "Remove option 1 of question 1"; use `getByRole("textbox", {name})` or `{exact: true}`. A new event has a default draft Q&A, so there are two Edit buttons; the survey is `.last()`.
+  - A test for a link guard cannot rely on `fireEvent.click` return value when the link has its own preventDefault; count the link's React handler calls instead (the capture-phase guard stops propagation before React sees the click).
+  - US-050 (participant form) can reuse the `rating-scale`/`rating-choice` classes; the preview renders them inside a disabled fieldset. US-050 must still exempt surveys from `interactions_one_live_per_event` (see US-048 notes).
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-builder.mjs): build three kinds, move, preview, save, edit, leave with changes (confirm dialog shown and honoured); no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---

@@ -56,6 +56,8 @@ const MIGRATED = [
   "components/notes-analysis-panel.tsx",
   "components/open-text-host-panel.tsx",
   "components/poll-manager.tsx",
+  "components/survey-builder.tsx",
+  "components/survey-preview.tsx",
   "components/presenter-analysis.tsx",
   "components/presenter-notes.tsx",
   "components/presenter-open-text.tsx",

@@ -27,6 +27,7 @@ import {
 import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
 import { SaveTemplateDialog, type SaveTarget } from "@/components/save-template-dialog";
+import { SurveyBuilder, blankSurvey, surveyDraftFrom, type StoredSurveyQuestion, type SurveyDraft, type surveyBody } from "@/components/survey-builder";
 import { TemplatePicker } from "@/components/template-picker";
 import { GripIcon, TypeIcon } from "@/components/type-icon";
 import { useCoalesced } from "@/lib/use-coalesced";
@@ -57,10 +58,13 @@ export type InteractionItem = {
     correctOptionIds?: string[];
     timeLimitSeconds?: number;
     points?: number;
+    questions?: StoredSurveyQuestion[];
   };
 };
 
 type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking" | "quiz";
+/** What the Add content menu offers: the form kinds plus the survey, which has its own builder. */
+type AddKind = Kind | "survey";
 
 /** Option count and text length the server accepts for a kind with an option list. */
 const OPTION_LIMITS = {
@@ -97,9 +101,9 @@ const REFRESH_EVENTS = [
 
 /** The field of the PATCH body that carries an interaction's name, which differs by type. */
 const nameBody = (type: InteractionItem["type"], name: string) =>
-  type === "poll" ? { question: name } : type === "qa" ? { title: name } : { prompt: name };
+  type === "poll" ? { question: name } : type === "qa" || type === "survey" ? { title: name } : { prompt: name };
 
-const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
+const ADD_BUTTONS: { kind: AddKind; label: MessageKey }[] = [
   { kind: "poll", label: "pollMgr.newPoll" },
   { kind: "wordcloud", label: "pollMgr.newWordcloud" },
   { kind: "sharedNotes", label: "pollMgr.newSharedNotes" },
@@ -107,6 +111,7 @@ const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
   { kind: "rating", label: "pollMgr.newRating" },
   { kind: "ranking", label: "pollMgr.newRanking" },
   { kind: "quiz", label: "pollMgr.newQuiz" },
+  { kind: "survey", label: "pollMgr.newSurvey" },
   { kind: "qa", label: "pollMgr.newQa" },
 ];
 
@@ -127,7 +132,7 @@ type PollManagerProps = {
   initialInteractions: InteractionItem[];
   aiEnabled?: boolean;
   /** Types the plan leaves out; their add buttons turn into a pointer to the plan page. */
-  lockedTypes?: Partial<Record<Kind, Lock>>;
+  lockedTypes?: Partial<Record<AddKind, Lock>>;
   /** Set when the plan has no AI calls: the analysis button turns into a pointer to the plan page. */
   aiLock?: Lock;
   /** Interactions a downgrade left read-only, by id: they keep their results but cannot be started, edited or duplicated. */
@@ -159,6 +164,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [survey, setSurvey] = useState<SurveyDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [deleting, setDeleting] = useState<InteractionItem | null>(null);
@@ -267,6 +273,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     setDraft(null);
   }
 
+  async function saveSurvey(body: ReturnType<typeof surveyBody>, id: string | null) {
+    setPending(true);
+    const response = id ? await call(`${base}/${id}`, { ...json(body), method: "PATCH" }) : await call(base, json(body));
+    setPending(false);
+    if (!response) return;
+    const { interaction } = (await response.json()) as { interaction: InteractionItem };
+    setItems((list) => (id ? list.map((i) => (i.id === interaction.id ? interaction : i)) : [...list, interaction]));
+    setSurvey(null);
+  }
+
   async function duplicate(item: InteractionItem) {
     const response = await call(`${base}/${item.id}/duplicate`, { method: "POST" });
     if (!response) return;
@@ -311,12 +327,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     setRenaming(null);
   }
 
-  function edit(item: InteractionItem & { type: Kind }) {
+  function edit(item: InteractionItem) {
     setError(null);
+    if (item.type === "survey") {
+      setSurvey(surveyDraftFrom(item.id, item.title, item.config.questions));
+      return;
+    }
     setDraft({
       qaPrompt: item.config.prompt ?? QA_DEFAULT_PROMPT,
       profanity: item.config.profanityFilter ?? true,
-      kind: item.type,
+      kind: item.type as Kind,
       scale: item.config.scale ?? "stars5",
       maxResponses: item.config.maxResponsesPerParticipant ?? 1,
       maxNotes: item.config.maxNotesPerParticipant ?? 3,
@@ -359,7 +379,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
   return (
     <section aria-labelledby="interactions-title" className="stack">
       <h2 id="interactions-title">{t("pollMgr.title")}</h2>
-      {error && !draft && <InlineError>{error}</InlineError>}
+      {error && !draft && !survey && <InlineError>{error}</InlineError>}
       {templateNotice && (
         <div role="status" className="notice">
           <p>{t(templateNotice.key, { name: templateNotice.name })}</p>
@@ -459,7 +479,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                 <NotesAnalysisPanel interactionId={item.id} socket={socket} />
               ))}
               <div className="row-actions row-actions-quiet">
-                {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
+                {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>}
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => { setError(null); setRenaming({ id: item.id, name: item.title }); }}>{t("pollMgr.rename")}</Button>}
                 {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                 {canManageTemplates && (
@@ -477,7 +497,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
         </ul>
       )}
 
-      {draft ? (
+      {survey ? (
+        <SurveyBuilder
+          key={survey.id ?? "new"}
+          initial={survey}
+          pending={pending}
+          error={error}
+          onSave={saveSurvey}
+          onCancel={() => { setError(null); setSurvey(null); }}
+        />
+      ) : draft ? (
         <Card aria-labelledby="draft-title">
           <form onSubmit={save} className="form-stack">
             <h3 id="draft-title">{t(draft.id ? "pollMgr.editType" : "pollMgr.newType", { type: typeInSentence(draft.kind) })}</h3>
@@ -602,7 +631,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
       ) : eventLock ? null : (
         <div className="add-bar">
           <div className="row-actions">
-            <AddContentMenu entries={ADD_BUTTONS} locks={lockedTypes} onPick={(kind) => setDraft(blank(kind, defaultModeration))} />
+            <AddContentMenu entries={ADD_BUTTONS} locks={lockedTypes} onPick={(kind) => { setError(null); if (kind === "survey") setSurvey(blankSurvey()); else setDraft(blank(kind, defaultModeration)); }} />
             <Button onClick={() => setPicking(true)}>{t("templates.addFrom")}</Button>
             {canManageTemplates && items.length > 0 && (
               <Button variant="quiet" onClick={() => setSaveTarget({ defaultName: eventName })}>{t("templates.saveEvent")}</Button>

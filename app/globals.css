@@ -2683,3 +2683,53 @@ button.quiz-option[aria-disabled="true"] {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* Survey builder and its preview */
+.survey-questions {
+  margin-top: 0;
+}
+
+.survey-preview {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.survey-preview-form,
+.survey-preview-question {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.survey-preview-form h4 {
+  margin: 0;
+}
+
+.survey-preview-list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.survey-preview-question legend {
+  padding: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.survey-preview-question .ui-hint {
+  margin: 0;
+}
+
+.survey-preview-form .ui-button {
+  justify-self: start;
+}
