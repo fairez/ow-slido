@@ -62,3 +62,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Two test runs on the same test DB at once produce hundreds of false failures (truncateAll). A background `( a; b; c ) &` chain started from a shell whose cwd is not the repo also ran `next build` in the wrong directory, so check `BUILD_ID` after building and never chain `npm test` twice. `tests/quiz-ui.test.tsx` "returns focus to the button" failed once under full-suite load and passes alone.
   - Browser checks need `TWOFA_ENCRYPTION_KEY` in the server's environment (the dev `.env.local` has none) to turn the requirement on; script `scripts/ralph/screens/us004.mjs [width]` seeds through SQL on the dev DB and cleans up. Signup is rate limited per IP (3 per run), so run one width per server start.
 ---
+
+## 2026-10-21 - US-005
+- `audit_log` table (migration 0042) with index on (workspace_id, created_at), FK cascade from workspaces, and a trigger function `audit_log_append_only` on BEFORE UPDATE / BEFORE DELETE. `lib/audit.ts` `recordAudit(db | undefined, entry)` is the only writer: strips deny-listed keys from metadata (substring match, any case, any depth), never throws, logs only action + error code on failure, returns whether the row was stored.
+- Files: db/schema.ts, db/migrations/0042_* (trigger SQL appended by hand after the generated table), lib/audit.ts, tests/audit-log.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - The delete trigger lets a row go only when `workspace_id` is set and the workspace row is already gone (that is what a cascade looks like from inside the trigger). Rows with a null workspace can never be deleted, which fits "keep only an audit entry without content" for workspace deletion (US-012): write that entry with `workspaceId: null`.
+  - No FK on `actor_user_id`, so deleting a user (US-012) does not fail on the trigger; `actor_label` is the durable identity.
+  - Deny-list is a substring match, so a metadata key like `keyCount` or `context` is dropped too. Name metadata keys accordingly (`memberCount`, `fromRole`).
+  - Trigger errors surface in Drizzle as `Failed query` with the Postgres error on `.cause` (code 23001, message "audit_log is append-only"); match on `cause`.
+  - Hand-written SQL in a generated migration is fine: `drizzle-kit generate` snapshots only tables, so triggers are not diffed. Keep `--> statement-breakpoint` between statements.
+  - US-006 should pass `clientIp(request)` as `ip` and an email as `actorLabel`; US-007 gates the page on the `auditLog` entitlement (not yet in `PLANS`? check lib/plans.ts first).
+---

@@ -95,6 +95,28 @@ export const workspaces = pgTable("workspaces", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Append-only: triggers reject UPDATE and DELETE, except the delete a workspace removal cascades.
+ * `actor_user_id` has no foreign key on purpose (a set-null would be an UPDATE); `actor_label` keeps who it was.
+ * Written only through `recordAudit` (lib/audit.ts).
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id"),
+    actorLabel: text("actor_label").notNull(),
+    action: text("action").notNull(),
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    ip: text("ip"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("audit_log_workspace_created_idx").on(t.workspaceId, t.createdAt)],
+);
+
 export const memberships = pgTable(
   "memberships",
   {
