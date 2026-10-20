@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import type { QuizConfig } from "@/lib/interaction-config";
 import { ownStanding, type OwnStanding } from "@/lib/leaderboard/standings";
 import { QUIZ_POINTS_DEFAULT, QUIZ_TIME_DEFAULT } from "@/lib/quiz-limits";
+import { getLeaderboardStore } from "@/lib/leaderboard";
 import { publish } from "@/lib/realtime/publisher";
 
 /** The answer window in seconds, from a stored config (the default for a config without one). */
@@ -99,6 +100,19 @@ export type QuizOutcome = {
   standing: OwnStanding | null;
 };
 
+type OutcomeAnswer = { optionIds: string[]; correct: boolean; points: number };
+
+function buildOutcome(config: unknown, answer: OutcomeAnswer | undefined, standing: OwnStanding | null): QuizOutcome {
+  return {
+    answered: Boolean(answer),
+    optionIds: answer?.optionIds ?? [],
+    correct: answer?.correct ?? false,
+    points: answer?.points ?? 0,
+    correctOptionIds: (config as Partial<QuizConfig>).correctOptionIds ?? [],
+    standing,
+  };
+}
+
 /** What one participant got for a closed question. The correct options are only revealed after close. */
 export async function getQuizOutcome(interactionId: string, participantId: string): Promise<QuizOutcome | null> {
   const db = getDb();
@@ -108,14 +122,33 @@ export async function getQuizOutcome(interactionId: string, participantId: strin
     .select({ optionIds: quizAnswers.optionIds, correct: quizAnswers.correct, points: quizAnswers.points })
     .from(quizAnswers)
     .where(and(eq(quizAnswers.interactionId, interactionId), eq(quizAnswers.participantId, participantId)));
-  return {
-    answered: Boolean(answer),
-    optionIds: answer?.optionIds ?? [],
-    correct: answer?.correct ?? false,
-    points: answer?.points ?? 0,
-    correctOptionIds: (interaction.config as Partial<QuizConfig>).correctOptionIds ?? [],
-    standing: await ownStanding(interaction.eventId, participantId),
-  };
+  return buildOutcome(interaction.config, answer, await ownStanding(interaction.eventId, participantId));
+}
+
+/**
+ * Pushes every participant their own result (`quiz:outcome`) when a question has closed, so a room of
+ * hundreds does not fetch `quiz-result` at the same moment. Built from one read of the answers and the
+ * ranking the store already holds; the GET route stays as the fallback for a missed message.
+ */
+export async function publishQuizOutcomes(eventId: string, interactionId: string): Promise<void> {
+  const db = getDb();
+  const [interaction] = await db.select().from(interactions).where(eq(interactions.id, interactionId));
+  if (!interaction || interaction.type !== "quiz" || interaction.state !== "closed") return;
+  const [answers, people] = await Promise.all([
+    db
+      .select({ participantId: quizAnswers.participantId, optionIds: quizAnswers.optionIds, correct: quizAnswers.correct, points: quizAnswers.points })
+      .from(quizAnswers)
+      .where(eq(quizAnswers.interactionId, interactionId)),
+    db.select({ id: participants.id }).from(participants).where(eq(participants.eventId, eventId)),
+  ]);
+  const byParticipant = new Map(answers.map((a) => [a.participantId, a]));
+  const store = getLeaderboardStore();
+  const players = await store.size(eventId);
+  for (const { id } of people) {
+    const entry = await store.rankOf(eventId, id);
+    const standing = entry ? { rank: entry.rank, points: entry.points, players } : null;
+    publish(eventId, "quiz:outcome", { interactionId, outcome: buildOutcome(interaction.config, byParticipant.get(id), standing) }, { participantId: id });
+  }
 }
 
 /** The database clock as epoch ms; the countdown compares it with `deadline_at`, which the database wrote. */

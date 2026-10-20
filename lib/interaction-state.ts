@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { applyScoreDeltas, persistClosedQuestion } from "@/lib/leaderboard";
-import { quizTimeLimitSeconds } from "@/lib/quiz";
+import { publishQuizOutcomes, quizTimeLimitSeconds } from "@/lib/quiz";
 import { publish } from "@/lib/realtime/publisher";
 
 export type InteractionRow = typeof interactions.$inferSelect;
@@ -98,5 +98,9 @@ export async function closeInteraction(eventId: string, id: string): Promise<Res
   if (!closed) return { ok: false, error: "api.closeInvalid" };
   await applyScoreDeltas(eventId, deltas);
   broadcast(eventId, [{ interactionId: id, state: "closed" }]);
+  if (closed.type === "quiz") {
+    // The close has already succeeded; a phone that misses its result fetches it instead.
+    await publishQuizOutcomes(eventId, id).catch((error) => console.error("[quiz] could not publish results", error));
+  }
   return { ok: true, interaction: closed };
 }

@@ -93,7 +93,7 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
         <RankingForm key={current.id} ranking={current} />
       ) : current.type === "quiz" ? (
         // A resumed question has a new deadline: a fresh key restarts the countdown.
-        <QuizForm key={`${current.id}:${current.deadlineAt}`} eventId={eventId} quiz={current} />
+        <QuizForm key={`${current.id}:${current.deadlineAt}`} eventId={eventId} quiz={current} socket={socket} />
       ) : current.state === "closed" ? (
         <EmptyState
           title={current.type === "wordcloud" ? t("live.submissionsClosed") : t("live.votingClosed")}

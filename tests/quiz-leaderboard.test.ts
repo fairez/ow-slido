@@ -132,6 +132,31 @@ test("a closed quiz question on the presenter carries the top 10, a live one doe
   expect(state && state.type === "quiz" && state.leaderboard).toBeNull();
 });
 
+test("closing a quiz question pushes each participant their own result, and the total after earlier questions", async () => {
+  const event = await seedEvent();
+  const [ann, ben, quiet] = await people(event.id, ["Ann", "Ben", null]);
+  const { setPublisher } = await import("@/lib/realtime/publisher");
+  const sent: { name: string; payload: { interactionId: string; outcome: Awaited<ReturnType<typeof quiz.getQuizOutcome>> & object }; participantId?: string }[] = [];
+  setPublisher({ publish: (_e, name, payload, options) => void sent.push({ name, payload: payload as (typeof sent)[number]["payload"], participantId: options?.participantId }) });
+  try {
+    const q1 = await question(event.id, "First", [[ann, 900, 2000], [ben, 600, 8000]]);
+    await closeInteraction(event.id, q1);
+    const outcomes = sent.filter((m) => m.name === "quiz:outcome");
+    expect(outcomes).toHaveLength(3);
+    const of = (id: string) => outcomes.find((m) => m.participantId === id)!.payload;
+    expect(of(ann)).toMatchObject({ interactionId: q1, outcome: { answered: true, correct: true, points: 900, correctOptionIds: ["a"], standing: { rank: 1, points: 900, players: 2 } } });
+    expect(of(ben).outcome.standing).toEqual({ rank: 2, points: 600, players: 2 });
+    // Someone who answered nothing still gets a result, without a rank.
+    expect(of(quiet).outcome).toMatchObject({ answered: false, points: 0, standing: null });
+    // The message matches what the GET route would answer.
+    expect(of(ann).outcome).toEqual(await quiz.getQuizOutcome(q1, ann));
+    // It follows the closed state message, and a question that is not a quiz sends none.
+    expect(sent.findIndex((m) => m.name === "state-changed")).toBeLessThan(sent.findIndex((m) => m.name === "quiz:outcome"));
+  } finally {
+    setPublisher(null);
+  }
+});
+
 test("a participant's outcome has their own rank and total, and null before they are ranked", async () => {
   const { q2, ann, nameless, event } = await twoQuestions();
   expect((await quiz.getQuizOutcome(q2, ann))?.standing).toEqual({ rank: 2, points: 900, players: 3 });

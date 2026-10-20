@@ -137,6 +137,32 @@ it("after close shows correct or not, the points and the correct options", async
   expect(items).toEqual(["Java Your answer", "Borneo Correct answer", "Bali"]);
 });
 
+it("after close uses the result the server pushes, and asks for it only when none comes", async () => {
+  const fetchMock = vi.fn(async () => json({ answered: true, optionIds: ["a"], correct: true, points: 300, correctOptionIds: ["a"], standing: null }));
+  vi.stubGlobal("fetch", fetchMock);
+  const handlers = new Map<string, (msg: unknown) => void>();
+  const socket = { on: (name: string, fn: (msg: unknown) => void) => handlers.set(name, fn), off: (name: string) => handlers.delete(name) };
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+  render(<QuizForm eventId="e1" quiz={live({ state: "closed", mine: ["a"] })} socket={socket as never} />);
+  expect(fetchMock).not.toHaveBeenCalled();
+  act(() =>
+    handlers.get("quiz:outcome")!({
+      interactionId: "q1",
+      outcome: { answered: true, optionIds: ["a"], correct: true, points: 777, correctOptionIds: ["a"], standing: { rank: 2, points: 777, players: 9 } },
+    }),
+  );
+  expect(screen.getByText("777 points")).toBeTruthy();
+  tick(5000);
+  expect(fetchMock).not.toHaveBeenCalled();
+  cleanup();
+
+  // No message within the wait: the phone asks for its result.
+  render(<QuizForm eventId="e1" quiz={live({ state: "closed", mine: ["a"] })} socket={socket as never} />);
+  tick(5000);
+  await vi.waitFor(() => expect(screen.getByText("300 points")).toBeTruthy());
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 it("after close a right answer shows its points", async () => {
   vi.stubGlobal(
     "fetch",

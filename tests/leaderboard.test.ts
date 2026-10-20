@@ -307,3 +307,20 @@ test("deleting a participant removes their score row", async () => {
   const rows = await db.select().from(quizScores);
   expect(rows.map((r) => r.participantId)).toEqual([ben]);
 });
+
+test("the memory store ranks again after a change, and not before", async () => {
+  const store = new MemoryLeaderboardStore();
+  await store.add("e", { participantId: "a", points: 100, elapsedMs: 1000 });
+  await store.add("e", { participantId: "b", points: 200, elapsedMs: 1000 });
+  expect((await store.top("e", 5)).map((x) => x.participantId)).toEqual(["b", "a"]);
+  expect(await store.rankOf("e", "a")).toMatchObject({ rank: 2, points: 100 });
+  // A read after a later add must see it (the ranking is kept between reads).
+  await store.add("e", { participantId: "a", points: 150, elapsedMs: 1000 });
+  expect(await store.rankOf("e", "a")).toMatchObject({ rank: 1, points: 250 });
+  expect((await store.top("e", 5)).map((x) => x.participantId)).toEqual(["a", "b"]);
+  await store.reset("e");
+  expect(await store.rankOf("e", "a")).toBeNull();
+  await store.replaceAll([{ eventId: "e", participantId: "z", points: 5, answeredCount: 1, totalElapsedMs: 1 }]);
+  expect(await store.rankOf("e", "z")).toMatchObject({ rank: 1 });
+  expect(await store.size("e")).toBe(1);
+});

@@ -1,6 +1,8 @@
 export type PublishOptions = {
   /** Deliver only to the host's sockets (presenter, moderation queue). */
   hostOnly?: boolean;
+  /** Deliver only to this participant's sockets (a personal result), not to the room. */
+  participantId?: string;
 };
 
 export interface Publisher {
@@ -9,6 +11,7 @@ export interface Publisher {
 
 export const eventRoom = (eventId: string) => `event:${eventId}`;
 export const hostRoom = (eventId: string) => `event:${eventId}:host`;
+export const participantRoom = (eventId: string, participantId: string) => `event:${eventId}:participant:${participantId}`;
 
 // Route handlers and server.ts may load separate module instances, so the active publisher lives on globalThis.
 const globalForPublisher = globalThis as unknown as { realtimePublisher?: Publisher };

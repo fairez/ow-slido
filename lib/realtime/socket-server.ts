@@ -10,7 +10,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 import { participantConnected, participantDisconnected, presenceCount } from "./presence";
-import { eventRoom, hostRoom, memberRoom, setMemberRevoker, setPublisher, type Publisher } from "./publisher";
+import { eventRoom, hostRoom, memberRoom, participantRoom, setMemberRevoker, setPublisher, type Publisher } from "./publisher";
 
 export type SocketRole = "participant" | "host" | "moderator";
 
@@ -59,7 +59,12 @@ async function authorize(
 export function createSocketPublisher(io: Server): Publisher {
   return {
     publish(eventId, name, payload, options) {
-      io.to(options?.hostOnly ? hostRoom(eventId) : eventRoom(eventId)).emit(name, payload);
+      const room = options?.participantId
+        ? participantRoom(eventId, options.participantId)
+        : options?.hostOnly
+          ? hostRoom(eventId)
+          : eventRoom(eventId);
+      io.to(room).emit(name, payload);
     },
   };
 }
@@ -103,6 +108,7 @@ export function attachSocketServer(httpServer: HttpServer) {
       socket.emit("presence", { count: presenceCount(eventId) });
     }
     if (role === "participant" && participantId) {
+      socket.join(participantRoom(eventId, participantId));
       void participantConnected(eventId, participantId).catch(() => {});
       socket.on("disconnect", () => participantDisconnected(eventId, participantId));
     }

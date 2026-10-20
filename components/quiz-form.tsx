@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
 import { NicknameForm } from "@/components/nickname-form";
@@ -20,6 +21,8 @@ export const QUIZ_SHAPES = [
 ];
 
 const TICK_MS = 250;
+/** How long a connected phone waits for its pushed result before it asks for it. */
+const OUTCOME_FALLBACK_MS = 3000;
 const ANNOUNCE_AT = [10, 5];
 
 /**
@@ -27,7 +30,7 @@ const ANNOUNCE_AT = [10, 5];
  * the offset between the server's "now" in the payload and its own clock when the payload arrived. Seconds are
  * announced to screen readers at 10 and 5 only; the ticking number is hidden from them.
  */
-export function QuizForm({ eventId, quiz }: { eventId: string; quiz: LiveQuiz }) {
+export function QuizForm({ eventId, quiz, socket = null }: { eventId: string; quiz: LiveQuiz; socket?: Socket | null }) {
   const t = useT();
   const [selected, setSelected] = useState<string[]>(quiz.mine ?? []);
   const [sent, setSent] = useState(quiz.mine !== null);
@@ -67,20 +70,36 @@ export function QuizForm({ eventId, quiz }: { eventId: string; quiz: LiveQuiz })
     wasRenaming.current = renaming;
   }, [renaming]);
 
+  // The server pushes each phone its own result when the question closes. The listener lives as long as the
+  // form, so a message that follows `state-changed` closely is not missed while the closed state renders.
   useEffect(() => {
-    if (!closed) return;
+    if (!socket) return;
+    const onOutcome = (msg: { interactionId: string; outcome: QuizOutcome }) => {
+      if (msg.interactionId === quiz.id) setOutcome(msg.outcome);
+    };
+    socket.on("quiz:outcome", onOutcome);
+    return () => void socket.off("quiz:outcome", onOutcome);
+  }, [socket, quiz.id]);
+
+  // The GET is the fallback for a phone that has no socket or missed the message.
+  const hasOutcome = outcome !== null;
+  useEffect(() => {
+    if (!closed || hasOutcome) return;
     let cancelled = false;
-    fetch(`/api/interactions/${quiz.id}/quiz-result`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(String(res.status));
-        return (await res.json()) as QuizOutcome;
-      })
-      .then((body) => !cancelled && setOutcome(body))
-      .catch(() => !cancelled && setOutcome("failed"));
+    const load = () =>
+      fetch(`/api/interactions/${quiz.id}/quiz-result`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return (await res.json()) as QuizOutcome;
+        })
+        .then((body) => !cancelled && setOutcome((cur) => cur ?? body))
+        .catch(() => !cancelled && setOutcome((cur) => cur ?? "failed"));
+    const timer = window.setTimeout(() => void load(), socket ? OUTCOME_FALLBACK_MS : 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [closed, quiz.id]);
+  }, [closed, hasOutcome, quiz.id, socket]);
 
   // Derived, so the live region changes text only on entering the 10 s and 5 s steps (and at zero).
   const announcement = !counting
