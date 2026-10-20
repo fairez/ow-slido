@@ -1,11 +1,24 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlanOverview } from "@/components/plan-overview";
+import { goTo } from "@/lib/go-to";
+import type { BillingControls } from "@/lib/billing/status";
 import { t } from "@/lib/i18n";
 import { resolveEntitlements, type SubscriptionRow } from "@/lib/plans";
 import type { WorkspaceUsage } from "@/lib/usage";
 
-afterEach(cleanup);
+const refresh = vi.fn();
+vi.mock("@/lib/go-to", () => ({ goTo: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  refresh.mockClear();
+});
+
+const READY: BillingControls = { configured: true, portal: false, cancel: false, changeVia: "checkout" };
+const SUBSCRIBED: BillingControls = { configured: true, portal: true, cancel: true, changeVia: "checkout" };
 
 const usage: WorkspaceUsage = { seats: 1, eventsThisMonth: 2, participantsPeak: 40, aiCallsThisMonth: 0, storageMb: 0 };
 const tr = (key: Parameters<typeof t>[1], params?: Parameters<typeof t>[2]) => t("en", key, params);
@@ -31,8 +44,27 @@ function row(patch: Partial<SubscriptionRow>): SubscriptionRow {
   };
 }
 
-function view(entitlements = resolveEntitlements(null, NOW), canManageBilling = true, u = usage) {
-  return render(<PlanOverview entitlements={entitlements} usage={u} canManageBilling={canManageBilling} locale="en" t={tr} />);
+function view(
+  entitlements = resolveEntitlements(null, NOW),
+  canManageBilling = true,
+  u = usage,
+  extra: { billing?: BillingControls; checkout?: "success" | "canceled" | null } = {},
+) {
+  return render(
+    <PlanOverview entitlements={entitlements} usage={u} canManageBilling={canManageBilling} billing={READY} locale="en" t={tr} {...extra} />,
+  );
+}
+
+/** Answers each fetch with the next entry and records the calls. */
+function stubFetch(...replies: { status?: number; body: unknown }[]) {
+  const calls: { url: string; body: unknown }[] = [];
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    const reply = replies.shift() ?? { body: {} };
+    return new Response(JSON.stringify(reply.body), { status: reply.status ?? 200 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return calls;
 }
 
 describe("PlanOverview", () => {
@@ -68,25 +100,125 @@ describe("PlanOverview", () => {
     expect(screen.getByText("0 MB of 1 GB")).toBeTruthy();
   });
 
-  it("shows prices and disabled change buttons to roles that manage billing", () => {
+  it("shows the monthly price first and the yearly price after the toggle", () => {
     view();
-    expect(screen.getByText("$12 a month, $120 a year")).toBeTruthy();
-    expect(screen.getByText("$49 a month, $490 a year")).toBeTruthy();
-    const upgrade = screen.getByRole("button", { name: "Upgrade to Pro" }) as HTMLButtonElement;
-    expect(upgrade.disabled).toBe(true);
-    expect(screen.getByText("Changing plans is not available yet. Billing is still being set up.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Switch to/ })).toBeNull();
+    expect(screen.getByText("$12 a month")).toBeTruthy();
+    expect(screen.getByText("$49 a month")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Yearly" }));
+    expect(screen.getByText("$120 a year")).toBeTruthy();
+    expect(screen.getByText("$490 a year")).toBeTruthy();
+    expect(screen.queryByText("$12 a month")).toBeNull();
   });
 
-  it("offers a switch down from a paid plan", () => {
-    view(resolveEntitlements(row({ plan: "team" }), NOW));
-    expect(screen.getByRole("button", { name: "Switch to Free" })).toBeTruthy();
+  it("starts checkout for the chosen plan and interval, then follows the returned link", async () => {
+    const calls = stubFetch({ body: { url: "https://pay.example/checkout" } });
+    view();
+    fireEvent.click(screen.getByRole("radio", { name: "Yearly" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Team" }));
+    await waitFor(() => expect(goTo).toHaveBeenCalledWith("https://pay.example/checkout"));
+    expect(calls).toEqual([{ url: "/api/billing/checkout", body: { plan: "team", interval: "year" } }]);
+  });
+
+  it("shows the server's reason when checkout is refused", async () => {
+    stubFetch({ status: 403, body: { error: "Verify your email first" } });
+    view();
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Pro" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Verify your email first");
+    expect((screen.getByRole("button", { name: "Upgrade to Pro" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("sends a plan change on a live Stripe subscription to the portal", async () => {
+    const calls = stubFetch({ body: { url: "https://pay.example/portal" } });
+    view(resolveEntitlements(row({}), NOW), true, usage, { billing: { ...SUBSCRIBED, changeVia: "portal" } });
+    expect(screen.getByText(/Plan changes are made in the billing portal/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Team" }));
+    await waitFor(() => expect(goTo).toHaveBeenCalledWith("https://pay.example/portal"));
+    expect(calls[0].url).toBe("/api/billing/portal");
+  });
+
+  it("explains that plans cannot change when no billing provider is set up", () => {
+    view(undefined, true, usage, { billing: { ...READY, configured: false } });
+    expect(screen.getByText(/Online payments are not set up/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Upgrade to/ })).toBeNull();
+  });
+
+  it("offers a switch down from Team to Pro and none to Free", () => {
+    view(resolveEntitlements(row({ plan: "team" }), NOW), true, usage, { billing: SUBSCRIBED });
     expect(screen.getByRole("button", { name: "Switch to Pro" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Switch to Free|Upgrade to Free/ })).toBeNull();
+  });
+
+  it("opens the portal from Manage billing", async () => {
+    const calls = stubFetch({ body: { url: "https://pay.example/portal" } });
+    view(resolveEntitlements(row({}), NOW), true, usage, { billing: SUBSCRIBED });
+    fireEvent.click(screen.getByRole("button", { name: "Manage billing" }));
+    await waitFor(() => expect(goTo).toHaveBeenCalledWith("https://pay.example/portal"));
+    expect(calls[0].url).toBe("/api/billing/portal");
+  });
+
+  it("asks before canceling and names the date access ends", async () => {
+    const calls = stubFetch({ body: { ok: true } });
+    view(resolveEntitlements(row({}), NOW), true, usage, { billing: SUBSCRIBED });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel subscription" }));
+    const dialog = screen.getByRole("dialog", { name: "Cancel Pro?" });
+    expect(within(dialog).getByText(/Pro stays available until 2026-11-01, then the workspace returns to Free/)).toBeTruthy();
+    expect(calls).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel subscription" }));
+    expect((await screen.findByRole("status")).textContent).toBe("Canceled. Pro stays until 2026-11-01.");
+    expect(calls).toEqual([{ url: "/api/billing/cancel", body: {} }]);
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps the plan when the dialog is dismissed", () => {
+    const calls = stubFetch();
+    view(resolveEntitlements(row({}), NOW), true, usage, { billing: SUBSCRIBED });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel subscription" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep Pro" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("shows no cancel button once the subscription is canceled", () => {
+    view(resolveEntitlements(row({ status: "canceled" }), NOW), true, usage, { billing: { ...SUBSCRIBED, cancel: false } });
+    expect(screen.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Manage billing" })).toBeTruthy();
+  });
+
+  it("shows the payment-failed banner with the end of the grace period, and nothing otherwise", () => {
+    const pastDue = resolveEntitlements(row({ status: "past_due", currentPeriodEnd: new Date("2026-10-18T00:00:00Z") }), NOW);
+    view(pastDue, true, usage, { billing: SUBSCRIBED });
+    const banner = screen.getByRole("heading", { name: "The last payment failed" }).closest("section") as HTMLElement;
+    expect(within(banner).getByText(/Pro stays on until 2026-10-25/)).toBeTruthy();
+    expect(within(banner).getByRole("button", { name: "Manage billing" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Manage billing" })).toHaveLength(1);
+    cleanup();
+    view(resolveEntitlements(row({}), NOW), true, usage, { billing: SUBSCRIBED });
+    expect(screen.queryByRole("heading", { name: "The last payment failed" })).toBeNull();
+  });
+
+  it("tells non-owners about the failed payment without a button", () => {
+    const pastDue = resolveEntitlements(row({ status: "past_due", currentPeriodEnd: new Date("2026-10-18T00:00:00Z") }), NOW);
+    view(pastDue, false, usage, { billing: SUBSCRIBED });
+    expect(screen.getByText("Only the workspace owner can update payment details.")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("reports how checkout ended", () => {
+    view(resolveEntitlements(row({}), NOW), true, usage, { checkout: "success" });
+    expect(screen.getByRole("status").textContent).toBe("Your workspace is on Pro.");
+    cleanup();
+    view(undefined, true, usage, { checkout: "success" });
+    expect(screen.getByRole("status").textContent).toMatch(/changes as soon as the payment is confirmed/);
+    cleanup();
+    view(undefined, true, usage, { checkout: "canceled" });
+    expect(screen.getByRole("status").textContent).toBe("Checkout was canceled. Nothing was charged.");
   });
 
   it("hides price and buttons from everyone else but keeps the usage", () => {
     view(undefined, false);
-    expect(screen.queryByText(/\$\d+ a month/)).toBeNull();
+    expect(screen.queryByText(/\$\d+ a (month|year)/)).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.getByText("Prices and plan changes are only shown to the workspace owner.")).toBeTruthy();
     expect(screen.getByRole("progressbar", { name: "Events this month" })).toBeTruthy();
@@ -98,14 +230,10 @@ describe("PlanOverview", () => {
     expect(tiers.map((h) => h.textContent)).toEqual(["Free", "Pro", "Team"]);
     const pro = tiers[1].closest("li") as HTMLElement;
     expect(within(pro).getByText("Current plan")).toBeTruthy();
-    expect(screen.getByText("Current period ends 2026-11-01.")).toBeTruthy();
+    expect(screen.getByText("Renews 2026-11-01.")).toBeTruthy();
   });
 
-  it("explains a failed payment and a cancellation with the date", () => {
-    const pastDue = resolveEntitlements(row({ status: "past_due", currentPeriodEnd: new Date("2026-10-18T00:00:00Z") }), NOW);
-    view(pastDue);
-    expect(screen.getByText(/The last payment failed\. Pro stays until 2026-10-25/)).toBeTruthy();
-    cleanup();
+  it("explains a cancellation with the date", () => {
     view(resolveEntitlements(row({ status: "canceled" }), NOW));
     expect(screen.getByText(/Canceled\. Pro stays until 2026-11-01/)).toBeTruthy();
   });

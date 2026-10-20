@@ -265,3 +265,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Still not handled: out-of-order webhook delivery (see US-022 notes). Stripe event `created` could be stored to skip older events.
   - No UI change, no browser check. Full suite: 799 tests, ~314s. No migration.
 ---
+## 2026-10-20 - US-024
+- Plan page now works for owners: tier list with a Monthly/Yearly toggle (prices formatted server-side from `PLAN_PRICES`, tier data passed to the client as plain props), Upgrade/Switch buttons that POST `/api/billing/checkout` (or the portal) and follow the returned URL, Manage billing (portal), Cancel subscription behind a dialog that names the date access ends. `?checkout=success|canceled` shows a status note. A banner (heading, grace end date, Manage billing for owners, a plain note for others) shows only while `past_due` is inside the grace period; the old past-due line in the current-plan note was removed.
+- `getBillingControls(workspaceId)` (lib/billing/status.ts) decides what to offer: configured, portal, cancel, and `changeVia` (portal for a live Stripe subscription so a plan change does not create a second subscription; checkout for mock and for Free/canceled). With no provider the owner sees prices and a note, no buttons.
+- Files: components/{plan-billing,plan-overview}.tsx, app/dashboard/plan/page.tsx, lib/billing/status.ts, lib/go-to.ts, app/globals.css, lib/i18n/{en,id}.ts, tests/{plan-overview.test.tsx,billing-controls.test.ts,no-inline-strings.test.ts}, e2e/billing.spec.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A visually hidden radio under a label makes Playwright's `.check()` fail ("label intercepts pointer events"); click the label text and assert `toBeChecked()`.
+  - jsdom cannot replace `window.location`; navigation goes through `goTo` in lib/go-to.ts, which tests `vi.mock`.
+  - Client components that call `useRouter` need `vi.mock("next/navigation")` in tests that render them via `PlanOverview`.
+  - `plan.periodEnds` now reads "Renews {date}." (it is only shown for subscription-sourced plans); `plan.pastDue` and `plan.action.soon` keys were removed.
+  - Not handled: switching a Free-plan workspace that has a canceled subscription still opens a fresh checkout (intended); an owner on a hand-set override who pays gets a subscription that the override still masks.
+  - Screenshots at 360/1280 (free monthly/yearly, after checkout, cancel dialog, canceled, past due, dark): no overflow, no console errors, Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB. Full suite: 817 tests green; e2e billing spec passes.
+---

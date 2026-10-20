@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PlanOverview } from "@/components/plan-overview";
 import { can } from "@/lib/auth/permissions";
+import { getBillingControls } from "@/lib/billing/status";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
@@ -13,7 +14,7 @@ import { getUsage } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlanPage() {
+export default async function PlanPage({ searchParams }: { searchParams: Promise<{ checkout?: string | string[] }> }) {
   const [t, locale] = await Promise.all([getT(), getLocale()]);
   const jar = await cookies();
   const user = await getUserFromToken(jar.get(SESSION_COOKIE)?.value);
@@ -22,10 +23,15 @@ export default async function PlanPage() {
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
 
+  const canManageBilling = can(membership.role, "billing.manage");
+  const { checkout } = await searchParams;
+  const checkoutResult = checkout === "success" || checkout === "canceled" ? checkout : null;
+
   const db = getDb();
-  const [entitlements, usage] = await Promise.all([
+  const [entitlements, usage, billing] = await Promise.all([
     getEntitlements(membership.workspaceId, { db }),
     getUsage(membership.workspaceId, { db }),
+    getBillingControls(membership.workspaceId),
   ]);
 
   return (
@@ -42,7 +48,9 @@ export default async function PlanPage() {
       <PlanOverview
         entitlements={entitlements}
         usage={usage}
-        canManageBilling={can(membership.role, "billing.manage")}
+        canManageBilling={canManageBilling}
+        billing={billing}
+        checkout={canManageBilling ? checkoutResult : null}
         locale={locale}
         t={t}
       />

@@ -7,6 +7,7 @@ const MIGRATED = [
   "components/password-forms.tsx",
   "components/plan-hint.tsx",
   "components/plan-overview.tsx",
+  "components/plan-billing.tsx",
   "app/dashboard/plan/page.tsx",
   "components/members-manager.tsx",
   "components/invite-accept-form.tsx",
