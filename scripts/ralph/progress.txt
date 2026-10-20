@@ -208,3 +208,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `getEntitlements` takes an optional `db`/`now` so tests do not need fake timers. Rehearsal pattern from tests/workspaces.test.ts reused for the backfill (own schema name `mig_rehearsal_plans`).
   - Full `npm test` took ~280s this time. No UI change, no browser check. Dev DB migrated to 0027.
 ---
+## 2026-10-20 - US-019
+- Server-side limits now return 402 `{error, reason, requiredPlan}` (`requiredPlan` = cheapest plan that would allow it, null if none): `type_not_allowed` on interaction create and interaction duplicate, `event_limit` on event create and event duplicate, `seat_limit` on invitation create, invitation accept and member reactivation. `assertSeatAvailable` (lib/seats.ts) now reads entitlements; a seat is an active membership or an unexpired pending invitation (suspended members hold none). Accept leaves its own invitation out of the count, so it only fails after a downgrade.
+- Files: lib/{limits,seats,plans,invitations,members}.ts, app/api/{events,events/[id]/duplicate,events/[id]/interactions,events/[id]/interactions/[interactionId]/duplicate,invitations,invitations/accept,members/[userId]}, lib/i18n/{en,id}.ts, tests/{plan-limits.test.ts,helpers/db.ts,invitations.test.ts,members.test.ts}, CLAUDE.md
+- **Learnings for future iterations:**
+  - Free has 1 seat and 3 events a month, so tests that invite or add members need `setPlan(db, workspaceId, "team")` (tests/helpers/db.ts, a plan override).
+  - Every type that exists today is in Free's `allowedTypes`, so the denied-type test shrinks `PLANS.free.allowedTypes` for one test and restores it. When ranking/quiz/survey routes arrive (US-037+), call `assertTypeAllowed` there too.
+  - Events per month counts event rows created this UTC month, so deleting an event frees a slot. Closing that loophole needs a usage counter table; not done.
+  - Seat checks are not serialized: two simultaneous invites can both pass the last seat. Reactivation runs inside the member transaction.
+  - `getEntitlements`/seat helpers take `Pick<Db, "select">` so a transaction works as well as the pool.
+  - No UI change, no browser check (the plan page and locked hints are US-021). Full suite: 729 tests, ~290s.
+---

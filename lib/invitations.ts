@@ -5,6 +5,7 @@ import { getEmailSender } from "@/lib/email";
 import { MIN_PASSWORD_LENGTH, isValidEmail } from "@/lib/auth/credentials";
 import { hashPassword } from "@/lib/auth/password";
 import { hashToken, issueTokenRecord } from "@/lib/auth/tokens";
+import { assertSeatAvailable } from "@/lib/seats";
 import type { MessageKey } from "@/lib/i18n/en";
 
 type Db = ReturnType<typeof createDb>["db"];
@@ -195,6 +196,8 @@ export async function acceptInvitation(
       return fail("api.passwordMin", 400, "password_required", { min: MIN_PASSWORD_LENGTH });
     }
   }
+  // The invitation already holds a seat, so it is left out of the count.
+  await assertSeatAvailable(invite.workspaceId, { db, exceptInvitationId: invite.id });
   const passwordHash = input.sessionUser ? null : await hashPassword(input.password!);
 
   try {

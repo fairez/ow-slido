@@ -4,6 +4,7 @@ import { events, interactions } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { EVENT_NAME_MAX, generateUniqueJoinCode, isUuid } from "@/lib/events";
+import { PlanLimitError, assertCanCreateEvent, planLimitResponse } from "@/lib/limits";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -27,6 +28,12 @@ export async function POST(request: Request, { params }: Context) {
         .where(and(eq(events.id, id), eq(events.workspaceId, auth.workspaceId)))
     : [];
   if (!source) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
+  try {
+    await assertCanCreateEvent(auth.workspaceId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
 
   const copies = await getDb()
     .select()

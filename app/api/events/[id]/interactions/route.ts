@@ -3,6 +3,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
+import { PlanLimitError, assertTypeAllowed, planLimitResponse } from "@/lib/limits";
 import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
 import { eventNotFound, findOwnedEvent, parsePollInput, pollConfig } from "@/lib/polls";
 import { parseWordcloudInput, wordcloudConfig } from "@/lib/wordclouds";
@@ -35,6 +36,12 @@ export async function POST(request: Request, { params }: Context) {
       { error: serverT(request, "api.typeInvalid") },
       { status: 400 },
     );
+  }
+  try {
+    await assertTypeAllowed(auth.workspaceId, type);
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
   }
   let title: string;
   let config: Record<string, unknown>;

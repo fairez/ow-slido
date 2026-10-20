@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { config } from "dotenv";
 import { createDb } from "@/db/client";
-import { users } from "@/db/schema";
+import { subscriptions, users } from "@/db/schema";
 import { createPersonalWorkspace } from "@/lib/workspaces";
 
 config({ path: ".env.local" });
@@ -25,4 +25,16 @@ export async function truncateAll(db: ReturnType<typeof createTestDb>["db"]) {
 export async function workspaceFor(db: ReturnType<typeof createTestDb>["db"], userId: string) {
   const [user] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, userId));
   return (await createPersonalWorkspace(db, user)).id;
+}
+
+/** Puts a workspace on `plan` through a plan override, so tests do not need a billing provider. */
+export async function setPlan(
+  db: ReturnType<typeof createTestDb>["db"],
+  workspaceId: string,
+  plan: "free" | "pro" | "team",
+) {
+  await db
+    .insert(subscriptions)
+    .values({ workspaceId, planOverride: plan, planOverrideReason: "test" })
+    .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { planOverride: plan, planOverrideReason: "test" } });
 }

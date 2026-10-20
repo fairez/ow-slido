@@ -4,6 +4,7 @@ import { events } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { generateUniqueJoinCode, parseEventInput } from "@/lib/events";
+import { PlanLimitError, assertCanCreateEvent, planLimitResponse } from "@/lib/limits";
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -21,6 +22,12 @@ export async function POST(request: Request) {
   const { name, startsAt, endsAt, moderationMode } = parsed.value;
 
   const { workspaceId } = auth;
+  try {
+    await assertCanCreateEvent(workspaceId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
 
   // A concurrent create can take the code between the check and the insert; retry on that.
   for (let attempt = 0; attempt < 3; attempt++) {

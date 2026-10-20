@@ -6,7 +6,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { getSessionMember } from "@/lib/auth/require-admin";
 import { clearOutbox, getOutbox } from "@/lib/email";
 import { createPersonalWorkspace } from "@/lib/workspaces";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, setPlan, truncateAll } from "./helpers/db";
 
 const PASSWORD = "correct horse battery";
 const { db, pool } = createTestDb();
@@ -75,6 +75,7 @@ async function seenBy(p: Person) {
 /** An owner's workspace plus a member of each role; `cookie` on each member targets that workspace. */
 async function team() {
   const owner = await makeUser("owner@example.com");
+  await setPlan(db, owner.workspaceId, "team");
   const people: Record<string, Person> = { owner };
   for (const role of ["admin", "editor", "moderator", "viewer"] as const) {
     const p = await makeUser(`${role}@example.com`);

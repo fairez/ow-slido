@@ -3,7 +3,8 @@ import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { createInvitation, listInvitations, parseInviteInput, sendInvitationEmail } from "@/lib/invitations";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { SeatLimitError, assertSeatAvailable } from "@/lib/seats";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
+import { assertSeatAvailable } from "@/lib/seats";
 
 const INVITE_LIMIT = 30;
 const INVITE_WINDOW_SECONDS = 60 * 60;
@@ -35,9 +36,7 @@ export async function POST(request: Request) {
   try {
     await assertSeatAvailable(auth.workspaceId);
   } catch (error) {
-    if (error instanceof SeatLimitError) {
-      return Response.json({ error: error.message, reason: error.reason }, { status: 402 });
-    }
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;
   }
 

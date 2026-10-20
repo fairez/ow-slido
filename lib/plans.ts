@@ -172,7 +172,7 @@ export function resolveEntitlements(row: SubscriptionRow | null, now: Date = new
 /** The only way code reads what a workspace may do. A workspace without a subscription row is on Free. */
 export async function getEntitlements(
   workspaceId: string,
-  options: { db?: ReturnType<typeof getDb>; now?: Date } = {},
+  options: { db?: Pick<ReturnType<typeof getDb>, "select">; now?: Date } = {},
 ): Promise<Entitlements> {
   const db = options.db ?? getDb();
   const [row] = await db.select().from(subscriptions).where(eq(subscriptions.workspaceId, workspaceId));

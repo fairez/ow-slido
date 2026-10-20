@@ -62,3 +62,4 @@ No inline UI strings in new code. Add the key to `lib/i18n/en.ts` and `id.ts`, t
 
 ## Plans
 - `lib/plans.ts` is the only place that defines tiers (`PLANS`, `PLAN_PRICES`, `PAST_DUE_GRACE_DAYS`) and the only way to read limits is `getEntitlements(workspaceId)`; never read `subscriptions` directly for a limit. A workspace with no `subscriptions` row is Free, so new workspaces need no row. Month boundaries come from `utcMonthBounds()`.
+- Limits: `lib/limits.ts` (`assertTypeAllowed`, `assertCanCreateEvent`, `PlanLimitError`, `planLimitResponse`) and `lib/seats.ts` (`assertSeatAvailable`) throw `PlanLimitError`; routes catch it and return 402 `{error, reason, requiredPlan}`. New limit checks follow that shape. Tests that need more than Free allows (invites, members, many events) call `setPlan(db, workspaceId, "team")` from `tests/helpers/db.ts`.

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { authTokens, invitations, memberships, users, workspaces } from "@/db/schema";
 import { clearOutbox, getOutbox } from "@/lib/email";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, setPlan, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -53,6 +53,7 @@ async function makeOwner(email = "owner@example.com") {
   await db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.email, email));
   const [user] = await db.select().from(users).where(eq(users.email, email));
   const [membership] = await db.select().from(memberships).where(eq(memberships.userId, user.id));
+  await setPlan(db, membership.workspaceId, "team");
   return { user, workspaceId: membership.workspaceId, cookie: cookieOf(res) };
 }
 

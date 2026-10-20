@@ -4,6 +4,7 @@ import { workspaceSetCookie } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { acceptInvitation } from "@/lib/invitations";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 const ACCEPT_LIMIT = 10;
@@ -28,11 +29,17 @@ export async function POST(request: Request) {
   if (!token) return Response.json({ error: serverT(request, "api.inviteInvalid") }, { status: 400 });
 
   const user = await getSessionUser(request);
-  const result = await acceptInvitation(getDb(), {
-    token,
-    sessionUser: user ? { id: user.id, email: user.email } : null,
-    password,
-  });
+  let result;
+  try {
+    result = await acceptInvitation(getDb(), {
+      token,
+      sessionUser: user ? { id: user.id, email: user.email } : null,
+      password,
+    });
+  } catch (error) {
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
   if (!result.ok) {
     return Response.json(
       { error: apiMessage(request, result), ...(result.reason ? { reason: result.reason } : {}) },

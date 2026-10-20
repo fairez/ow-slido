@@ -2,6 +2,7 @@ import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { apiMessage, serverT } from "@/lib/i18n/server";
+import { PlanLimitError, planLimitResponse } from "@/lib/limits";
 import { changeMemberRole, parseMemberPatch, removeMember, setMemberStatus } from "@/lib/members";
 
 type Context = { params: Promise<{ userId: string }> };
@@ -20,10 +21,17 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: parsed.status });
 
   const actor = { userId: auth.user.id, role: auth.role };
-  const result =
-    "role" in parsed.value
-      ? await changeMemberRole(getDb(), auth.workspaceId, actor, userId, parsed.value.role)
-      : await setMemberStatus(getDb(), auth.workspaceId, actor, userId, parsed.value.status);
+  let result;
+  try {
+    result =
+      "role" in parsed.value
+        ? await changeMemberRole(getDb(), auth.workspaceId, actor, userId, parsed.value.role)
+        : await setMemberStatus(getDb(), auth.workspaceId, actor, userId, parsed.value.status);
+  } catch (error) {
+    // Reactivating a member needs a free seat.
+    if (error instanceof PlanLimitError) return planLimitResponse(request, error);
+    throw error;
+  }
   if (!result.ok) return failure(request, result);
   return Response.json({ ok: true });
 }

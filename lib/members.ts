@@ -4,6 +4,7 @@ import type { createDb } from "@/db/client";
 import { memberships, users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { ROLES, type Role } from "@/lib/auth/permissions";
+import { assertSeatAvailable } from "@/lib/seats";
 import type { MessageKey } from "@/lib/i18n/en";
 import { revokeMemberSockets } from "@/lib/realtime/publisher";
 
@@ -116,6 +117,7 @@ export async function setMemberStatus(
   const result = await withTarget(db, workspaceId, actor, targetId, async (tx, target, lastActiveOwner) => {
     if (target.status === status) throw new Abort(fail("api.nothingToChange", 400));
     if (status === "suspended" && lastActiveOwner) throw new Abort(fail("api.memberLastOwner", 409, "last_owner"));
+    if (status === "active") await assertSeatAvailable(workspaceId, { db: tx });
     await tx
       .update(memberships)
       .set({ status })
