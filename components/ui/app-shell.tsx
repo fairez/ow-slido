@@ -39,6 +39,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
           {workspaces ? <Link href="/dashboard/templates">{t("templates.nav")}</Link> : null}
           {workspaces?.canManageMembers ? <Link href="/dashboard/members">{t("members.nav")}</Link> : null}
           {workspaces ? <Link href="/dashboard/plan">{t("plan.nav")}</Link> : null}
+          {workspaces ? <Link href="/account/security">{t("security.nav")}</Link> : null}
           <Link href="/">{t("shell.join")}</Link>
         </nav>
         {workspaces ? <WorkspaceSwitcher workspaces={workspaces.list} activeId={workspaces.activeId} /> : null}

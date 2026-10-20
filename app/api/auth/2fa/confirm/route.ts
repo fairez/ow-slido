@@ -32,5 +32,5 @@ export async function POST(request: Request) {
   if (result.reason === "not_enabled") {
     return Response.json({ error: serverT(request, "api.twoFactorNotStarted") }, { status: 409 });
   }
-  return Response.json({ error: serverT(request, "api.twoFactorInvalid") }, { status: 400 });
+  return Response.json({ error: serverT(request, "api.twoFactorConfirmInvalid") }, { status: 400 });
 }

@@ -49,6 +49,8 @@ const MIGRATED = [
   "app/dashboard/templates/page.tsx",
   "components/analysis-editor.tsx",
   "components/auth-form.tsx",
+  "components/security-settings.tsx",
+  "app/account/security/page.tsx",
   "components/event-manager.tsx",
   "components/live-participant-count.tsx",
   "components/logout-button.tsx",

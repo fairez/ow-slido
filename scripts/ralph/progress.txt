@@ -38,3 +38,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Attempt budget stays one key per user (`2fa:<userId>`), shared by confirm, verify and disable; verify also has a per-IP limit (30 per 15 min). The enrolment confirm uses one attempt, so route tests count that when probing the limit.
   - tests/totp `totp(secret, timeMs)` needs the time argument; route tests wrap it as `totp(secret)`.
 ---
+
+## 2026-10-21 - US-003
+- `/account/security` (server page + `SecuritySettings`): status, enrol with a locally drawn QR (`qrcode` in the browser, from the otpauth URI) plus the grouped manual key, confirm with a code, recovery codes shown once with Copy and Download, disable with password + code. Login shows a code step (`TwoFactorStep` in `components/auth-form.tsx`) after `twoFactorRequired`, with "Use a recovery code instead" as a labelled toggle and "Back to log in". "Security" link added to the app shell nav.
+- Files: app/account/security/page.tsx, components/security-settings.tsx, components/auth-form.tsx, components/ui/app-shell.tsx, app/globals.css (`.security-*`), app/api/auth/2fa/confirm/route.ts (own message `api.twoFactorConfirmInvalid`), lib/i18n en/id, tests/two-factor-ui.test.tsx, tests/no-inline-strings.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - `toHaveFocus` is not available (no jest-dom); assert `document.activeElement`.
+  - Screen changes inside `SecuritySettings` move focus to the new `h2` (`tabIndex=-1`, outline off like `.section-head h2`); errors are `InlineError` (role=alert).
+  - Inputs inside a list item need `min-width: 0` and `width: 100%` or they overflow at 360px.
+  - Browser checks: `npm run dev` ignores a shell `DATABASE_URL` (server.ts lets `.env.local` win), so it used the dev DB, which needed `npm run db:migrate` for 0040; and the dev server rewrote tsconfig.json/next-env.d.ts and kept reloading the page. A production build on `.next-shot` against `TEST_DATABASE_URL` worked (`git checkout tsconfig.json next-env.d.ts` after building). Do not `pkill -f` a pattern that appears in your own command line (it kills the shell); list pids with `ps` and kill them by number.
+  - Screens at 360 and 1280 (light and dark) are in scripts/ralph/screens/us003-*.png; script us003.mjs.
+  - Not done: no route to regenerate recovery codes, and the reset form still pushes to /dashboard for a 2FA user (US-002 note); both are outside this story's criteria.
+---
