@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { aiCalls, events } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -52,7 +52,7 @@ beforeEach(async () => {
   const [user] = await db.query.users.findMany();
   const [event] = await db
     .insert(events)
-    .values({ ownerId: user.id, name: "E", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000), joinCode: "234567" })
+    .values({ workspaceId: await workspaceFor(db, user.id), ownerId: user.id, name: "E", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000), joinCode: "234567" })
     .returning();
   eventId = event.id;
 });

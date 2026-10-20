@@ -134,6 +134,13 @@
       "when": 1792163591232,
       "tag": "0018_same_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792482289498,
+      "tag": "0019_skinny_cerise",
+      "breakpoints": true
     }
   ]
 }

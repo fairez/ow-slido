@@ -14,6 +14,11 @@
 - `npm run db:reset:test` — drop and recreate the test DB's schemas, then migrate (refuses to run on the dev DB).
 - Tests that hit the DB: start the file with `// @vitest-environment node`, use `createTestDb()` and `truncateAll(db)` in `beforeEach` from `tests/helpers/db.ts`. Run `db:migrate:test` first after adding migrations.
 
+## Workspaces
+- Events belong to a workspace (`events.workspace_id`, NOT NULL, cascade); `events.owner_id` is only the creator. Users reach workspaces through `memberships`.
+- Every data table must reach a workspace through `events` (or `interactions`, which reach `events`), so deleting a workspace removes everything. A table that holds workspace-level data (not event data) references `workspaces` directly with `onDelete: "cascade"`.
+- Tests that insert events directly need `workspaceId: await workspaceFor(db, user.id)` from `tests/helpers/db.ts`. In routes, `lib/workspaces.ts` has `createPersonalWorkspace` and `firstWorkspaceId`.
+
 ## Interactions
 - Types: `poll`, `wordcloud`, `sharedNotes`, `openText`, `rating`. Config for the last three is validated in `lib/interaction-config.ts` (hand-written parsers; no zod). Adding a type means updating the `db/schema.ts` enum and check, the create/PATCH/duplicate routes and a migration.
 - Every table that holds event data (responses, notes, analyses...) must reference `interactions` or `events` with `onDelete: "cascade"`, so deleting an event removes it. Add a cascade test for each new table.

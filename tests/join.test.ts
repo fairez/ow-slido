@@ -3,7 +3,7 @@ import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, participants, users } from "@/db/schema";
 import { getRateLimitStore } from "@/lib/rate-limit";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 import { JOIN_IP_LIMIT } from "@/lib/rate-limit";
 
 const { db, pool } = createTestDb();
@@ -27,7 +27,7 @@ beforeEach(async () => {
   const [event] = await db
     .insert(events)
     .values({
-      ownerId: user.id,
+      workspaceId: await workspaceFor(db, user.id), ownerId: user.id,
       name: "Town hall",
       startsAt: new Date("2026-11-01T10:00:00Z"),
       endsAt: new Date("2026-11-01T11:00:00Z"),

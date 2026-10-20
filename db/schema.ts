@@ -29,12 +29,43 @@ export const users = pgTable(
       .default("admin"),
     active: boolean("active").notNull().default(true),
     firstLoginAt: timestamp("first_login_at", { withTimezone: true }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     firstInteractionLiveAt: timestamp("first_interaction_live_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
     check("users_role_admin", sql`${t.role} = 'admin'`),
+  ],
+);
+
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const memberships = pgTable(
+  "memberships",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["owner", "admin", "editor", "moderator", "viewer"] }).notNull(),
+    status: text("status", { enum: ["active", "suspended"] })
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("memberships_workspace_user").on(t.workspaceId, t.userId),
+    index("memberships_user_idx").on(t.userId),
+    check("memberships_role", sql`${t.role} in ('owner', 'admin', 'editor', 'moderator', 'viewer')`),
+    check("memberships_status", sql`${t.status} in ('active', 'suspended')`),
   ],
 );
 
@@ -45,6 +76,9 @@ export const events = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),

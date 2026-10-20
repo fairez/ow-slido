@@ -1,6 +1,8 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { config } from "dotenv";
 import { createDb } from "@/db/client";
+import { users } from "@/db/schema";
+import { createPersonalWorkspace } from "@/lib/workspaces";
 
 config({ path: ".env.local" });
 
@@ -17,4 +19,10 @@ export async function truncateAll(db: ReturnType<typeof createTestDb>["db"]) {
   if (rows.length === 0) return;
   const names = rows.map((r) => `"public"."${r.tablename}"`).join(", ");
   await db.execute(sql.raw(`TRUNCATE ${names} RESTART IDENTITY CASCADE`));
+}
+
+/** Give an existing user a personal workspace (as sign-up does) and return its id, for inserting events directly. */
+export async function workspaceFor(db: ReturnType<typeof createTestDb>["db"], userId: string) {
+  const [user] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, userId));
+  return (await createPersonalWorkspace(db, user)).id;
 }

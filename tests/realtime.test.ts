@@ -9,7 +9,7 @@ import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 import { createParticipantToken, participantCookieName } from "@/lib/participant-token";
 import { publish, setPublisher } from "@/lib/realtime/publisher";
 import { attachSocketServer } from "@/lib/realtime/socket-server";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -38,6 +38,7 @@ beforeEach(async () => {
     const [e] = await db
       .insert(events)
       .values({
+        workspaceId: await workspaceFor(db, ownerId),
         ownerId,
         name: joinCode,
         startsAt: new Date("2026-11-01T10:00:00Z"),

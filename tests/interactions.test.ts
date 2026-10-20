@@ -2,7 +2,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -17,7 +17,7 @@ async function makeEvent(joinCode = "123456") {
   const [e] = await db
     .insert(events)
     .values({
-      ownerId: u.id,
+      workspaceId: await workspaceFor(db, u.id), ownerId: u.id,
       name: "E",
       startsAt: new Date("2026-01-01"),
       endsAt: new Date("2026-01-02"),

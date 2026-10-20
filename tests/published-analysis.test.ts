@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { events, interactions, noteAnalyses, participants, sharedNotes, users } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -41,7 +41,7 @@ beforeEach(async () => {
   const [{ id: ownerId }] = await db.insert(users).values({ email: "h@example.com", passwordHash: "x" }).returning();
   const [ev] = await db
     .insert(events)
-    .values({ ownerId, name: "E", joinCode: "1234", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000) })
+    .values({ workspaceId: await workspaceFor(db, ownerId), ownerId, name: "E", joinCode: "1234", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000) })
     .returning();
   eventId = ev.id;
   const [it] = await db

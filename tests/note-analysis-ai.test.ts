@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { events, users } from "@/db/schema";
 import type { AiProvider, ProviderRequest } from "@/lib/ai/types";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db } = createTestDb();
 let lib: typeof import("@/lib/note-analysis-ai");
@@ -17,7 +17,7 @@ beforeEach(async () => {
   const [u] = await db.insert(users).values({ email: "h@example.com", passwordHash: "x" }).returning();
   const [e] = await db
     .insert(events)
-    .values({ ownerId: u.id, name: "E", joinCode: "1234", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000) })
+    .values({ workspaceId: await workspaceFor(db, u.id), ownerId: u.id, name: "E", joinCode: "1234", startsAt: new Date(), endsAt: new Date(Date.now() + 3600_000) })
     .returning();
   eventId = e.id;
 });

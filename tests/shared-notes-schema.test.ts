@@ -9,7 +9,7 @@ import {
   sharedNoteVotes,
   users,
 } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -21,7 +21,7 @@ async function setup() {
   const [e] = await db
     .insert(events)
     .values({
-      ownerId: u.id,
+      workspaceId: await workspaceFor(db, u.id), ownerId: u.id,
       name: "E",
       startsAt: new Date("2026-01-01"),
       endsAt: new Date("2026-01-02"),

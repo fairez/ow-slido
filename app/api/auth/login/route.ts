@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
   await getDb()
     .update(users)
-    .set({ firstLoginAt: sql`coalesce(${users.firstLoginAt}, now())` })
+    .set({ firstLoginAt: sql`coalesce(${users.firstLoginAt}, now())`, lastLoginAt: sql`now()` })
     .where(eq(users.id, user.id));
 
   return Response.json(

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, interactions, noteAnalyses, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -63,7 +63,7 @@ beforeEach(async () => {
   const [event] = await db
     .insert(events)
     .values({
-      ownerId: host.id,
+      workspaceId: await workspaceFor(db, host.id), ownerId: host.id,
       name: "Town hall",
       startsAt: new Date("2026-11-01T10:00:00Z"),
       endsAt: new Date("2026-11-01T11:00:00Z"),

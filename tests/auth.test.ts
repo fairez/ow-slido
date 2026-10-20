@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { users } from "@/db/schema";
+import { memberships, users, workspaces } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -173,6 +173,28 @@ test("login records first_login_at once", async () => {
   expect(first).toBeInstanceOf(Date);
   await login(post("/api/auth/login", creds));
   expect(await read()).toEqual(first);
+});
+
+test("login sets last_login_at on every login", async () => {
+  await signup(post("/api/auth/signup", creds));
+  const read = async () =>
+    (await db.select({ at: users.lastLoginAt }).from(users).where(eq(users.email, "host@example.com")))[0].at;
+  expect(await read()).toBeNull();
+  await login(post("/api/auth/login", creds));
+  const first = await read();
+  expect(first).toBeInstanceOf(Date);
+  await new Promise((r) => setTimeout(r, 20));
+  await login(post("/api/auth/login", creds));
+  expect((await read())!.getTime()).toBeGreaterThan(first!.getTime());
+});
+
+test("signup creates a personal workspace named after the email prefix with an owner membership", async () => {
+  await signup(post("/api/auth/signup", creds));
+  const rows = await db
+    .select({ name: workspaces.name, role: memberships.role })
+    .from(memberships)
+    .innerJoin(workspaces, eq(workspaces.id, memberships.workspaceId));
+  expect(rows).toEqual([{ name: "host", role: "owner" }]);
 });
 
 test("cookies are Secure only when the request arrived over https", async () => {

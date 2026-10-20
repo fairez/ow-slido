@@ -55,3 +55,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - /api/ai/test and AiError messages, and AI-validator errors fed to the model, stay English on purpose.
   - Typecheck is what finds a route still forwarding a raw `result.error`.
 ---
+
+## 2026-10-20 - US-005
+- Added `workspaces` and `memberships` (owner|admin|editor|moderator|viewer, active|suspended, unique per user+workspace), `events.workspace_id` NOT NULL cascade, `users.must_change_password` and `users.last_login_at` (set on login). Migration 0019 backfills a personal workspace (email prefix) + owner membership per user and moves every event into its owner's workspace.
+- Sign-up now creates the workspace and membership in one transaction; event create uses the user's oldest workspace (`firstWorkspaceId`, replaced by the active workspace in US-006); duplicate keeps the source workspace.
+- Files: db/schema.ts, db/migrations/0019_*, lib/workspaces.ts, app/api/{auth/signup,auth/login,events,events/[id]/duplicate}, tests/workspaces.test.ts, tests/auth.test.ts, tests/helpers/db.ts, 13 tests that insert events, CLAUDE.md
+- **Learnings for future iterations:**
+  - The test DB role cannot CREATE DATABASE; the migration rehearsal in tests/workspaces.test.ts runs the SQL in a temporary schema (`mig_rehearsal`) by rewriting `"public".`. Reuse that for later data migrations (US-027).
+  - Tests that insert events directly need `workspaceId: await workspaceFor(db, user.id)` (tests/helpers/db.ts).
+  - `npx eslint db lib app tests components e2e` is clean; whole-repo `npm run lint` only fails on generated files and scripts/ralph/screens (pre-existing).
+  - No UI change, no browser check.
+---

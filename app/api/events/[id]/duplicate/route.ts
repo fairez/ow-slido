@@ -43,6 +43,7 @@ export async function POST(request: Request, { params }: Context) {
           .insert(events)
           .values({
             ownerId: auth.user.id,
+            workspaceId: source.workspaceId,
             name,
             startsAt: source.startsAt,
             endsAt: source.endsAt,
