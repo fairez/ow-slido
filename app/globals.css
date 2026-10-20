@@ -248,6 +248,7 @@ input[type="radio"] {
 }
 
 .site-nav a {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -283,6 +284,14 @@ input[type="radio"] {
 @media (max-width: 40rem) {
   .site-header {
     flex-wrap: wrap;
+  }
+
+  /* Brand and theme toggle share the first row; the links get a row of their own so none wrap mid-word. */
+  .site-nav {
+    order: 2;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 0 var(--space-4);
   }
 
   .workspace-current,
@@ -1789,4 +1798,129 @@ a.ui-button:not([data-variant]) {
 
 .stack > section > .row-list {
   margin-top: var(--space-4);
+}
+
+/* Plan page: usage meters and the tier list. Bars are ink tints; the accent marks a limit that is used up. */
+.plan-current-name {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+}
+
+.meter-list {
+  display: grid;
+  gap: var(--space-5);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meter-row {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.meter-row > p {
+  margin: 0;
+}
+
+.meter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+
+.meter-label {
+  font-weight: 600;
+}
+
+.meter-figures {
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  width: 100%;
+  height: 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+  appearance: none;
+  overflow: hidden;
+}
+
+.meter::-webkit-progress-bar {
+  background: var(--border);
+}
+
+.meter::-webkit-progress-value {
+  background: var(--ink-muted);
+}
+
+.meter::-moz-progress-bar {
+  background: var(--ink-muted);
+}
+
+.meter[data-full]::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.meter[data-full]::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.plan-tier {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.plan-tier[data-current] {
+  border-color: var(--ink);
+}
+
+.plan-tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.plan-tier-head h3,
+.plan-tier-price {
+  margin: 0;
+}
+
+.plan-tier-price {
+  font-weight: 600;
+}
+
+#plan-change-note {
+  margin-top: var(--space-3);
+}
+
+.plan-facts {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--ink-muted);
+}
+
+/* A control the plan does not include: a quiet link that names the tier, never a dead button. */
+.plan-hint {
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  border-style: dashed;
+  color: var(--ink);
+}
+
+.plan-hint-tier {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
 }

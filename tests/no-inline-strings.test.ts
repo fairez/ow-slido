@@ -5,6 +5,9 @@ import ts from "typescript";
 /** Files whose UI text has moved to the message files. Add a file here when it is migrated. */
 const MIGRATED = [
   "components/password-forms.tsx",
+  "components/plan-hint.tsx",
+  "components/plan-overview.tsx",
+  "app/dashboard/plan/page.tsx",
   "components/members-manager.tsx",
   "components/invite-accept-form.tsx",
   "app/dashboard/members/page.tsx",

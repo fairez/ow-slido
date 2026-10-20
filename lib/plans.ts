@@ -84,6 +84,11 @@ export const PLANS: Record<PlanId, PlanLimits> = {
   },
 };
 
+/** Cheapest tier for which `allows` holds; null when no tier does. */
+export function cheapestPlan(allows: (plan: PlanId) => boolean): PlanId | null {
+  return PLAN_IDS.find(allows) ?? null;
+}
+
 export type BillingInterval = "month" | "year";
 
 /** Amounts are integer minor units (cents) of `currency`, an ISO 4217 code. Free has no price. */

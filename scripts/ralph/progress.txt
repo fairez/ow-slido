@@ -229,3 +229,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Do not write `open(path, "w").write(open(path).read()...)` in a one-off script: the write handle truncates the file first (wiped en.ts and id.ts; restored with git checkout since they were clean).
   - No UI change, so no browser check. The locked hints and the participant message styling on the join form are US-021 / not needed: the join form already shows `error` text.
 ---
+## 2026-10-20 - US-021
+- Added `/dashboard/plan` (all roles): current tier with period/grace/cancel note, usage meters (seats, events this month, busiest event's participants, AI calls this month, image storage) as `<progress>` bars that also print "used of limit"; limit 0 prints "Not included... Starts with Pro" instead of a bar, no limit prints the count. Tier list (stacked rows, not columns) with price and Upgrade/Switch buttons only for `billing.manage`; others get a read-only note. The buttons are disabled with a visible "not available yet" note until US-024 (TODO in code).
+- Locked hints: `PlanHint` replaces the add-content buttons for types the plan leaves out, the invite button when seats are full (counted from client state so invite/revoke updates it), the shared-notes analysis button when the plan has no AI (AI still hidden only when unconfigured) and the PDF/XLSX export on Free. "Plan" link added to the app shell nav.
+- Files: lib/usage.ts, lib/plan-hints.ts, lib/plans.ts (`cheapestPlan` exported, used by lib/limits.ts), components/{plan-hint,plan-overview,poll-manager,members-manager,ui/app-shell}.tsx, app/dashboard/{plan/page,members/page,events/[id]/page}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{usage,plan-overview,plan-hints}.test.*, CLAUDE.md
+- **Learnings for future iterations:**
+  - Ranking/quiz/survey add buttons do not exist yet; when US-037+ add them, pass them through `lockedTypes` the same way (poll-manager ADD_BUTTONS list) and widen `Kind`.
+  - PDF/XLSX are locked on Free, but nothing offers them to Pro workspaces yet (no export route for them), so Pro sees only CSV.
+  - Storage used is a constant 0 in `getUsage` until image uploads exist.
+  - Link text of `PlanHint` is "label tier" (a literal space between the spans keeps the accessible name readable); tests use e.g. `{name: "New rating Pro plan"}`.
+  - Header nav at 360px now wraps to its own row (Members + Plan + Events + Join no longer fit beside the brand); links are `nowrap`.
+  - The dev server's in-memory sign-up limiter (5/h per IP) blocks a second screenshot run; restart the dev server (kill by PID) between runs.
+  - Screenshots at 360/1280 (free owner, pro owner, viewer, dark, event page with hints, members with full seats): no overflow, no console errors; hint link goes to /dashboard/plan. Screenshot users/workspaces deleted from the dev DB. Full suite: 766 tests green.
+---

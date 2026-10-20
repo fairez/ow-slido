@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { getT } from "@/lib/i18n/server";
 import { listInvitations } from "@/lib/invitations";
 import { listMembers } from "@/lib/members";
+import { PLAN_IDS, PLANS, getEntitlements } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,10 @@ export default async function MembersPage() {
   if (!can(membership.role, "members.manage")) redirect("/dashboard");
 
   const db = getDb();
-  const [members, invitations] = await Promise.all([
+  const [members, invitations, entitlements] = await Promise.all([
     listMembers(db, membership.workspaceId),
     listInvitations(db, membership.workspaceId),
+    getEntitlements(membership.workspaceId, { db }),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function MembersPage() {
       <MembersManager
         selfId={user.id}
         actorRole={membership.role}
+        seatTiers={{ current: entitlements.plan, tiers: PLAN_IDS.map((plan) => ({ plan, seats: PLANS[plan].seats })) }}
         initialMembers={members.map((m) => ({
           ...m,
           joinedAt: m.joinedAt.toISOString(),

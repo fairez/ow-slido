@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { Badge } from "@/components/ui/card";
+import { PlanHint } from "@/components/plan-hint";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
@@ -11,6 +12,8 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
+import { aiLock, lockedFormats, lockedTypes } from "@/lib/plan-hints";
+import { getEntitlements } from "@/lib/plans";
 import { findOwnedEvent } from "@/lib/polls";
 import { getT } from "@/lib/i18n/server";
 
@@ -29,6 +32,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (!event) notFound();
 
   const canModerate = can(membership.role, "moderate");
+  const { limits } = await getEntitlements(membership.workspaceId);
+  const formatLocks = lockedFormats(limits);
 
   const list = await getDb()
     .select()
@@ -58,9 +63,17 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
             {t("dash.exportCsv")}
           </a>
+          {formatLocks.pdf && <PlanHint lock={formatLocks.pdf}>{t("dash.exportPdf")}</PlanHint>}
+          {formatLocks.xlsx && <PlanHint lock={formatLocks.xlsx}>{t("dash.exportXlsx")}</PlanHint>}
         </div>
       </header>
-      <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} aiEnabled={isAiConfigured()} />
+      <PollManager
+        eventId={event.id}
+        initialInteractions={list as InteractionItem[]}
+        aiEnabled={isAiConfigured()}
+        lockedTypes={lockedTypes(limits)}
+        aiLock={aiLock(limits)}
+      />
     </main>
   );
 }

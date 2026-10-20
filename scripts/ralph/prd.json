@@ -342,7 +342,7 @@
       ],
       "id": "US-021",
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M2"
     },
     {

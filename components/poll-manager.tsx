@@ -11,6 +11,8 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
+import { PlanHint } from "@/components/plan-hint";
+import type { Lock } from "@/lib/plan-hints";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 import { useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n";
@@ -44,6 +46,14 @@ const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
   rating: "pollMgr.type.rating",
 };
 
+const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
+  { kind: "poll", label: "pollMgr.newPoll" },
+  { kind: "wordcloud", label: "pollMgr.newWordcloud" },
+  { kind: "sharedNotes", label: "pollMgr.newSharedNotes" },
+  { kind: "openText", label: "pollMgr.newOpenText" },
+  { kind: "rating", label: "pollMgr.newRating" },
+];
+
 type Draft = { kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
 
 const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: false, showAuthors: false, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
@@ -53,7 +63,17 @@ async function errorFrom(response: Response) {
   return body?.error ?? SERVER_ERROR;
 }
 
-export function PollManager({ eventId, initialInteractions, aiEnabled = false }: { eventId: string; initialInteractions: InteractionItem[]; aiEnabled?: boolean }) {
+type PollManagerProps = {
+  eventId: string;
+  initialInteractions: InteractionItem[];
+  aiEnabled?: boolean;
+  /** Types the plan leaves out; their add buttons turn into a pointer to the plan page. */
+  lockedTypes?: Partial<Record<Kind, Lock>>;
+  /** Set when the plan has no AI calls: the analysis button turns into a pointer to the plan page. */
+  aiLock?: Lock;
+};
+
+export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock }: PollManagerProps) {
   const t = useT();
   const typeLabel = (kind: Kind) => t(TYPE_LABELS[kind]);
   const base = `/api/events/${eventId}/interactions`;
@@ -230,7 +250,11 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
                 )}
               </div>
               {item.type === "openText" && item.state !== "draft" && <OpenTextHostPanel eventId={eventId} interactionId={item.id} live={item.state === "live"} />}
-              {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && <NotesAnalysisPanel interactionId={item.id} socket={socket} />}
+              {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && (aiLock ? (
+                <div className="row-actions"><PlanHint lock={aiLock}>{t("notesAnalysis.analyze")}</PlanHint></div>
+              ) : (
+                <NotesAnalysisPanel interactionId={item.id} socket={socket} />
+              ))}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
                   <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>
@@ -329,11 +353,14 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
         <div className="add-bar">
           <p className="row-meta">{t("pollMgr.addBar")}</p>
           <div className="row-actions">
-            <Button onClick={() => setDraft(blank())}>{t("pollMgr.newPoll")}</Button>
-            <Button onClick={() => setDraft(blank("wordcloud"))}>{t("pollMgr.newWordcloud")}</Button>
-            <Button onClick={() => setDraft(blank("sharedNotes"))}>{t("pollMgr.newSharedNotes")}</Button>
-            <Button onClick={() => setDraft(blank("openText"))}>{t("pollMgr.newOpenText")}</Button>
-            <Button onClick={() => setDraft(blank("rating"))}>{t("pollMgr.newRating")}</Button>
+            {ADD_BUTTONS.map(({ kind, label }) => {
+              const lock = lockedTypes[kind];
+              return lock ? (
+                <PlanHint key={kind} lock={lock}>{t(label)}</PlanHint>
+              ) : (
+                <Button key={kind} onClick={() => setDraft(blank(kind))}>{t(label)}</Button>
+              );
+            })}
           </div>
         </div>
       )}

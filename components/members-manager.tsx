@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { PlanHint } from "@/components/plan-hint";
 import { Button } from "@/components/ui/button";
 import { Badge, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
@@ -8,6 +9,8 @@ import { InlineError, Select, TextField } from "@/components/ui/field";
 import { ROLES, type Role } from "@/lib/auth/permissions";
 import { useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n";
+import type { Lock } from "@/lib/plan-hints";
+import type { PlanId } from "@/lib/plans";
 
 export type MemberRow = {
   userId: string;
@@ -29,11 +32,14 @@ export function MembersManager({
   actorRole,
   initialMembers,
   initialInvitations,
+  seatTiers,
 }: {
   selfId: string;
   actorRole: Role;
   initialMembers: MemberRow[];
   initialInvitations: InvitationRow[];
+  /** Seats each tier includes, cheapest first, with the current tier's name. Omit to never lock the invite button. */
+  seatTiers?: { current: PlanId; tiers: { plan: PlanId; seats: number }[] };
 }) {
   const t = useT();
   const roleLabel = (role: string) => t(`role.${role}` as MessageKey);
@@ -53,6 +59,22 @@ export function MembersManager({
 
   const assignable = actorRole === "owner" ? ROLES : ROLES.filter((r) => r !== "owner");
   const pending = invitations.filter((i) => i.status === "pending" && new Date(i.expiresAt) > new Date());
+  // Mirrors lib/seats.ts: an active member or an unexpired pending invitation holds a seat. Counted from state so
+  // inviting or revoking updates the button without a reload.
+  const seatsUsed = members.filter((m) => m.status === "active").length + pending.length;
+  const seatLimit = seatTiers?.tiers.find((tier) => tier.plan === seatTiers.current)?.seats;
+  const seatLock: Lock | undefined =
+    seatTiers && seatLimit !== undefined && seatsUsed >= seatLimit
+      ? { requiredPlan: seatTiers.tiers.find((tier) => tier.seats > seatsUsed)?.plan ?? null }
+      : undefined;
+
+  // Sending the last invitation swaps the invite button for a link, so the dialog's opener is gone on close.
+  function closeInvited() {
+    setInvited(null);
+    setTimeout(() => {
+      if (document.activeElement === document.body) headingRef.current?.focus();
+    }, 0);
+  }
 
   async function call(method: string, url: string, body?: unknown): Promise<Call> {
     try {
@@ -145,15 +167,19 @@ export function MembersManager({
           <h2 id="members-heading" ref={headingRef} tabIndex={-1}>
             {t("members.listTitle")}
           </h2>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setInviteError(null);
-              setInviting(true);
-            }}
-          >
-            {t("members.invite")}
-          </Button>
+          {seatLock ? (
+            <PlanHint lock={seatLock}>{t("members.invite")}</PlanHint>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setInviteError(null);
+                setInviting(true);
+              }}
+            >
+              {t("members.invite")}
+            </Button>
+          )}
         </div>
         {pageError && <InlineError>{pageError}</InlineError>}
         <ul className="row-list" aria-busy={busy !== null || undefined}>
@@ -280,13 +306,13 @@ export function MembersManager({
         </form>
       </Dialog>
 
-      <Dialog open={invited !== null} title={t("members.inviteSentTitle")} onClose={() => setInvited(null)}>
+      <Dialog open={invited !== null} title={t("members.inviteSentTitle")} onClose={closeInvited}>
         {invited && (
           <div className="form-stack">
             <p>{t(invited.emailSent ? "members.inviteEmailed" : "members.inviteNotEmailed", { email: invited.email })}</p>
             <CopyField label={t("members.inviteLink")} value={invited.link} />
             <div className="row-actions">
-              <Button variant="primary" onClick={() => setInvited(null)}>
+              <Button variant="primary" onClick={closeInvited}>
                 {t("members.done")}
               </Button>
             </div>

@@ -3,7 +3,7 @@ import { aiCalls, events, participants } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { MessageKey } from "@/lib/i18n/en";
 import { serverT } from "@/lib/i18n/server";
-import { PLAN_IDS, PLANS, getEntitlements, utcMonthBounds, type GatedInteractionType, type PlanId, type ReportFormat } from "@/lib/plans";
+import { PLANS, cheapestPlan, getEntitlements, utcMonthBounds, type GatedInteractionType, type PlanId, type ReportFormat } from "@/lib/plans";
 
 type Db = Pick<ReturnType<typeof getDb>, "select">;
 
@@ -34,10 +34,6 @@ export function planLimitResponse(request: Request, error: PlanLimitError) {
     { error: serverT(request, error.messageKey, error.params), reason: error.reason, requiredPlan: error.requiredPlan },
     { status: 402 },
   );
-}
-
-function cheapestPlan(allows: (plan: PlanId) => boolean): PlanId | null {
-  return PLAN_IDS.find(allows) ?? null;
 }
 
 export async function assertTypeAllowed(workspaceId: string, type: GatedInteractionType, db: Db = getDb()) {
