@@ -13,6 +13,8 @@ import { listApprovedQuestions, resolveEventQa } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
 
+const initialScreen = (view?: string) => (view === "qa" || view === "podium" ? view : "interaction");
+
 export default async function PresentPage({
   params,
   searchParams,
@@ -46,7 +48,7 @@ export default async function PresentPage({
         items={items}
         initialQuestions={qaId ? await listApprovedQuestions(qaId) : []}
         initialQaId={qaId}
-        initialScreen={(await searchParams).view === "qa" ? "qa" : "interaction"}
+        initialScreen={initialScreen((await searchParams).view)}
       />
     </main>
   );

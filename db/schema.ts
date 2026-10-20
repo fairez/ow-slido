@@ -517,12 +517,14 @@ export const quizScores = pgTable(
     points: integer("points").notNull().default(0),
     /** Closed questions this participant answered. */
     answeredCount: integer("answered_count").notNull().default(0),
+    /** Of those, the ones answered correctly; shown in the leaderboard CSV. */
+    correctCount: integer("correct_count").notNull().default(0),
     /** Sum of `quiz_answers.elapsed_ms` over those questions; the tie-break (less time ranks higher). */
     totalElapsedMs: integer("total_elapsed_ms").notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.eventId, t.participantId] }),
-    check("quiz_scores_nonnegative", sql`${t.points} >= 0 and ${t.answeredCount} >= 0 and ${t.totalElapsedMs} >= 0`),
+    check("quiz_scores_nonnegative", sql`${t.points} >= 0 and ${t.answeredCount} >= 0 and ${t.correctCount} >= 0 and ${t.totalElapsedMs} >= 0`),
   ],
 );
 

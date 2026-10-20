@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   interactions,
   noteAnalyses,
@@ -15,13 +15,14 @@ import {
 } from "@/db/schema";
 import { isAiConfigured } from "@/lib/ai/config";
 import { getDb } from "@/lib/db";
-import type { MessageKey, TParams } from "@/lib/i18n";
+import { t, type MessageKey, type TParams } from "@/lib/i18n";
 import { parseNewInteractionInput, type OpenTextConfig, type QuizConfig, type RankingConfig, type RatingConfig, type SharedNotesConfig } from "@/lib/interaction-config";
 import type { LiveInteraction } from "@/lib/live-view";
 import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
+import { LEADERBOARD_TOP, allStandings, topStandings } from "@/lib/leaderboard/standings";
 import { getNicknameState } from "@/lib/nickname";
 import { computeQuizResults, countQuizAnswers, databaseNowMs, quizTimeLimitSeconds } from "@/lib/quiz";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
@@ -49,6 +50,8 @@ export const RANKING_EXPORT_HEADER = [
   ...Array.from({ length: RANKING_MAX_OPTIONS }, (_, i) => `position_${i + 1}`),
 ] as const;
 export const QUIZ_EXPORT_HEADER = ["section", "title", "option", "correct", "count", "answers", "correct_percent"] as const;
+/** The event's cumulative standings; the only place a nickname appears in an export. */
+export const LEADERBOARD_EXPORT_HEADER = ["section", "rank", "nickname", "points", "correct_answers"] as const;
 export const ANALYSIS_EXPORT_HEADER = ["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"] as const;
 
 /**
@@ -413,6 +416,28 @@ const rankingModule: InteractionModule = {
   },
 };
 
+/**
+ * The standings belong to the whole event, so only its first quiz question carries them: the event CSV and the
+ * ZIP then list the leaderboard once.
+ */
+async function isFirstQuiz(row: InteractionRow): Promise<boolean> {
+  const [first] = await db()
+    .select({ id: interactions.id })
+    .from(interactions)
+    .where(and(eq(interactions.eventId, row.eventId), eq(interactions.type, "quiz")))
+    .orderBy(asc(interactions.position), asc(interactions.createdAt))
+    .limit(1);
+  return first?.id === row.id;
+}
+
+async function leaderboardTable(eventId: string): Promise<CsvTable> {
+  const standings = await allStandings(eventId);
+  return {
+    header: LEADERBOARD_EXPORT_HEADER,
+    rows: standings.map((s) => ["leaderboard", s.rank, s.nickname ?? t("en", "leaderboard.noName"), s.points, s.correct]),
+  };
+}
+
 const quizModule: InteractionModule = {
   type: "quiz",
   presentWhenClosed: true,
@@ -436,6 +461,7 @@ const quizModule: InteractionModule = {
           results.correctPercent ?? "",
         ]),
       },
+      ...((await isFirstQuiz(row)) ? [await leaderboardTable(row.eventId)] : []),
     ];
   },
   responseCount: countQuizAnswers,
@@ -456,6 +482,8 @@ const quizModule: InteractionModule = {
       total: results.total,
       // Per-option counts and the correct options are held back until the host closes the question.
       results: row.state === "closed" ? results : null,
+      // After a question closes the projector adds the cumulative top 10 to the answer.
+      leaderboard: row.state === "closed" ? await topStandings(row.eventId, LEADERBOARD_TOP) : null,
     };
   },
   async live(row, participantId) {

@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
+import { PresenterPodium } from "@/components/presenter-podium";
 import { PresenterOpenText } from "@/components/presenter-open-text";
 import { PresenterQuiz } from "@/components/presenter-quiz";
 import { PresenterRanking } from "@/components/presenter-ranking";
@@ -22,7 +23,7 @@ import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
 export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed"; type?: string; title?: string };
-export type PresenterScreen = "interaction" | "qa";
+export type PresenterScreen = "interaction" | "qa" | "podium";
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
 type Words = { interactionId: string; words: WordCount[]; total: number };
@@ -87,7 +88,7 @@ export function PresenterView({
     // Keep the choice in the URL so a reload, or a second tab on another monitor, opens the same screen.
     try {
       const url = new URL(window.location.href);
-      if (next === "qa") url.searchParams.set("view", "qa");
+      if (next !== "interaction") url.searchParams.set("view", next);
       else url.searchParams.delete("view");
       window.history.replaceState(null, "", url);
     } catch {
@@ -298,15 +299,22 @@ export function PresenterView({
       busy.current = false;
     }
   }, [eventId, poll, t]);
+  // "End quiz" is offered once the event has a quiz question and none is being answered.
+  const canShowPodium = list.some((i) => i.type === "quiz") && !(poll?.type === "quiz" && poll.state === "live");
   const extras = (
     <>
       <div className="present-controls">
+        {(canShowPodium || screen === "podium") && (
+          <Button onClick={() => changeScreen(screen === "podium" ? "interaction" : "podium")}>
+            {screen === "podium" ? t("podium.hide") : t("podium.show")}
+          </Button>
+        )}
         {poll?.type === "quiz" && poll.state === "live" && (
           <Button variant="primary" onClick={() => void closeQuiz()}>
             {t("presQuiz.reveal")}
           </Button>
         )}
-        {!qaFillsScreen && (
+        {!qaFillsScreen && screen !== "podium" && (
           <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
             {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
           </Button>
@@ -320,6 +328,16 @@ export function PresenterView({
       )}
     </>
   );
+
+  if (screen === "podium") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(t("podium.title"))}
+        <PresenterPodium eventId={eventId} />
+        {extras}
+      </section>
+    );
+  }
 
   if (screen === "qa" || qaFillsScreen) {
     const qaTitle = list.find((i) => i.id === qaId)?.title;

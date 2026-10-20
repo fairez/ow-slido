@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LeaderboardList } from "@/components/leaderboard-list";
 import { QUIZ_SHAPES } from "@/components/quiz-form";
 import { useT } from "@/lib/i18n/client";
 import type { PresenterQuiz as PresenterQuizState } from "@/lib/presenter";
@@ -103,6 +104,19 @@ export function PresenterQuiz({ quiz }: { quiz: PresenterQuizState }) {
             </li>
           ))}
         </ol>
+      )}
+
+      {closed && quiz.leaderboard && (
+        <section className="present-leaderboard" aria-labelledby={`lb-${quiz.id}`}>
+          <h2 id={`lb-${quiz.id}`} className="present-leaderboard-title">
+            {t("leaderboard.title")}
+          </h2>
+          {quiz.leaderboard.length === 0 ? (
+            <p className="present-empty">{t("leaderboard.empty")}</p>
+          ) : (
+            <LeaderboardList standings={quiz.leaderboard} />
+          )}
+        </section>
       )}
 
       <p className="present-total">

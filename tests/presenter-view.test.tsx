@@ -348,6 +348,7 @@ const quizState = (over: Record<string, unknown> = {}) => ({
   serverNow: 1_000_000,
   total: 0,
   results: null,
+  leaderboard: null,
   ...over,
 });
 
@@ -410,4 +411,56 @@ it("shows the correct options and the count per option once the quiz is closed",
   expect(rows.map((li) => li.textContent)).toEqual(["JavaScriptCorrect answer2 answers", "COBOL1 answer"]);
   expect(screen.getByText(/3 answers, 67% correct \(closed\)/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Close and show answer" })).toBeNull();
+});
+
+it("lists the top 10 under the answer once a quiz question has closed", () => {
+  const leaderboard = [
+    { rank: 1, nickname: "Ana", points: 1900 },
+    { rank: 2, nickname: "Budi", points: 1500 },
+    { rank: 2, nickname: null, points: 1500 },
+  ];
+  const results = { interactionId: "z1", total: 0, correctPercent: null, options: [] };
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState({ state: "closed", deadlineAt: null, results, leaderboard })} />);
+  const rows = screen.getAllByRole("listitem").filter((li) => li.closest(".leaderboard"));
+  expect(rows.map((li) => li.textContent)).toEqual(["1Ana1900 points", "2Budi1500 points", "2Player1500 points"]);
+});
+
+it("shows no leaderboard while the question is live", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={quizState()} />);
+  expect(screen.queryByRole("heading", { name: "Leaderboard" })).toBeNull();
+});
+
+it("shows the final podium for the host and goes back", async () => {
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          standings: [
+            { rank: 1, nickname: "Ana", points: 1900 },
+            { rank: 2, nickname: "Budi", points: 1500 },
+          ],
+          players: 2,
+        }),
+      ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const items = [{ id: "z1", state: "closed" as const, type: "quiz", title: "Quiz" }];
+  const results = { interactionId: "z1", total: 0, correctPercent: null, options: [] };
+  render(<PresenterView eventId="e1" joinCode="1234" items={items} initial={quizState({ state: "closed", deadlineAt: null, results })} />);
+  fireEvent.click(screen.getByRole("button", { name: "End quiz and show podium" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/leaderboard?limit=3"));
+  expect(await screen.findByRole("heading", { name: "Final podium" })).toBeTruthy();
+  const steps = screen.getAllByRole("listitem").filter((li) => li.closest(".podium"));
+  expect(steps.map((li) => li.textContent)).toEqual(["Place 1Ana1900 points", "Place 2Budi1500 points"]);
+  fireEvent.click(screen.getByRole("button", { name: "Back to the question" }));
+  expect(screen.queryByRole("heading", { name: "Final podium" })).toBeNull();
+});
+
+it("offers the podium only when the event has a quiz and no question is live", () => {
+  const live = [{ id: "z1", state: "live" as const, type: "quiz", title: "Quiz" }];
+  const { unmount } = render(<PresenterView eventId="e1" joinCode="1234" items={live} initial={quizState()} />);
+  expect(screen.queryByRole("button", { name: "End quiz and show podium" })).toBeNull();
+  unmount();
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} />);
+  expect(screen.queryByRole("button", { name: "End quiz and show podium" })).toBeNull();
 });

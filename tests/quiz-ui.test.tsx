@@ -147,6 +147,34 @@ it("after close a right answer shows its points", async () => {
   expect(screen.getByText("870 points")).toBeTruthy();
 });
 
+it("after close shows the participant's rank and running total", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json({
+        answered: true,
+        optionIds: ["b"],
+        correct: true,
+        points: 870,
+        correctOptionIds: ["b"],
+        standing: { rank: 3, points: 1770, players: 25 },
+      }),
+    ),
+  );
+  render(<QuizForm eventId="e1" quiz={live({ state: "closed", mine: ["b"] })} />);
+  await waitFor(() => expect(screen.getByText("Rank 3 of 25")).toBeTruthy());
+  expect(screen.getByText("1770 points in total")).toBeTruthy();
+});
+
+it("after close says so when the participant is not on the leaderboard yet", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ answered: false, optionIds: [], correct: false, points: 0, correctOptionIds: ["b"], standing: null })),
+  );
+  render(<QuizForm eventId="e1" quiz={live({ state: "closed" })} />);
+  await waitFor(() => expect(screen.getByText(/not on the leaderboard yet/)).toBeTruthy());
+});
+
 it("after close without an answer says so", async () => {
   vi.stubGlobal(
     "fetch",

@@ -535,3 +535,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - The countdown keeps running while a participant picks a name (the form says so); the server deadline is not affected.
   - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-nickname.mjs): empty, taken, profane and valid names, change, focus return, answer locks the name, reload keeps it; no horizontal overflow, only the expected 400/409 console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0036.
 ---
+
+## 2026-10-21 - US-046
+- Quiz standings on screen. Presenter: a closed quiz question now shows the cumulative top 10 (rank, nickname, points) under the answer (`PresenterQuiz.leaderboard`, `LeaderboardList`). Participant: the closed-question result adds "Rank n of N" and the running total (`QuizOutcome.standing`; "not on the leaderboard yet" when unranked). Final podium: "End quiz and show podium" on the presenter opens `PresenterPodium` (top 3 from new `GET /api/events/[id]/leaderboard?limit=`), steps rise third to first, no animation under `prefers-reduced-motion`; `?view=podium` survives a reload. CSV: `section,rank,nickname,points,correct_answers`, once per event (carried by the first quiz question), nickname fallback "Player".
+- Migration 0037: `quiz_scores.correct_count` (backfilled from closed quiz answers), written by `persistClosedQuestion`.
+- Files: db/schema.ts, db/migrations/0037_*, lib/leaderboard/{index,standings}.ts, lib/{quiz,presenter,interaction-modules}.ts, app/api/events/[id]/leaderboard/route.ts, app/present/[eventId]/page.tsx, components/{leaderboard-list,presenter-podium,presenter-quiz,presenter-view,quiz-form}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{quiz-leaderboard.test.ts,presenter-view.test.tsx,quiz-ui.test.tsx,quiz-answer.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-leaderboard.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - "Host ends the quiz" has no stored state (no column): it is a presenter screen like the Q&A one. Participants are not sent a podium message; they keep their last result. A stored "ended" state would need a migration and a participant screen.
+  - The event CSV merges tables with equal headers, so an event-wide table must be emitted by one interaction only (here the first quiz), or it repeats once per question.
+  - The first request to a new API route in `next dev` takes ~3 s to compile; wait for the element, not a fixed delay.
+  - `correct_count` backfill counts closed answers that predate a host reset (the reset only deleted the score rows); new data is exact.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-leaderboard.mjs): four players, two questions, top 10 after each close, participant rank, podium with a 20-character name, reload on `?view=podium`, reduced-motion computed `animation-name: none`; no horizontal overflow, no console errors. The fixed presenter buttons overlap the last row at 360 (as on other presenter screens). Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0037.
+---

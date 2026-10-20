@@ -281,6 +281,23 @@ function QuizResult({ outcome }: { outcome: QuizOutcome | "failed" | null }) {
       <span className="quiz-result-points">
         {t(outcome.points === 1 ? "quiz.points.one" : "quiz.points.other", { n: outcome.points })}
       </span>
+      {outcome.standing ? (
+        <>
+          <span className="quiz-result-rank">
+            {t("leaderboard.yourRank", { rank: outcome.standing.rank, players: outcome.standing.players })}
+          </span>
+          {/* After the first question the total is the question's points; saying it twice adds nothing. */}
+          {outcome.standing.points !== outcome.points && (
+            <span className="quiz-result-points">
+              {t("leaderboard.yourTotal", {
+                points: t(outcome.standing.points === 1 ? "quiz.points.one" : "quiz.points.other", { n: outcome.standing.points }),
+              })}
+            </span>
+          )}
+        </>
+      ) : (
+        <span>{t("leaderboard.notRanked")}</span>
+      )}
     </p>
   );
 }

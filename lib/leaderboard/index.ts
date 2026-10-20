@@ -26,7 +26,12 @@ type Db = Pick<ReturnType<typeof getDb>, "select" | "insert">;
  */
 export async function persistClosedQuestion(db: Db, eventId: string, interactionId: string): Promise<ScoreDelta[]> {
   const deltas = await db
-    .select({ participantId: quizAnswers.participantId, points: quizAnswers.points, elapsedMs: quizAnswers.elapsedMs })
+    .select({
+      participantId: quizAnswers.participantId,
+      points: quizAnswers.points,
+      elapsedMs: quizAnswers.elapsedMs,
+      correct: quizAnswers.correct,
+    })
     .from(quizAnswers)
     .where(eq(quizAnswers.interactionId, interactionId));
   if (deltas.length === 0) return [];
@@ -38,6 +43,7 @@ export async function persistClosedQuestion(db: Db, eventId: string, interaction
         participantId: d.participantId,
         points: d.points,
         answeredCount: 1,
+        correctCount: d.correct ? 1 : 0,
         totalElapsedMs: d.elapsedMs,
       })),
     )
@@ -46,6 +52,7 @@ export async function persistClosedQuestion(db: Db, eventId: string, interaction
       set: {
         points: sql`${quizScores.points} + excluded.points`,
         answeredCount: sql`${quizScores.answeredCount} + 1`,
+        correctCount: sql`${quizScores.correctCount} + excluded.correct_count`,
         totalElapsedMs: sql`${quizScores.totalElapsedMs} + excluded.total_elapsed_ms`,
       },
     });
@@ -66,6 +73,14 @@ export async function resetLeaderboard(eventId: string) {
 /** Loads every persisted total into the live store; run once when the server starts. */
 export async function rebuildLeaderboard(store: LeaderboardStore = getLeaderboardStore()) {
   const rows = await getDb().select().from(quizScores);
-  await store.replaceAll(rows);
+  await store.replaceAll(
+    rows.map((r) => ({
+      eventId: r.eventId,
+      participantId: r.participantId,
+      points: r.points,
+      answeredCount: r.answeredCount,
+      totalElapsedMs: r.totalElapsedMs,
+    })),
+  );
   return rows.length;
 }

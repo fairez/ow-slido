@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { interactions, participants, quizAnswers } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { QuizConfig } from "@/lib/interaction-config";
+import { ownStanding, type OwnStanding } from "@/lib/leaderboard/standings";
 import { QUIZ_POINTS_DEFAULT, QUIZ_TIME_DEFAULT } from "@/lib/quiz-limits";
 import { publish } from "@/lib/realtime/publisher";
 
@@ -94,6 +95,8 @@ export type QuizOutcome = {
   correct: boolean;
   points: number;
   correctOptionIds: string[];
+  /** The participant's cumulative rank and points in the event, null while they have none ranked. */
+  standing: OwnStanding | null;
 };
 
 /** What one participant got for a closed question. The correct options are only revealed after close. */
@@ -111,6 +114,7 @@ export async function getQuizOutcome(interactionId: string, participantId: strin
     correct: answer?.correct ?? false,
     points: answer?.points ?? 0,
     correctOptionIds: (interaction.config as Partial<QuizConfig>).correctOptionIds ?? [],
+    standing: await ownStanding(interaction.eventId, participantId),
   };
 }
 

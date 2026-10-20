@@ -3,6 +3,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { INTERACTION_MODULES, interactionModule } from "@/lib/interaction-modules";
 import type { PublicResponse } from "@/lib/open-text";
+import type { Standing } from "@/lib/leaderboard/standings";
 import type { QuizResults } from "@/lib/quiz";
 import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
@@ -71,6 +72,8 @@ export type PresenterQuiz = {
   serverNow: number;
   total: number;
   results: QuizResults | null;
+  /** The event's top 10 after this question closed; null while it is live. */
+  leaderboard: Standing[] | null;
 };
 
 export type PresenterState =

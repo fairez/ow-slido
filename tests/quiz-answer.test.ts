@@ -311,6 +311,8 @@ test("quiz-result: refused while live, then the participant's own outcome with t
     correct: false,
     points: 0,
     correctOptionIds: ["a", "b"],
+    // Closed by a direct update here, so no scores were written.
+    standing: null,
   });
 
   expect((await get(null)).status).toBe(401);
