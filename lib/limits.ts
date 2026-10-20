@@ -17,6 +17,7 @@ export type LimitReason =
   | "report_format"
   | "template_limit"
   | "enforced_2fa"
+  | "audit_log"
   | "over_limit";
 
 /**
@@ -129,4 +130,12 @@ export async function assertCanEnforceTwoFactor(workspaceId: string, db: Db = ge
   if (limits.enforced2fa) return;
   const requiredPlan = cheapestPlan((p) => PLANS[p].enforced2fa);
   throw new PlanLimitError("enforced_2fa", "api.planTwoFactorNotIncluded", requiredPlan, { plan });
+}
+
+/** Reading the audit log is a Team feature; entries are still written on every plan. */
+export async function assertAuditLog(workspaceId: string, db: Db = getDb()) {
+  const { limits, plan } = await getEntitlements(workspaceId, { db });
+  if (limits.auditLog) return;
+  const requiredPlan = cheapestPlan((p) => PLANS[p].auditLog);
+  throw new PlanLimitError("audit_log", "api.planAuditLogNotIncluded", requiredPlan, { plan });
 }

@@ -10,6 +10,8 @@ const MIGRATED = [
   "components/plan-billing.tsx",
   "app/dashboard/plan/page.tsx",
   "components/members-manager.tsx",
+  "components/audit-log.tsx",
+  "app/dashboard/audit/page.tsx",
   "components/invite-accept-form.tsx",
   "app/dashboard/members/page.tsx",
   "app/invite/page.tsx",

@@ -42,3 +42,9 @@ export function twoFactorLock(limits: PlanLimits): Lock | undefined {
   if (limits.enforced2fa) return undefined;
   return { requiredPlan: cheapestPlan((p) => PLANS[p].enforced2fa) };
 }
+
+/** Set when the plan has no audit log page, so the page shows a pointer to the plan page instead of entries. */
+export function auditLogLock(limits: PlanLimits): Lock | undefined {
+  if (limits.auditLog) return undefined;
+  return { requiredPlan: cheapestPlan((p) => PLANS[p].auditLog) };
+}

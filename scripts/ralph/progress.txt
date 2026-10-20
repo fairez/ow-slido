@@ -85,3 +85,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - US-007 (audit page) can rely on these action names; there is no entry for seat-limit suspensions done by `reconcileSeats` (system action, not in the story list).
   - Not instrumented (outside the story list): logout, template create/rename, event create, member suspensions by the plan, operator actions (US-016 should add its own with `operator:<email>` labels).
 ---
+
+## 2026-10-21 - US-007
+- `/dashboard/audit` plus `GET /api/audit`: entries newest first, 50 per page with a total, filters for action (select of the workspace's own actions), actor (substring of the label) and a from/to date range. `audit.view` (owner, admin) is checked by `requireMember`; Free and Pro get 402 `audit_log` (Team) from the API and a plan hint on the page; other roles get 403 and no nav link, and the page redirects them to /dashboard.
+- Files: lib/audit-query.ts, lib/limits.ts (`assertAuditLog`), lib/plan-hints.ts (`auditLogLock`), app/api/audit/route.ts, app/dashboard/audit/page.tsx, components/audit-log.tsx, components/ui/app-shell.tsx, app/globals.css (`.audit-*`), lib/i18n en/id, tests/audit-page.test.ts, tests/audit-log-ui.test.tsx, tests/no-inline-strings.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - Time zone display without a hydration mismatch: `useSyncExternalStore(noop, () => Intl...timeZone, () => "UTC")`; the server render and hydration use UTC, the browser then switches. Date inputs are local days, converted to instants on the client before the request.
+  - LIKE filters on user text need `%`, `_` and `\` escaped (`escapeLike`), tested with `bo_b` and `%`.
+  - Screenshots: full-page shots of 50 rows are too tall to read; use viewport shots. Dark-mode shots right after `emulateMedia` catch the 150 ms button transition, so wait 400 ms. Signup is limited per IP in memory: restart the dev server after about 3 signups. `pkill -f "tsx server.ts"` kills your own shell if the pattern is in the command; kill by pid from `ss -ltnp`.
+  - The dev server needed `npm run db:migrate` for 0042 on the dev DB; script `scripts/ralph/screens/us007.mjs [width]` seeds 120 entries via SQL and cleans up.
+  - The audit page lists raw action names (`member.role_changed`); US-024 (API errors and emails) or US-022 can add labels if wanted.
+---
