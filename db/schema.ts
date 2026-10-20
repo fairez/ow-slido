@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -13,6 +14,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 
 export const appMeta = pgTable("app_meta", {
   key: text("key").primaryKey(),
@@ -117,6 +120,40 @@ export const auditLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("audit_log_workspace_created_idx").on(t.workspaceId, t.createdAt)],
+);
+
+/**
+ * One owner-requested ZIP of the whole workspace. The file lives in `zip` until `expires_at`, then the sweep
+ * nulls it and sets `expired`; it goes with the workspace row. At most one queued or running row per workspace.
+ * Read through `lib/workspace-export.ts`, which never selects `zip` for status.
+ */
+export const workspaceExports = pgTable(
+  "workspace_exports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
+    status: text("status", { enum: ["queued", "running", "done", "failed", "expired"] })
+      .notNull()
+      .default("queued"),
+    /** A short code (`build_failed`, `interrupted`), never a message that could carry content. */
+    error: text("error"),
+    zip: bytea("zip"),
+    sizeBytes: integer("size_bytes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("workspace_exports_status", sql`${t.status} in ('queued', 'running', 'done', 'failed', 'expired')`),
+    index("workspace_exports_workspace_idx").on(t.workspaceId, t.createdAt),
+    uniqueIndex("workspace_exports_one_active")
+      .on(t.workspaceId)
+      .where(sql`${t.status} in ('queued', 'running')`),
+  ],
 );
 
 export const memberships = pgTable(

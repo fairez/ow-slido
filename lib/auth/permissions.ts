@@ -15,6 +15,7 @@ export const ACTIONS = [
   "export",
   "results.view",
   "audit.view",
+  "workspace.export",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -35,6 +36,7 @@ const MATRIX: Record<Action, Partial<Record<Role, Grant>>> = {
   export: { owner: true, admin: true, editor: true, viewer: true },
   "results.view": { owner: true, admin: true, editor: true, moderator: true, viewer: true },
   "audit.view": { owner: true, admin: true },
+  "workspace.export": { owner: true },
 };
 
 export function can(role: Role, action: Action, opts: { ownsContent?: boolean } = {}): boolean {

@@ -128,3 +128,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Participant numbering in the list is by position, so it shifts after a deletion; a named participant is stable. The id.ts event delete strings were still English; translated the three the dialog uses, the rest is US-022.
   - Browser check: scripts/ralph/screens/us010.mjs [width], one width per server start (signup limit); screens in scripts/ralph/screens/us010-*.png.
 ---
+
+## 2026-10-21 - US-011
+- Workspace export as a background job: `workspace_exports` (migration 0044: status queued/running/done/failed/expired, `zip` bytea, expires 24 h after finishing, partial unique index allows one queued or running row per workspace). `POST /api/workspace/export` (new owner-only permission `workspace.export`) answers 202 and builds the ZIP after the response; 409 `export_running` with the running id otherwise. `GET /api/workspace/export/[id]` is the status (no file) and hands out a `downloadUrl` signed for 5 minutes; `/download` needs that link and the owner's session. Hourly sweep removes files after 24 h (download then 410); at start rows left by a dead process become `failed/interrupted`. Audited as `workspace.export_requested` / `workspace.export_downloaded`.
+- ZIP content: `events/NN-name/event.json` + the per-interaction CSVs (`buildEventFiles`, split out of `buildEventZip`), `templates.json` (with config), `members.csv` (email, role), `plan.json`. A test scans the archive for participant ids and tokens, the caller's IP and password hashes.
+- Files: db/schema.ts, db/migrations/0044_*, lib/workspace-export.ts, lib/export.ts, lib/auth/permissions.ts, app/api/workspace/export/** (3 routes), server.ts, lib/i18n en/id (`api.export*`), tests/workspace-export.test.ts, tests/helpers/zip.ts (`readZip`, moved out of export-zip.test.ts), tests/permissions.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - There was no job system or file storage, so the job is an in-process promise (`setImmediate`) plus a status row; the file is a bytea column so workspace deletion (US-012) removes it by cascade with nothing else to clean. US-014 (health/job recording) can read `workspace_exports`, and the `STUCK_AFTER_MS` rule, as the job-runner signal.
+  - Not built (outside the criteria): a screen for owners to start and download an export. The API is ready; the settings page needs owner-only gating (it is `members.manage` today, which admins also have). US-012 could host it next to workspace deletion.
+  - Insights/AI analyses are not exported separately; the shared-notes CSV from the module already carries the stored summaries, and images/reports (M5/M6) do not exist.
+  - Mind `statusColumns` in lib/workspace-export.ts: never `select()` the whole row for status, or the file is loaded with it.
+  - Drizzle wraps driver errors, so a unique violation is on `error.cause.code` (23505), as with the audit trigger.
+---

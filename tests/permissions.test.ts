@@ -18,6 +18,7 @@ const EXPECTED: Record<Action, [boolean, boolean, boolean, boolean, boolean]> = 
   export: [Y, Y, Y, N, Y],
   "results.view": [Y, Y, Y, Y, Y],
   "audit.view": [Y, Y, N, N, N],
+  "workspace.export": [Y, N, N, N, N],
 };
 
 describe("permission matrix", () => {

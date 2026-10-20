@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import { createZip } from "@/lib/zip";
+import { createZip, type ZipEntry } from "@/lib/zip";
 import {
   ANALYSIS_EXPORT_HEADER,
   EXPORT_HEADER,
@@ -64,25 +64,30 @@ export async function buildEventCsv(eventId: string) {
 }
 
 /** A title as a file name part: letters and digits, dashes between words, at most 60 characters. */
-function fileSlug(text: string) {
+export function fileSlug(text: string) {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60).replace(/-$/, "");
 }
 
-/**
- * One CSV per interaction in a ZIP, named by position and title (`01-Best-fruit.csv`). The files come
- * from each type's module, so they carry the same aggregates as the event CSV and no participant data.
- */
-export async function buildEventZip(eventId: string) {
+/** The per-interaction CSV files of an event, named by position and title (`01-Best-fruit.csv`). */
+export async function buildEventFiles(eventId: string): Promise<ZipEntry[]> {
   const list = await getDb()
     .select()
     .from(interactions)
     .where(eq(interactions.eventId, eventId))
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
   const width = Math.max(2, String(list.length).length);
-  const entries = [];
+  const entries: ZipEntry[] = [];
   for (const [i, interaction] of list.entries()) {
     const name = `${String(i + 1).padStart(width, "0")}-${fileSlug(interaction.title) || interaction.type}.csv`;
     entries.push({ name, data: await buildInteractionCsv(interaction.type, interaction.id) });
   }
-  return createZip(entries);
+  return entries;
+}
+
+/**
+ * One CSV per interaction in a ZIP. The files come from each type's module, so they carry the same
+ * aggregates as the event CSV and no participant data.
+ */
+export async function buildEventZip(eventId: string) {
+  return createZip(await buildEventFiles(eventId));
 }

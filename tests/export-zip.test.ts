@@ -3,12 +3,12 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { crc32 } from "node:zlib";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { events, interactions, openTextResponses, participants, pollVotes, questions, sharedNotes, users, wordcloudEntries } from "@/db/schema";
 import { createZip } from "@/lib/zip";
 import { createTestDb, qaFor, truncateAll, workspaceFor } from "./helpers/db";
+import { readZip } from "./helpers/zip";
 
 const { db, pool } = createTestDb();
 
@@ -26,29 +26,6 @@ beforeAll(async () => {
   session = await import("@/lib/auth/session");
 });
 afterAll(() => pool.end());
-
-/** Reads a stored-only ZIP through its central directory and checks every CRC. */
-function readZip(zip: Buffer) {
-  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
-  expect(end).toBeGreaterThanOrEqual(0);
-  const count = zip.readUInt16LE(end + 10);
-  let at = zip.readUInt32LE(end + 16);
-  const files: Record<string, string> = {};
-  for (let i = 0; i < count; i++) {
-    expect(zip.readUInt32LE(at)).toBe(0x02014b50);
-    const crc = zip.readUInt32LE(at + 16);
-    const size = zip.readUInt32LE(at + 24);
-    const nameLength = zip.readUInt16LE(at + 28);
-    const local = zip.readUInt32LE(at + 42);
-    const name = zip.subarray(at + 46, at + 46 + nameLength).toString("utf8");
-    const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
-    const data = zip.subarray(start, start + size);
-    expect(crc32(data)).toBe(crc);
-    files[name] = data.toString("utf8");
-    at += 46 + nameLength;
-  }
-  return files;
-}
 
 beforeEach(async () => {
   await truncateAll(db);
