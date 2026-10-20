@@ -3,12 +3,9 @@ import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { createInvitation, listInvitations, parseInviteInput, sendInvitationEmail } from "@/lib/invitations";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { workspaceRateLimited } from "@/lib/workspace-rate-limit";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
 import { assertSeatAvailable } from "@/lib/seats";
-
-const INVITE_LIMIT = 30;
-const INVITE_WINDOW_SECONDS = 60 * 60;
 
 export async function GET(request: Request) {
   const auth = await requireMember(request, "members.manage");
@@ -26,13 +23,8 @@ export async function POST(request: Request) {
   const parsed = parseInviteInput(await request.json().catch(() => null));
   if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: parsed.status });
 
-  const limit = await rateLimit(`invite:${auth.workspaceId}:${clientIp(request)}`, INVITE_LIMIT, INVITE_WINDOW_SECONDS);
-  if (!limit.allowed) {
-    return Response.json(
-      { error: serverT(request, "api.tooManyAttempts") },
-      { status: 429, headers: { "retry-after": String(limit.retryAfterSeconds) } },
-    );
-  }
+  const limited = await workspaceRateLimited(request, auth.workspaceId, "invitation");
+  if (limited) return limited;
 
   try {
     await assertSeatAvailable(auth.workspaceId);

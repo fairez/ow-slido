@@ -657,6 +657,8 @@ export const id: Record<MessageKey, string> = {
   "api.votingNotOpen": "Voting is not open",
   "api.tooManyLogins": "Too many login attempts. Try again later.",
   "api.tooManyAttempts": "Too many attempts. Try again shortly.",
+  "api.aiPaused": "AI dijeda untuk hari ini",
+  "api.workspaceRateLimited": "Terlalu banyak permintaan dari workspace ini. Coba lagi dalam beberapa menit.",
   "api.noAnalysisToPublish": "There is no finished analysis to publish",
   "api.noAnalysisToEdit": "There is no finished analysis to edit",
   "api.noNotesToAnalyze": "There are no approved notes to analyze",

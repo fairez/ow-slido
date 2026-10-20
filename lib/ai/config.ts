@@ -6,6 +6,8 @@ export type AiConfig = {
   apiKey: string | null;
   eventCallCap: number;
   dailyCallCap: number;
+  /** Platform-wide ceiling for AI calls per UTC day, across all workspaces. */
+  globalDailyCap: number;
 };
 
 const DEFAULT_MODELS: Record<AiProviderName, string> = {
@@ -16,6 +18,7 @@ const DEFAULT_MODELS: Record<AiProviderName, string> = {
 
 export const DEFAULT_EVENT_CALL_CAP = 20;
 export const DEFAULT_DAILY_CALL_CAP = 200;
+export const DEFAULT_GLOBAL_DAILY_CAP = 1000;
 
 function readCap(raw: string | undefined, fallback: number) {
   const n = Number(raw);
@@ -34,6 +37,7 @@ export function getAiConfig(): AiConfig {
     apiKey,
     eventCallCap: readCap(process.env.AI_EVENT_CALL_CAP, DEFAULT_EVENT_CALL_CAP),
     dailyCallCap: readCap(process.env.AI_DAILY_CALL_CAP, DEFAULT_DAILY_CALL_CAP),
+    globalDailyCap: readCap(process.env.AI_GLOBAL_DAILY_CAP, DEFAULT_GLOBAL_DAILY_CAP),
   };
 }
 

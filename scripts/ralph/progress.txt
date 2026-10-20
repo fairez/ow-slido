@@ -153,3 +153,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - There is still no screen to start/download the workspace ZIP export (US-011); the delete dialog points to per-event export instead. A US-029/US-030 pass could add it next to the delete section.
   - Browser check: `next dev` kept reloading the page mid-script even with retries; the production build on `.next-shot` against the test DB (run only after `npm test` finished) worked. Script `scripts/ralph/screens/us012.mjs [width]` signs up, drives both flows and cleans up; screens in scripts/ralph/screens/us012-*.png. Full `npm test` took 615 s.
 ---
+
+## 2026-10-21 - US-013
+- Per-workspace rate limits on the existing `rateLimit` interface (`lib/workspace-rate-limit.ts`): event CSV (60/h), event ZIP and workspace export job (10/h), AI analysis starts (20/h), invitations (30/h, replaces the old per-workspace-and-IP key). Over the ceiling the route answers 429 `{error, retryAfter}` with a `retry-after` header. Audience limits (per IP / participant token) are untouched.
+- Global daily AI cap `AI_GLOBAL_DAILY_CAP` (default 1000, 0 pauses AI; in `.env.example`): `assertAiNotPaused(db, now)` counts all `ai_calls` of the UTC day and the analyze route answers 503 `{reason: "ai_paused"}` with the translated "AI is paused for today", checked before plan limits. `reserveAiCall` also stops at the cap.
+- Files: lib/workspace-rate-limit.ts, lib/ai/config.ts, lib/ai/usage.ts, app/api/interactions/[id]/analyze, events/[id]/export.csv + export.zip, workspace/export, invitations routes, lib/i18n en/id (`api.aiPaused`, `api.workspaceRateLimited`), .env.example, tests/operational-limits.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - The panel shows the server's `error` text as-is, so the host sees the paused message after pressing Analyze; the panel does not show it beforehand (the GET state has no paused flag). The operator alert belongs to US-015 (`assertAiNotPaused` or the same count can feed it).
+  - The in-memory rate limiter uses `Date.now()` and has no injectable clock; "new day" behaviour is only testable for the AI count, which takes `now`. Tests reset it with `getRateLimitStore().reset()`.
+  - A count by day needs both bounds (`gte` start, `lt` next day), or a `now` in the past counts later rows.
+  - Full `npm test` took 581 s (1375 tests). No UI change, so no browser check.
+---

@@ -654,6 +654,8 @@ export const en = {
   "api.votingNotOpen": "Voting is not open",
   "api.tooManyLogins": "Too many login attempts. Try again later.",
   "api.tooManyAttempts": "Too many attempts. Try again shortly.",
+  "api.aiPaused": "AI is paused for today",
+  "api.workspaceRateLimited": "Too many requests from this workspace. Try again in a few minutes.",
   "api.noAnalysisToPublish": "There is no finished analysis to publish",
   "api.noAnalysisToEdit": "There is no finished analysis to edit",
   "api.noNotesToAnalyze": "There are no approved notes to analyze",

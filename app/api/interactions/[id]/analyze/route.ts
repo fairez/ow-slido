@@ -1,6 +1,8 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { requireMember } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
+import { AiPausedError, assertAiNotPaused } from "@/lib/ai/usage";
+import { workspaceRateLimited } from "@/lib/workspace-rate-limit";
 import { PlanLimitError, assertAiCallsAvailable, planLimitResponse } from "@/lib/limits";
 import { findNotesInteractionEvent, startAnalysis } from "@/lib/note-analysis";
 import "@/lib/note-analysis-ai";
@@ -21,8 +23,12 @@ export async function POST(request: Request, { params }: Context) {
   if (!interaction || !event) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
   try {
+    await assertAiNotPaused();
     await assertAiCallsAvailable(auth.workspaceId, event.id);
   } catch (error) {
+    if (error instanceof AiPausedError) {
+      return Response.json({ error: serverT(request, "api.aiPaused"), reason: "ai_paused" }, { status: 503 });
+    }
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;
   }
@@ -47,6 +53,9 @@ export async function POST(request: Request, { params }: Context) {
       targetId: event.id,
     });
   }
+
+  const limited = await workspaceRateLimited(request, auth.workspaceId, "ai");
+  if (limited) return limited;
 
   const result = await startAnalysis(event.id, id);
   if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });

@@ -3,6 +3,7 @@ import { requireMember } from "@/lib/auth/require-admin";
 import { buildEventCsv } from "@/lib/export";
 import { PlanLimitError, assertReportFormat, planLimitResponse } from "@/lib/limits";
 import { auditContext, recordAudit } from "@/lib/audit";
+import { workspaceRateLimited } from "@/lib/workspace-rate-limit";
 import { findOwnedEvent } from "@/lib/polls";
 
 type Context = { params: Promise<{ id: string }> };
@@ -20,6 +21,9 @@ export async function GET(request: Request, { params }: Context) {
     if (error instanceof PlanLimitError) return planLimitResponse(request, error);
     throw error;
   }
+
+  const limited = await workspaceRateLimited(request, auth.workspaceId, "export");
+  if (limited) return limited;
 
   await recordAudit(undefined, {
     ...auditContext(request, auth.user),
