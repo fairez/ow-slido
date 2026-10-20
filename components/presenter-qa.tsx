@@ -1,10 +1,14 @@
+"use client";
+
 import { Badge } from "@/components/ui/card";
+import { useT } from "@/lib/i18n/client";
 import { orderQuestions, type QaSort } from "@/lib/question-order";
+import type { MessageKey } from "@/lib/i18n";
 import type { PublicQuestion } from "@/lib/question-types";
 
-const SORTS: { id: QaSort; label: string }[] = [
-  { id: "popular", label: "Most upvoted" },
-  { id: "recent", label: "Newest" },
+const SORTS: { id: QaSort; label: MessageKey }[] = [
+  { id: "popular", label: "presQa.sort.popular" },
+  { id: "recent", label: "presQa.sort.recent" },
 ];
 
 /** Q&A on the projector: approved questions in large type, pinned first and answered ones dimmed at the end. */
@@ -19,6 +23,7 @@ export function PresenterQa({
   onSortChange: (sort: QaSort) => void;
   joinCode: string;
 }) {
+  const t = useT();
   const ordered = orderQuestions(questions, sort);
   const count = questions.length;
 
@@ -26,9 +31,9 @@ export function PresenterQa({
     <div className="present-qa">
       <div className="present-qa-bar">
         <p className="present-total" role="status">
-          {count === 1 ? "1 question" : `${count} questions`}
+          {t(count === 1 ? "presQa.count.one" : "presQa.count.other", { n: count })}
         </p>
-        <div className="present-qa-sort" role="group" aria-label="Order questions by">
+        <div className="present-qa-sort" role="group" aria-label={t("presQa.sortLabel")}>
           {SORTS.map((s) => (
             <button
               key={s.id}
@@ -37,7 +42,7 @@ export function PresenterQa({
               aria-pressed={sort === s.id}
               onClick={() => onSortChange(s.id)}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
@@ -45,18 +50,18 @@ export function PresenterQa({
 
       {ordered.length === 0 ? (
         <p role="status" className="present-empty">
-          No questions yet. Ask from your phone with code {joinCode}.
+          {t("presQa.empty", { code: joinCode })}
         </p>
       ) : (
-        <ul className="present-qa-list" aria-label="Questions">
+        <ul className="present-qa-list" aria-label={t("presQa.listLabel")}>
           {ordered.map((q) => (
             <li key={q.id} className="present-qa-item" data-pinned={q.pinned} data-answered={q.answered}>
               <p className="present-qa-text">{q.text}</p>
               <p className="present-qa-meta">
-                <span>{q.authorName?.trim() || "Anonymous"}</span>
-                <span>{q.upvotes === 1 ? "1 upvote" : `${q.upvotes} upvotes`}</span>
-                {q.pinned && <Badge tone="accent">Pinned</Badge>}
-                {q.answered && <Badge>Answered</Badge>}
+                <span>{q.authorName?.trim() || t("common.anonymous")}</span>
+                <span>{t(q.upvotes === 1 ? "presQa.upvotes.one" : "presQa.upvotes.other", { n: q.upvotes })}</span>
+                {q.pinned && <Badge tone="accent">{t("common.pinned")}</Badge>}
+                {q.answered && <Badge>{t("common.answered")}</Badge>}
               </p>
             </li>
           ))}

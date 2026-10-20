@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { applyTheme, readStoredTheme, systemTheme, type Theme } from "@/lib/theme";
 
 export function ThemeToggle() {
+  const t = useT();
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
@@ -24,9 +26,9 @@ export function ThemeToggle() {
       className="theme-toggle"
       onClick={toggle}
       aria-pressed={theme === "dark"}
-      aria-label="Dark theme"
+      aria-label={t("theme.label")}
     >
-      {theme === "dark" ? "Dark" : "Light"}
+      {theme === "dark" ? t("theme.dark") : t("theme.light")}
     </button>
   );
 }

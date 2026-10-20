@@ -5,18 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { InlineError, TextField } from "@/components/ui/field";
-import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
 
 type Mode = "login" | "signup";
 
-const COPY = {
-  login: { title: "Log in", lead: "Welcome back. Log in to manage your events.", submit: "Log in", alt: "Need an account?", altLink: "Sign up", altHref: "/signup" },
-  signup: { title: "Create a host account", lead: "An email and a password are all you need to start an event.", submit: "Create account", alt: "Already have an account?", altLink: "Log in", altHref: "/login" },
-} as const;
+const ALT_HREF = { login: "/signup", signup: "/login" } as const;
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
-  const copy = COPY[mode];
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -37,9 +34,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
         return;
       }
       const body = await response.json().catch(() => null);
-      setError(body?.error ?? SERVER_ERROR);
+      setError(body?.error ?? t("error.server"));
     } catch {
-      setError(NETWORK_ERROR);
+      setError(t("error.network"));
     } finally {
       setPending(false);
     }
@@ -47,26 +44,26 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   return (
     <main id="main" className="entry-page">
-      <h1>{copy.title}</h1>
-      <p className="entry-lead">{copy.lead}</p>
+      <h1>{t(`auth.${mode}.title`)}</h1>
+      <p className="entry-lead">{t(`auth.${mode}.lead`)}</p>
       <form method="post" onSubmit={onSubmit} className="entry-form">
-        <TextField label="Email" name="email" type="email" autoComplete="email" required />
+        <TextField label={t("auth.email")} name="email" type="email" autoComplete="email" required />
         <TextField
-          label="Password"
+          label={t("auth.password")}
           name="password"
           type="password"
           autoComplete={mode === "login" ? "current-password" : "new-password"}
           minLength={mode === "signup" ? 8 : undefined}
-          hint={mode === "signup" ? "At least 8 characters." : undefined}
+          hint={mode === "signup" ? t("auth.passwordHint") : undefined}
           required
         />
         {error && <InlineError>{error}</InlineError>}
         <Button type="submit" variant="primary" busy={pending}>
-          {pending ? "One moment" : copy.submit}
+          {pending ? t("auth.pending") : t(`auth.${mode}.submit`)}
         </Button>
       </form>
       <p className="entry-alt">
-        {copy.alt} <Link href={copy.altHref}>{copy.altLink}</Link>
+        {t(`auth.${mode}.alt`)} <Link href={ALT_HREF[mode]}>{t(`auth.${mode}.altLink`)}</Link>
       </p>
     </main>
   );

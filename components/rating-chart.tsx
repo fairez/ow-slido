@@ -1,11 +1,15 @@
+"use client";
+
+import { useT } from "@/lib/i18n/client";
 import type { RatingResults } from "@/lib/rating";
 
 /** Distribution of ratings, one row per value, with the count and share printed beside each bar. */
 export function RatingChart({ results, large = false }: { results: RatingResults; large?: boolean }) {
+  const t = useT();
   const max = Math.max(1, ...results.distribution);
   const lead = Math.max(0, ...results.distribution);
   return (
-    <ol aria-label="Rating distribution" className="rating-chart" data-large={large || undefined}>
+    <ol aria-label={t("ratingChart.label")} className="rating-chart" data-large={large || undefined}>
       {results.distribution.map((count, i) => {
         const percent = results.total > 0 ? Math.round((count / results.total) * 100) : 0;
         return (

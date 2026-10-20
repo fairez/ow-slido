@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { JoinForm } from "@/components/join-form";
+import { getT } from "@/lib/i18n/server";
 
-export default function Home() {
+export default async function Home() {
+  const t = await getT();
   return (
     <main id="main" className="entry-page">
-      <h1>Join an event</h1>
-      <p className="entry-lead">Type the code your host is showing. It has six digits.</p>
+      <h1>{t("home.title")}</h1>
+      <p className="entry-lead">{t("home.lead")}</p>
       <JoinForm />
       <p className="entry-alt">
-        Running an event yourself? <Link href="/signup">Create a host account</Link> or <Link href="/login">log in</Link>.
+        {t("home.hostPrompt")} <Link href="/signup">{t("home.createAccount")}</Link> {t("home.or")} <Link href="/login">{t("home.logIn")}</Link>.
       </p>
     </main>
   );

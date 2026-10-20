@@ -12,6 +12,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n";
 
 export type InteractionItem = {
   id: string;
@@ -34,12 +36,12 @@ export type InteractionItem = {
 };
 
 type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
-const TYPE_LABELS: Record<InteractionItem["type"], string> = {
-  poll: "Poll",
-  wordcloud: "Word cloud",
-  sharedNotes: "Shared notes",
-  openText: "Open text",
-  rating: "Rating",
+const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
+  poll: "pollMgr.type.poll",
+  wordcloud: "pollMgr.type.wordcloud",
+  sharedNotes: "pollMgr.type.sharedNotes",
+  openText: "pollMgr.type.openText",
+  rating: "pollMgr.type.rating",
 };
 
 type Draft = { kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
@@ -51,9 +53,9 @@ async function errorFrom(response: Response) {
   return body?.error ?? SERVER_ERROR;
 }
 
-const STATE_LABELS: Record<InteractionItem["state"], string> = { draft: "Draft", live: "Live", paused: "Paused", closed: "Closed" };
-
 export function PollManager({ eventId, initialInteractions, aiEnabled = false }: { eventId: string; initialInteractions: InteractionItem[]; aiEnabled?: boolean }) {
+  const t = useT();
+  const typeLabel = (kind: Kind) => t(TYPE_LABELS[kind]);
   const base = `/api/events/${eventId}/interactions`;
   // Only needed for live analysis status; stays disconnected when AI is off.
   const { socket } = useEventSocket(eventId, "host", undefined, aiEnabled);
@@ -195,10 +197,10 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
 
   return (
     <section aria-labelledby="interactions-title" className="stack">
-      <h2 id="interactions-title">Interactions</h2>
+      <h2 id="interactions-title">{t("pollMgr.title")}</h2>
       {error && !draft && <InlineError>{error}</InlineError>}
       {items.length === 0 ? (
-        <EmptyState title="Nothing to run yet">Add a poll, word cloud, shared notes, open text or rating below. Start one when your audience has joined.</EmptyState>
+        <EmptyState title={t("pollMgr.emptyTitle")}>{t("pollMgr.emptyBody")}</EmptyState>
       ) : (
         <ul className="row-list">
           {items.map((item, index) => (
@@ -207,22 +209,22 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
                 <div className="event-main">
                   <h3 className="event-name">{item.title}</h3>
                   <div className="row-meta">
-                    {TYPE_LABELS[item.type]} <Badge tone={item.state === "live" ? "accent" : "neutral"}><span data-testid="state">{item.state}</span></Badge>
+                    {typeLabel(item.type)} <Badge tone={item.state === "live" ? "accent" : "neutral"}><span data-testid="state">{item.state}</span></Badge>
                   </div>
                 </div>
                 {item.state !== "closed" && (
                   <div className="row-actions">
                     {item.state === "draft" && (
-                      <Button variant="primary" onClick={() => transition(item, "start")}>Start</Button>
+                      <Button variant="primary" onClick={() => transition(item, "start")}>{t("pollMgr.start")}</Button>
                     )}
                     {item.state === "paused" && (
-                      <Button variant="primary" onClick={() => transition(item, "start")}>Resume</Button>
+                      <Button variant="primary" onClick={() => transition(item, "start")}>{t("pollMgr.resume")}</Button>
                     )}
                     {item.state === "live" && (
-                      <Button variant="secondary" onClick={() => transition(item, "pause")}>Pause</Button>
+                      <Button variant="secondary" onClick={() => transition(item, "pause")}>{t("pollMgr.pause")}</Button>
                     )}
                     {item.state !== "draft" && (
-                      <Button variant={item.state === "live" ? "primary" : "secondary"} onClick={() => transition(item, "close")}>Close</Button>
+                      <Button variant={item.state === "live" ? "primary" : "secondary"} onClick={() => transition(item, "close")}>{t("pollMgr.close")}</Button>
                     )}
                   </div>
                 )}
@@ -231,11 +233,11 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
               {item.type === "sharedNotes" && item.state !== "draft" && aiEnabled && <NotesAnalysisPanel interactionId={item.id} socket={socket} />}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
-                  <Button variant="quiet" onClick={() => edit(item)}>Edit</Button>
-                  <Button variant="quiet" onClick={() => duplicate(item)}>Duplicate</Button>
-                  <Button variant="quiet" onClick={() => setDeleting(item)}>Delete</Button>
-                  <Button variant="quiet" aria-label={`Move ${item.title} up`} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
-                  <Button variant="quiet" aria-label={`Move ${item.title} down`} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>
+                  <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>
+                  <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>
+                  <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>
+                  <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
+                  <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>
                 </div>
               )}
             </li>
@@ -246,9 +248,9 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
       {draft ? (
         <Card aria-labelledby="draft-title">
           <form onSubmit={save} className="form-stack">
-            <h3 id="draft-title">{draft.id ? "Edit" : "New"} {TYPE_LABELS[draft.kind].toLowerCase()}</h3>
+            <h3 id="draft-title">{t(draft.id ? "pollMgr.editType" : "pollMgr.newType", { type: typeLabel(draft.kind).toLowerCase() })}</h3>
             <TextField
-              label={draft.kind === "poll" ? "Question" : "Prompt"}
+              label={draft.kind === "poll" ? t("pollMgr.question") : t("pollMgr.prompt")}
               value={draft.question}
               onChange={(e) => setDraft({ ...draft, question: e.target.value })}
               required
@@ -256,23 +258,23 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
             />
             {draft.kind === "poll" && (
               <fieldset className="form-group">
-                <legend>Options</legend>
+                <legend>{t("pollMgr.options")}</legend>
                 {draft.options.map((option, index) => (
                   <div key={option.id ?? index} className="option-row">
                     <input
                       value={option.label}
                       onChange={(e) => setOption(index, e.target.value)}
-                      aria-label={`Option ${index + 1}`}
+                      aria-label={t("pollMgr.optionN", { n: index + 1 })}
                       required
                       maxLength={POLL_OPTION_MAX}
                     />
                     <Button
                       variant="quiet"
-                      aria-label={`Remove option ${index + 1}`}
+                      aria-label={t("pollMgr.removeOptionN", { n: index + 1 })}
                       disabled={draft.options.length <= POLL_MIN_OPTIONS}
                       onClick={() => setDraft({ ...draft, options: draft.options.filter((_, i) => i !== index) })}
                     >
-                      Remove
+                      {t("pollMgr.remove")}
                     </Button>
                   </div>
                 ))}
@@ -281,66 +283,66 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
                     disabled={draft.options.length >= POLL_MAX_OPTIONS}
                     onClick={() => setDraft({ ...draft, options: [...draft.options, { label: "" }] })}
                   >
-                    Add option
+                    {t("pollMgr.addOption")}
                   </Button>
                 </div>
-                <Toggle label="Allow multiple selections" checked={draft.multiSelect} onChange={(e) => setDraft({ ...draft, multiSelect: e.target.checked })} />
-                <Toggle label="Show results to participants" checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} />
+                <Toggle label={t("pollMgr.multiSelect")} checked={draft.multiSelect} onChange={(e) => setDraft({ ...draft, multiSelect: e.target.checked })} />
+                <Toggle label={t("pollMgr.showResults")} checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} />
               </fieldset>
             )}
-            {draft.kind === "wordcloud" && numberField("Entries per participant", draft.maxEntries, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_MAX_ENTRIES, (n) => setDraft({ ...draft, maxEntries: n }))}
-            {draft.kind === "openText" && numberField("Responses per participant", draft.maxResponses, OPEN_TEXT_MIN, OPEN_TEXT_MAX, (n) => setDraft({ ...draft, maxResponses: n }))}
+            {draft.kind === "wordcloud" && numberField(t("pollMgr.entriesPer"), draft.maxEntries, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_MAX_ENTRIES, (n) => setDraft({ ...draft, maxEntries: n }))}
+            {draft.kind === "openText" && numberField(t("pollMgr.responsesPer"), draft.maxResponses, OPEN_TEXT_MIN, OPEN_TEXT_MAX, (n) => setDraft({ ...draft, maxResponses: n }))}
             {draft.kind === "rating" && (
               <fieldset className="form-group">
-                <legend>Scale</legend>
+                <legend>{t("pollMgr.scale")}</legend>
                 <label className="ui-toggle">
-                  <input type="radio" name="scale" checked={draft.scale === "stars5"} onChange={() => setDraft({ ...draft, scale: "stars5" })} /> Stars, 1 to 5
+                  <input type="radio" name="scale" checked={draft.scale === "stars5"} onChange={() => setDraft({ ...draft, scale: "stars5" })} /> {t("pollMgr.stars")}
                 </label>
                 <label className="ui-toggle">
-                  <input type="radio" name="scale" checked={draft.scale === "numeric10"} onChange={() => setDraft({ ...draft, scale: "numeric10" })} /> Numbers, 1 to 10
+                  <input type="radio" name="scale" checked={draft.scale === "numeric10"} onChange={() => setDraft({ ...draft, scale: "numeric10" })} /> {t("pollMgr.numbers")}
                 </label>
               </fieldset>
             )}
             {draft.kind === "sharedNotes" && (
               <>
-                {numberField("Notes per participant", draft.maxNotes, NOTES_MIN, NOTES_MAX, (n) => setDraft({ ...draft, maxNotes: n }))}
+                {numberField(t("pollMgr.notesPer"), draft.maxNotes, NOTES_MIN, NOTES_MAX, (n) => setDraft({ ...draft, maxNotes: n }))}
                 <fieldset className="form-group">
-                  <legend>Moderation</legend>
+                  <legend>{t("pollMgr.moderation")}</legend>
                   <label className="ui-toggle">
-                    <input type="radio" name="moderation" checked={!draft.moderated} onChange={() => setDraft({ ...draft, moderated: false })} /> Open: notes appear right away
+                    <input type="radio" name="moderation" checked={!draft.moderated} onChange={() => setDraft({ ...draft, moderated: false })} /> {t("pollMgr.modOpen")}
                   </label>
                   <label className="ui-toggle">
-                    <input type="radio" name="moderation" checked={draft.moderated} onChange={() => setDraft({ ...draft, moderated: true })} /> Moderated: notes wait for approval
+                    <input type="radio" name="moderation" checked={draft.moderated} onChange={() => setDraft({ ...draft, moderated: true })} /> {t("pollMgr.modModerated")}
                   </label>
                 </fieldset>
-                <Toggle label="Show author names" checked={draft.showAuthors} onChange={(e) => setDraft({ ...draft, showAuthors: e.target.checked })} />
+                <Toggle label={t("pollMgr.showAuthors")} checked={draft.showAuthors} onChange={(e) => setDraft({ ...draft, showAuthors: e.target.checked })} />
               </>
             )}
             {error && <InlineError>{error}</InlineError>}
             <div className="row-actions">
-              <Button type="submit" variant="primary" busy={pending}>{pending ? "Saving" : `Save ${TYPE_LABELS[draft.kind].toLowerCase()}`}</Button>
-              <Button onClick={() => { setError(null); setDraft(null); }}>Cancel</Button>
+              <Button type="submit" variant="primary" busy={pending}>{pending ? t("pollMgr.saving") : t("pollMgr.saveType", { type: typeLabel(draft.kind).toLowerCase() })}</Button>
+              <Button onClick={() => { setError(null); setDraft(null); }}>{t("pollMgr.cancel")}</Button>
             </div>
           </form>
         </Card>
       ) : (
         <div className="add-bar">
-          <p className="row-meta">Add an interaction</p>
+          <p className="row-meta">{t("pollMgr.addBar")}</p>
           <div className="row-actions">
-            <Button onClick={() => setDraft(blank())}>New poll</Button>
-            <Button onClick={() => setDraft(blank("wordcloud"))}>New word cloud</Button>
-            <Button onClick={() => setDraft(blank("sharedNotes"))}>New shared notes</Button>
-            <Button onClick={() => setDraft(blank("openText"))}>New open text</Button>
-            <Button onClick={() => setDraft(blank("rating"))}>New rating</Button>
+            <Button onClick={() => setDraft(blank())}>{t("pollMgr.newPoll")}</Button>
+            <Button onClick={() => setDraft(blank("wordcloud"))}>{t("pollMgr.newWordcloud")}</Button>
+            <Button onClick={() => setDraft(blank("sharedNotes"))}>{t("pollMgr.newSharedNotes")}</Button>
+            <Button onClick={() => setDraft(blank("openText"))}>{t("pollMgr.newOpenText")}</Button>
+            <Button onClick={() => setDraft(blank("rating"))}>{t("pollMgr.newRating")}</Button>
           </div>
         </div>
       )}
 
-      <Dialog open={deleting !== null} title="Delete this interaction?" onClose={() => setDeleting(null)}>
-        <p>“{deleting?.title}” will be removed from this event.</p>
+      <Dialog open={deleting !== null} title={t("pollMgr.deleteTitle")} onClose={() => setDeleting(null)}>
+        <p>{t("pollMgr.deleteBody", { title: deleting?.title ?? "" })}</p>
         <div className="row-actions">
-          <Button onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => deleting && remove(deleting)}>Delete interaction</Button>
+          <Button onClick={() => setDeleting(null)}>{t("pollMgr.cancel")}</Button>
+          <Button variant="primary" onClick={() => deleting && remove(deleting)}>{t("pollMgr.deleteConfirm")}</Button>
         </div>
       </Dialog>
     </section>

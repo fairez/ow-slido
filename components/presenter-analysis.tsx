@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { WordCloud } from "@/components/word-cloud";
 import { fallbackKeywords, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
 import type { PublicNote } from "@/lib/shared-notes";
+import { useT } from "@/lib/i18n/client";
 
 export type AnalysisView = "cloud" | "categories" | "top" | "summary";
 
@@ -63,22 +64,24 @@ export function categoryNotes(
 }
 
 function AiLabel({ outdated }: { outdated: boolean }) {
+  const t = useT();
   return (
     <p className="present-ai">
-      <span className="ui-badge">AI-generated</span>
-      {outdated && <span className="ui-badge">Outdated: notes have changed since this analysis</span>}
+      <span className="ui-badge">{t("presAnalysis.aiGenerated")}</span>
+      {outdated && <span className="ui-badge">{t("presAnalysis.outdated")}</span>}
     </p>
   );
 }
 
 function NoteList({ notes }: { notes: PublicNote[] }) {
+  const t = useT();
   return (
     <ul className="present-cards" data-stack>
       {notes.map((n) => (
         <li key={n.id} className="present-card">
           <p className="present-card-text">{n.text}</p>
           <p className="present-card-meta">
-            {n.upvotes} {n.upvotes === 1 ? "upvote" : "upvotes"}
+            {t(n.upvotes === 1 ? "presAnalysis.upvote.one" : "presAnalysis.upvote.other", { n: n.upvotes })}
           </p>
         </li>
       ))}
@@ -93,6 +96,7 @@ function CategoryChart({
   categories: Category[];
   notes: PublicNote[];
 }) {
+  const t = useT();
   const [open, setOpen] = useState<string | null>(null);
   const rows = categories.map((c) => ({ c, list: categoryNotes(c, notes) }));
   const total = rows.reduce((sum, r) => sum + r.list.length, 0);
@@ -101,7 +105,7 @@ function CategoryChart({
   const selected = rows.find((r) => r.c.name === open);
   return (
     <>
-      <ol aria-label="Categories" className="present-bars">
+      <ol aria-label={t("presAnalysis.categories")} className="present-bars">
         {rows.map(({ c, list }) => {
           const percent = total > 0 ? Math.round((list.length / total) * 100) : 0;
           return (
@@ -125,11 +129,11 @@ function CategoryChart({
         })}
       </ol>
       {selected && (
-        <section aria-label={`Notes in ${selected.c.name}`} className="present-section">
+        <section aria-label={t("presAnalysis.notesIn", { name: selected.c.name })} className="present-section">
           <h2 className="present-subtitle">{selected.c.name}</h2>
           {selected.c.description && <p className="present-desc">{selected.c.description}</p>}
           {selected.list.length === 0 ? (
-            <p className="present-empty">No notes left in this category.</p>
+            <p className="present-empty">{t("presAnalysis.noneLeft")}</p>
           ) : (
             <NoteList notes={selected.list} />
           )}
@@ -146,6 +150,7 @@ function TopNotes({
   categories: Category[];
   notes: PublicNote[];
 }) {
+  const t = useT();
   return (
     <div className="present-groups">
       {categories.map((c) => {
@@ -154,7 +159,7 @@ function TopNotes({
           <section key={c.name} aria-label={c.name}>
             <h2 className="present-subtitle">{c.name}</h2>
             {top.length === 0 ? (
-              <p className="present-empty">No notes left in this category.</p>
+              <p className="present-empty">{t("presAnalysis.noneLeft")}</p>
             ) : (
               <NoteList notes={top} />
             )}
@@ -177,6 +182,7 @@ export function PresenterAnalysis({
   view: AnalysisView;
   socket?: Socket | null;
 }) {
+  const t = useT();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [failed, setFailed] = useState(false);
   // Refetch when the approved notes change so the "outdated" state follows the board.
@@ -226,8 +232,7 @@ export function PresenterAnalysis({
   const categories = parseCategories(analysis?.categories);
   const aiKeywords = parseKeywords(analysis?.keywords);
   const outdated = analysis?.outdated ?? false;
-  const noAnalysis =
-    "No analysis yet. Run one from the event page, then come back to this view.";
+  const noAnalysis = t("presAnalysis.none");
 
   if (view === "cloud") {
     const fromAi = aiKeywords.length > 0;
@@ -240,7 +245,7 @@ export function PresenterAnalysis({
         {fromAi ? (
           <AiLabel outdated={outdated} />
         ) : (
-          <p className="present-desc">Word frequency across the notes. Not AI-generated.</p>
+          <p className="present-desc">{t("presAnalysis.frequency")}</p>
         )}
         <WordCloud words={words} />
       </>
@@ -250,7 +255,7 @@ export function PresenterAnalysis({
   if (!analysis) {
     return (
       <p role="status" className="present-empty">
-        {failed ? "Could not load the analysis." : noAnalysis}
+        {failed ? t("presAnalysis.loadFailed") : noAnalysis}
       </p>
     );
   }
@@ -263,7 +268,7 @@ export function PresenterAnalysis({
           <AnalysisSummary text={analysis.summary} className="present-summary" />
         ) : (
           <p role="status" className="present-empty">
-            This run produced keywords only, so there is no summary.
+            {t("presAnalysis.noSummary")}
           </p>
         )}
       </>
@@ -273,7 +278,7 @@ export function PresenterAnalysis({
   if (categories.length === 0) {
     return (
       <p role="status" className="present-empty">
-        This run produced keywords only, so there are no categories.
+        {t("presAnalysis.noCategories")}
       </p>
     );
   }

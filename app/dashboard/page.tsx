@@ -7,10 +7,12 @@ import { getDb } from "@/lib/db";
 import { LogoutButton } from "@/components/logout-button";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const t = await getT();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const user = await getUserFromToken(token);
   if (!user) redirect("/login");
@@ -32,8 +34,8 @@ export default async function DashboardPage() {
     <main id="main" className="page">
       <header className="page-head">
         <div>
-          <h1>Your events</h1>
-          <p className="row-meta">Signed in as {user.email}</p>
+          <h1>{t("dash.title")}</h1>
+          <p className="row-meta">{t("dash.signedInAs", { email: user.email })}</p>
         </div>
         <LogoutButton />
       </header>

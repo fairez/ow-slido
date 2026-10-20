@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/client";
 
 export function LogoutButton() {
   const router = useRouter();
+  const t = useT();
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -14,7 +16,7 @@ export function LogoutButton() {
 
   return (
     <Button variant="quiet" onClick={logout}>
-      Log out
+      {t("logout.button")}
     </Button>
   );
 }

@@ -8,6 +8,7 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField } from "@/components/ui/field";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
 
 export type EventSummary = {
   id: string;
@@ -30,6 +31,7 @@ async function errorFrom(response: Response) {
 }
 
 export function EventManager({ initialEvents }: { initialEvents: EventSummary[] }) {
+  const t = useT();
   const [events, setEvents] = useState([...initialEvents].sort(byStart));
   const [created, setCreated] = useState<EventSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       setCreated(saved);
       form.reset();
     } catch (err) {
-      setError(err instanceof RangeError ? "Enter valid start and end dates." : NETWORK_ERROR);
+      setError(err instanceof RangeError ? t("eventMgr.invalidDates") : NETWORK_ERROR);
     } finally {
       setPending(false);
     }
@@ -125,17 +127,17 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
   return (
     <div className="stack">
       <Card aria-labelledby="new-event-title">
-        <h2 id="new-event-title">New event</h2>
+        <h2 id="new-event-title">{t("eventMgr.newEvent")}</h2>
         <form onSubmit={createEvent} className="form-stack">
-          <TextField label="Event name" name="name" required maxLength={80} />
+          <TextField label={t("eventMgr.eventName")} name="name" required maxLength={80} />
           <div className="form-pair">
-            <TextField label="Start" name="startsAt" type="datetime-local" required />
-            <TextField label="End" name="endsAt" type="datetime-local" required />
+            <TextField label={t("eventMgr.start")} name="startsAt" type="datetime-local" required />
+            <TextField label={t("eventMgr.end")} name="endsAt" type="datetime-local" required />
           </div>
           {error && <InlineError>{error}</InlineError>}
           <div>
             <Button type="submit" variant="primary" busy={pending}>
-              {pending ? "Saving" : "Create event"}
+              {pending ? t("eventMgr.saving") : t("eventMgr.create")}
             </Button>
           </div>
         </form>
@@ -144,21 +146,21 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
       {created && (
         <div role="status" className="notice">
           <p className="notice-title">
-            <strong>{created.name}</strong> created.
+            <strong>{created.name}</strong> {t("eventMgr.created")}
           </p>
           <p>
-            Join code <strong className="join-code">{created.joinCode}</strong>
+            {t("dash.joinCode")} <strong className="join-code">{created.joinCode}</strong>
           </p>
           <p>
-            Join link <code>{joinUrl(created.joinCode)}</code>
+            {t("eventMgr.joinLink")} <code>{joinUrl(created.joinCode)}</code>
           </p>
         </div>
       )}
 
       <section aria-labelledby="events-title">
-        <h2 id="events-title">All events</h2>
+        <h2 id="events-title">{t("eventMgr.allEvents")}</h2>
         {events.length === 0 ? (
-          <EmptyState title="No events yet">Create your first event above. You get a join code to share with your audience.</EmptyState>
+          <EmptyState title={t("eventMgr.emptyTitle")}>{t("eventMgr.emptyBody")}</EmptyState>
         ) : (
           <ul className="row-list">
             {events.map((e) => (
@@ -166,18 +168,18 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                 <div className="event-main">
                   {renaming === e.id ? (
                     <form onSubmit={(ev) => rename(e, ev)} className="inline-form">
-                      <TextField label="New name" name="name" defaultValue={e.name} required maxLength={80} />
-                      <Button type="submit" variant="primary">Save</Button>
-                      <Button onClick={() => setRenaming(null)}>Cancel</Button>
+                      <TextField label={t("eventMgr.newName")} name="name" defaultValue={e.name} required maxLength={80} />
+                      <Button type="submit" variant="primary">{t("eventMgr.save")}</Button>
+                      <Button onClick={() => setRenaming(null)}>{t("eventMgr.cancel")}</Button>
                     </form>
                   ) : (
                     <h3 className="event-name">{e.name}</h3>
                   )}
                   <p className="row-meta">
-                    {new Date(e.startsAt).toLocaleString()} to {new Date(e.endsAt).toLocaleString()}
+                    {new Date(e.startsAt).toLocaleString()} {t("eventMgr.to")} {new Date(e.endsAt).toLocaleString()}
                   </p>
                   <div className="row-meta">
-                    Join code <Badge>{e.joinCode}</Badge>
+                    {t("dash.joinCode")} <Badge>{e.joinCode}</Badge>
                   </div>
                   <div className="row-meta">
                     <LiveParticipantCount eventId={e.id} />
@@ -185,11 +187,11 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
                 </div>
                 <div className="row-actions">
                   <Link href={`/dashboard/events/${e.id}`} className="ui-button" data-variant="primary">
-                    Manage
+                    {t("eventMgr.manage")}
                   </Link>
-                  <Button variant="quiet" onClick={() => setRenaming(e.id)}>Rename</Button>
-                  <Button variant="quiet" onClick={() => duplicate(e)}>Duplicate</Button>
-                  <Button variant="quiet" onClick={() => setDeleting(e)}>Delete</Button>
+                  <Button variant="quiet" onClick={() => setRenaming(e.id)}>{t("eventMgr.rename")}</Button>
+                  <Button variant="quiet" onClick={() => duplicate(e)}>{t("eventMgr.duplicate")}</Button>
+                  <Button variant="quiet" onClick={() => setDeleting(e)}>{t("eventMgr.delete")}</Button>
                 </div>
               </li>
             ))}
@@ -197,13 +199,13 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
         )}
       </section>
 
-      <Dialog open={deleting !== null} title="Delete this event?" onClose={() => setDeleting(null)}>
+      <Dialog open={deleting !== null} title={t("eventMgr.deleteTitle")} onClose={() => setDeleting(null)}>
         <p>
-          “{deleting?.name}” and everything in it (interactions, questions, responses) will be removed. This cannot be undone.
+          {t("eventMgr.deleteBody", { name: deleting?.name ?? "" })}
         </p>
         <div className="row-actions">
-          <Button onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => deleting && confirmDelete(deleting)}>Delete event</Button>
+          <Button onClick={() => setDeleting(null)}>{t("eventMgr.cancel")}</Button>
+          <Button variant="primary" onClick={() => deleting && confirmDelete(deleting)}>{t("eventMgr.deleteConfirm")}</Button>
         </div>
       </Dialog>
     </div>

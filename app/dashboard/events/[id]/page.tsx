@@ -14,10 +14,12 @@ import { getDb } from "@/lib/db";
 import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { createModeratorToken } from "@/lib/moderator-token";
 import { findOwnedEvent } from "@/lib/polls";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const user = await getUserFromToken(token);
   if (!user) redirect("/login");
@@ -40,20 +42,20 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main id="main" className="page">
-      <Link href="/dashboard" className="back-link">Back to events</Link>
+      <Link href="/dashboard" className="back-link">{t("dash.backToEvents")}</Link>
       <header className="page-head">
         <div>
           <h1>{event.name}</h1>
           <p className="row-meta">
-            Join code <Badge>{event.joinCode}</Badge>
+            {t("dash.joinCode")} <Badge>{event.joinCode}</Badge>
           </p>
         </div>
         <div className="row-actions">
           <Link href={`/present/${event.id}`} className="ui-button" data-variant="primary">
-            Open presenter view
+            {t("dash.openPresenter")}
           </Link>
           <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
-            Export CSV
+            {t("dash.exportCsv")}
           </a>
         </div>
       </header>

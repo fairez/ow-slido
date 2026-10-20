@@ -6,6 +6,7 @@ import { createTestDb, truncateAll } from "./helpers/db";
 const cookieValue = vi.fn<() => string | undefined>();
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (cookieValue() ? { value: cookieValue() } : undefined) }),
+  headers: async () => ({ get: () => null }),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {

@@ -2,6 +2,7 @@
 
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { PresenterOpenText } from "@/components/presenter-open-text";
 import { PresenterRating } from "@/components/presenter-rating";
@@ -39,6 +40,7 @@ export function PresenterView({
   initialQuestions?: PublicQuestion[];
   initialScreen?: PresenterScreen;
 }) {
+  const t = useT();
   const { socket } = useEventSocket(eventId, "host");
   const [poll, setPoll] = useState<PresenterState | null>(initial);
   const [list, setList] = useState<NavItem[]>(items);
@@ -106,7 +108,7 @@ export function PresenterView({
       if (!target) return;
       if (target.state === "live") return;
       if (target.state === "closed") {
-        setNotice("That interaction already ran; duplicate it to run it again.");
+        setNotice(t("presenter.closedNotice"));
         return;
       }
       busy.current = true;
@@ -114,12 +116,12 @@ export function PresenterView({
       try {
         const res = await fetch(`/api/events/${eventId}/interactions/${target.id}/start`, { method: "POST" });
         if (res.ok) cursor.current = target.id;
-        else setNotice(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Could not start");
+        else setNotice(((await res.json().catch(() => ({}))) as { error?: string }).error ?? t("presenter.startFailed"));
       } finally {
         busy.current = false;
       }
     },
-    [eventId, list],
+    [eventId, list, t],
   );
 
   useEffect(() => {
@@ -241,13 +243,13 @@ export function PresenterView({
   }, [socket, refetch, refetchList, refetchQuestions]);
 
   const corner = (
-    <aside className="present-join" aria-label="How to join">
+    <aside className="present-join" aria-label={t("presenter.joinLabel")}>
       {qr && (
         // Plain img: a data URL needs no optimisation, and the QR keeps a light backing so it scans in dark theme.
         // eslint-disable-next-line @next/next/no-img-element
-        <img className="present-qr" src={qr} alt={`QR code to join with code ${joinCode}`} width={140} height={140} />
+        <img className="present-qr" src={qr} alt={t("presenter.qrAlt", { code: joinCode })} width={140} height={140} />
       )}
-      <p className="present-code">Join code: {joinCode}</p>
+      <p className="present-code">{t("presenter.joinCode", { code: joinCode })}</p>
     </aside>
   );
   const head = (title: string) => (
@@ -262,9 +264,9 @@ export function PresenterView({
     <>
       <div className="present-controls">
         <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
-          {screen === "qa" ? "Show interaction (Q)" : "Show Q&A (Q)"}
+          {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
         </Button>
-        <Button onClick={() => void document.documentElement.requestFullscreen?.()}>Fullscreen (Esc to exit)</Button>
+        <Button onClick={() => void document.documentElement.requestFullscreen?.()}>{t("presenter.fullscreen")}</Button>
       </div>
       {notice && (
         <p role="status" className="present-notice">
@@ -277,7 +279,7 @@ export function PresenterView({
   if (screen === "qa") {
     return (
       <section aria-labelledby="present-title">
-        {head("Q&A")}
+        {head(t("presenter.qaTitle"))}
         <PresenterQa questions={questions} sort={qaSort} onSortChange={setQaSort} joinCode={joinCode} />
         {extras}
       </section>
@@ -289,7 +291,7 @@ export function PresenterView({
       <>
         <header className="present-head">
           <h1 aria-live="polite" className="present-title">
-            No live interaction
+            {t("presenter.nothingLive")}
           </h1>
           {corner}
         </header>
@@ -333,7 +335,7 @@ export function PresenterView({
       <section aria-labelledby="present-title">
         {head(poll.title)}
         <WordCloud words={poll.words} />
-        <p className="present-total">Total words: {poll.total}</p>
+        <p className="present-total">{t("presenter.totalWords", { n: poll.total })}</p>
         {extras}
       </section>
     );
@@ -362,7 +364,7 @@ export function PresenterView({
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent}
-                aria-valuetext={`${count} ${count === 1 ? "vote" : "votes"}, ${percent}%`}
+                aria-valuetext={t(count === 1 ? "presenter.votes.one" : "presenter.votes.other", { n: count, percent })}
               >
                 <div className="present-fill" data-leading={count > 0 && count === lead} style={{ width: `${percent}%` }} />
               </div>
@@ -370,7 +372,7 @@ export function PresenterView({
           );
         })}
       </ul>
-      <p className="present-total">Total votes: {poll.total}</p>
+      <p className="present-total">{t("presenter.totalVotes", { n: poll.total })}</p>
       {extras}
     </section>
   );

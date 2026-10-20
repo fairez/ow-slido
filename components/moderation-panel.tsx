@@ -9,6 +9,7 @@ import { useCoalesced } from "@/lib/use-coalesced";
 import type { HostNote } from "@/lib/note-types";
 import type { HostQuestion } from "@/lib/question-types";
 import { NETWORK_ERROR } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
 
 type Mode = "open" | "moderated";
 
@@ -33,6 +34,7 @@ export function ModerationPanel({
   /** Set when a moderator (not the host) uses the panel: authenticates calls and hides the mode switch. */
   moderatorToken?: string;
 }) {
+  const t = useT();
   const { socket } = useEventSocket(eventId, moderatorToken ? "moderator" : "host", moderatorToken);
   const authHeaders = useMemo<Record<string, string>>(
     () => (moderatorToken ? { "x-moderator-token": moderatorToken } : ({} as Record<string, string>)),
@@ -109,7 +111,7 @@ export function ModerationPanel({
     const res = await request(
       `/api/events/${eventId}`,
       { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ moderationMode: next }) },
-      "Could not change the Q&A mode.",
+      t("moderation.modeError"),
     );
     if (res) setMode(next);
   };
@@ -118,7 +120,7 @@ export function ModerationPanel({
     const res = await request(
       `/api/events/${eventId}/questions/${id}`,
       { method: "PATCH", headers: { "content-type": "application/json", ...authHeaders }, body: JSON.stringify(body) },
-      "Could not update the question.",
+      t("moderation.questionUpdateError"),
     );
     if (!res) return;
     const { question } = (await res.json()) as { question: HostQuestion | null };
@@ -130,7 +132,7 @@ export function ModerationPanel({
   };
 
   const remove = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE", headers: authHeaders }, "Could not delete the question.");
+    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE", headers: authHeaders }, t("moderation.questionDeleteError"));
     if (res) setQuestions((cur) => cur.filter((q) => q.id !== id));
   };
 
@@ -138,7 +140,7 @@ export function ModerationPanel({
     const res = await request(
       `/api/events/${eventId}/notes/${id}`,
       { method: "PATCH", headers: { "content-type": "application/json", ...authHeaders }, body: JSON.stringify(body) },
-      "Could not update the note.",
+      t("moderation.noteUpdateError"),
     );
     if (!res) return;
     const { note } = (await res.json()) as { note: HostNote | null };
@@ -148,7 +150,7 @@ export function ModerationPanel({
   };
 
   const removeNote = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/notes/${id}`, { method: "DELETE", headers: authHeaders }, "Could not delete the note.");
+    const res = await request(`/api/events/${eventId}/notes/${id}`, { method: "DELETE", headers: authHeaders }, t("moderation.noteDeleteError"));
     if (res) setNotes((cur) => cur.filter((n) => n.id !== id));
   };
 
@@ -159,53 +161,53 @@ export function ModerationPanel({
 
   return (
     <section aria-labelledby="moderation-title" className="moderation">
-      <h2 id="moderation-title">Q&amp;A moderation</h2>
-      {!moderatorToken && <Toggle label="Moderated Q&A (questions need approval)" checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
+      <h2 id="moderation-title">{t("moderation.title")}</h2>
+      {!moderatorToken && <Toggle label={t("moderation.moderatedToggle")} checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
       <p className="row-meta">
-        Mode: <strong>{mode === "moderated" ? "Moderated" : "Open"}</strong>
+        {t("moderation.modeLabel")} <strong>{mode === "moderated" ? t("moderation.modeModerated") : t("moderation.modeOpen")}</strong>
       </p>
       {error && <InlineError>{error}</InlineError>}
 
-      <h3>Pending ({pending.length})</h3>
+      <h3>{t("moderation.pendingHeading", { n: pending.length })}</h3>
       {pending.length === 0 ? (
-        <p className="row-meta">No pending questions.</p>
+        <p className="row-meta">{t("moderation.noPending")}</p>
       ) : (
-        <ul aria-label="Pending questions" className="post-list">
+        <ul aria-label={t("moderation.pendingList")} className="post-list">
           {pending.map((q) => (
             <li key={q.id} className="post" data-state="pending">
               <p className="post-text">{q.text}</p>
-              <p className="post-meta">{q.authorName ?? "Anonymous"}</p>
+              <p className="post-meta">{q.authorName ?? t("common.anonymous")}</p>
               <div className="post-foot">
                 <Button variant="primary" onClick={() => void change(q.id, { status: "approved" })}>
-                  Approve
+                  {t("moderation.approve")}
                 </Button>
-                <Button onClick={() => void change(q.id, { status: "rejected" })}>Reject</Button>
+                <Button onClick={() => void change(q.id, { status: "rejected" })}>{t("moderation.reject")}</Button>
               </div>
             </li>
           ))}
         </ul>
       )}
 
-      <h3>Approved ({approved.length})</h3>
+      <h3>{t("moderation.approvedHeading", { n: approved.length })}</h3>
       {approved.length === 0 ? (
-        <p className="row-meta">No approved questions.</p>
+        <p className="row-meta">{t("moderation.noApproved")}</p>
       ) : (
-        <ul aria-label="Approved questions" className="post-list">
+        <ul aria-label={t("moderation.approvedList")} className="post-list">
           {approved.map((q) => (
             <li key={q.id} className="post" data-pinned={q.pinned} data-answered={q.answered}>
               <p className="post-text">{q.text}</p>
               <p className="post-meta">
-                {q.authorName ?? "Anonymous"} · ▲ {q.upvotes}
-                {q.pinned && <Badge tone="accent">Pinned</Badge>}
-                {q.answered && <Badge>Answered</Badge>}
+                {q.authorName ?? t("common.anonymous")} · ▲ {q.upvotes}
+                {q.pinned && <Badge tone="accent">{t("common.pinned")}</Badge>}
+                {q.answered && <Badge>{t("common.answered")}</Badge>}
               </p>
               <div className="post-foot">
                 <Button onClick={() => void change(q.id, { answered: !q.answered })}>
-                  {q.answered ? "Mark unanswered" : "Mark answered"}
+                  {q.answered ? t("moderation.markUnanswered") : t("moderation.markAnswered")}
                 </Button>
-                <Button onClick={() => void change(q.id, { pinned: !q.pinned })}>{q.pinned ? "Unpin" : "Pin"}</Button>
+                <Button onClick={() => void change(q.id, { pinned: !q.pinned })}>{q.pinned ? t("moderation.unpin") : t("moderation.pin")}</Button>
                 <Button variant="quiet" onClick={() => void remove(q.id)}>
-                  Delete
+                  {t("moderation.delete")}
                 </Button>
               </div>
             </li>
@@ -215,45 +217,45 @@ export function ModerationPanel({
 
       {(notes.length > 0 || initialNotes.length > 0) && (
         <>
-          <h2>Shared notes moderation</h2>
-          <h3>Pending notes ({pendingNotes.length})</h3>
+          <h2>{t("moderation.notesTitle")}</h2>
+          <h3>{t("moderation.pendingNotesHeading", { n: pendingNotes.length })}</h3>
           {pendingNotes.length === 0 ? (
-            <p className="row-meta">No pending notes.</p>
+            <p className="row-meta">{t("moderation.noPendingNotes")}</p>
           ) : (
-            <ul aria-label="Pending notes" className="post-list">
+            <ul aria-label={t("moderation.pendingNotesList")} className="post-list">
               {pendingNotes.map((n) => (
                 <li key={n.id} className="post" data-state="pending">
                   <p className="post-text">{n.text}</p>
                   <p className="post-meta">
-                    {n.authorName ?? "Anonymous"} · {n.interactionTitle}
+                    {n.authorName ?? t("common.anonymous")} · {n.interactionTitle}
                   </p>
                   <div className="post-foot">
                     <Button variant="primary" onClick={() => void changeNote(n.id, { status: "approved" })}>
-                      Approve note
+                      {t("moderation.approveNote")}
                     </Button>
-                    <Button onClick={() => void changeNote(n.id, { status: "rejected" })}>Reject note</Button>
+                    <Button onClick={() => void changeNote(n.id, { status: "rejected" })}>{t("moderation.rejectNote")}</Button>
                   </div>
                 </li>
               ))}
             </ul>
           )}
 
-          <h3>Approved notes ({approvedNotes.length})</h3>
+          <h3>{t("moderation.approvedNotesHeading", { n: approvedNotes.length })}</h3>
           {approvedNotes.length === 0 ? (
-            <p className="row-meta">No approved notes.</p>
+            <p className="row-meta">{t("moderation.noApprovedNotes")}</p>
           ) : (
-            <ul aria-label="Approved notes" className="post-list">
+            <ul aria-label={t("moderation.approvedNotesList")} className="post-list">
               {approvedNotes.map((n) => (
                 <li key={n.id} className="post" data-pinned={n.pinned}>
                   <p className="post-text">{n.text}</p>
                   <p className="post-meta">
-                    {n.authorName ?? "Anonymous"} · {n.interactionTitle} · ▲ {n.upvotes}
-                    {n.pinned && <Badge tone="accent">Pinned</Badge>}
+                    {n.authorName ?? t("common.anonymous")} · {n.interactionTitle} · ▲ {n.upvotes}
+                    {n.pinned && <Badge tone="accent">{t("common.pinned")}</Badge>}
                   </p>
                   <div className="post-foot">
-                    <Button onClick={() => void changeNote(n.id, { pinned: !n.pinned })}>{n.pinned ? "Unpin note" : "Pin note"}</Button>
+                    <Button onClick={() => void changeNote(n.id, { pinned: !n.pinned })}>{n.pinned ? t("moderation.unpinNote") : t("moderation.pinNote")}</Button>
                     <Button variant="quiet" onClick={() => void removeNote(n.id)}>
-                      Delete note
+                      {t("moderation.deleteNote")}
                     </Button>
                   </div>
                 </li>

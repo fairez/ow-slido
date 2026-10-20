@@ -7,16 +7,18 @@ import {
   type AnalysisView,
 } from "@/components/presenter-analysis";
 import type { PublicNote } from "@/lib/shared-notes";
+import { useT } from "@/lib/i18n/client";
+import type { MessageKey } from "@/lib/i18n";
 
 type View = "top" | "newest";
 type Tab = "notes" | AnalysisView;
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "notes", label: "Notes" },
-  { id: "cloud", label: "Word cloud" },
-  { id: "categories", label: "Categories" },
-  { id: "top", label: "Top notes by category" },
-  { id: "summary", label: "Summary" },
+const TABS: { id: Tab; label: MessageKey }[] = [
+  { id: "notes", label: "presNotes.notes" },
+  { id: "cloud", label: "presNotes.cloud" },
+  { id: "categories", label: "presNotes.categories" },
+  { id: "top", label: "presNotes.top" },
+  { id: "summary", label: "presNotes.summary" },
 ];
 
 /** Pinned notes first, then by the chosen view; ties fall back to newest. */
@@ -40,45 +42,48 @@ export function PresenterNotes({
   notes: PublicNote[];
   closed: boolean;
 }) {
+  const t = useT();
   const [view, setView] = useState<View>("top");
   const [tab, setTab] = useState<Tab>("notes");
   const ordered = orderNotes(notes, view);
   return (
     <>
       <p className="present-total">
-        {notes.length} {notes.length === 1 ? "note" : "notes"}
-        {closed ? " (closed)" : ""}
+        {t(notes.length === 1 ? "presNotes.count.one" : "presNotes.count.other", {
+          n: notes.length,
+          closed: closed ? t("presNotes.closed") : "",
+        })}
       </p>
-      <div role="group" aria-label="Presenter view" className="present-switch">
-        {TABS.map((t) => (
-          <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
-            {t.label}
+      <div role="group" aria-label={t("presNotes.viewLabel")} className="present-switch">
+        {TABS.map((item) => (
+          <button key={item.id} type="button" aria-pressed={tab === item.id} onClick={() => setTab(item.id)}>
+            {t(item.label)}
           </button>
         ))}
       </div>
       {tab !== "notes" && <PresenterAnalysis interactionId={interactionId} notes={notes} view={tab} socket={socket} />}
       {tab === "notes" && (
         <>
-          <div role="group" aria-label="Order notes by" className="present-switch" data-small>
+          <div role="group" aria-label={t("presNotes.orderLabel")} className="present-switch" data-small>
             {(["top", "newest"] as const).map((v) => (
               <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}>
-                {v === "top" ? "Top upvoted" : "Newest"}
+                {v === "top" ? t("presNotes.topUpvoted") : t("presNotes.newest")}
               </button>
             ))}
           </div>
           {ordered.length === 0 ? (
             <p role="status" className="present-empty">
-              No notes yet
+              {t("presNotes.empty")}
             </p>
           ) : (
-            <ul aria-label="Notes" className="present-cards">
+            <ul aria-label={t("presNotes.notes")} className="present-cards">
               {ordered.map((n) => (
                 <li key={n.id} className="present-card" data-highlight={n.pinned || undefined}>
-                  {n.pinned && <p className="present-card-label">Pinned</p>}
+                  {n.pinned && <p className="present-card-label">{t("presNotes.pinned")}</p>}
                   <p className="present-card-text">{n.text}</p>
                   <p className="present-card-meta">
                     {n.authorName ? `${n.authorName} · ` : ""}
-                    {n.upvotes} {n.upvotes === 1 ? "upvote" : "upvotes"}
+                    {t(n.upvotes === 1 ? "presNotes.upvote.one" : "presNotes.upvote.other", { n: n.upvotes })}
                   </p>
                 </li>
               ))}

@@ -50,7 +50,7 @@
       ],
       "id": "US-003",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M1"
     },
     {

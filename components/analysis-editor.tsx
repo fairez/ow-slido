@@ -5,6 +5,7 @@ import { useState } from "react";
 import { CATEGORY_NAME_MAX, SUMMARY_MAX, UNCATEGORIZED_NAME, type AnalysisEdit } from "@/lib/analysis-edit";
 import { Button } from "@/components/ui/button";
 import { parseCategories, parseKeywords } from "@/components/presenter-analysis";
+import { useT } from "@/lib/i18n/client";
 
 type Props = {
   summary: string | null;
@@ -17,6 +18,7 @@ type Props = {
 
 /** Host review of an AI result: summary, categories, notes and keywords. Every change is saved at once. */
 export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }: Props) {
+  const t = useT();
   const cats = parseCategories(categories);
   const words = parseKeywords(keywords);
   const noteText = new Map(notes.map((n) => [n.id, n.text]));
@@ -50,15 +52,15 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
 
       {summary !== null && (
         <div className="analysis-part">
-          <h4>Summary</h4>
+          <h4>{t("analysisEditor.summary")}</h4>
           {draft === null ? (
             <>
               <AnalysisSummary text={summary} className="analysis-summary" />
-              <div className="row-actions"><Button onClick={() => setDraft(summary)}>Edit summary</Button></div>
+              <div className="row-actions"><Button onClick={() => setDraft(summary)}>{t("analysisEditor.editSummary")}</Button></div>
             </>
           ) : (
             <>
-              <label htmlFor="analysis-summary">Summary text</label>
+              <label htmlFor="analysis-summary">{t("analysisEditor.summaryText")}</label>
               <textarea
                 id="analysis-summary"
                 value={draft}
@@ -67,8 +69,8 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
                 onChange={(e) => setDraft(e.target.value)}
               />
               <div className="row-actions">
-                <Button variant="primary" busy={busy} onClick={() => void saveSummary()}>Save summary</Button>
-                <Button onClick={() => setDraft(null)}>Cancel</Button>
+                <Button variant="primary" busy={busy} onClick={() => void saveSummary()}>{t("analysisEditor.saveSummary")}</Button>
+                <Button onClick={() => setDraft(null)}>{t("analysisEditor.cancel")}</Button>
               </div>
             </>
           )}
@@ -77,7 +79,7 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
 
       {cats.length > 0 && (
         <div className="analysis-part">
-          <h4>Categories</h4>
+          <h4>{t("analysisEditor.categories")}</h4>
           <ul className="analysis-list">
             {cats.map((c) => {
               const isUncategorized = c.name.toLowerCase() === UNCATEGORIZED_NAME.toLowerCase();
@@ -87,7 +89,7 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
                   {renaming?.name === c.name ? (
                     <div className="inline-form">
                       <div className="ui-field">
-                        <label htmlFor="category-name">Category name</label>
+                        <label htmlFor="category-name">{t("analysisEditor.categoryName")}</label>
                         <input
                           id="category-name"
                           value={renaming.value}
@@ -95,8 +97,8 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
                           onChange={(e) => setRenaming({ name: c.name, value: e.target.value })}
                         />
                       </div>
-                      <Button variant="primary" busy={busy} onClick={() => void saveRename()}>Save name</Button>
-                      <Button onClick={() => setRenaming(null)}>Cancel</Button>
+                      <Button variant="primary" busy={busy} onClick={() => void saveRename()}>{t("analysisEditor.saveName")}</Button>
+                      <Button onClick={() => setRenaming(null)}>{t("analysisEditor.cancel")}</Button>
                     </div>
                   ) : (
                     <>
@@ -105,22 +107,22 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
                       </p>
                       <div className="row-actions">
                         <Button onClick={() => setRenaming({ name: c.name, value: c.name })}>
-                          Rename<span className="sr-only"> {c.name}</span>
+                          {t("analysisEditor.rename")}<span className="sr-only"> {c.name}</span>
                         </Button>
                         {others.length > 0 && (
                           <select
-                            aria-label={`Merge ${c.name} into`}
+                            aria-label={t("analysisEditor.mergeAria", { name: c.name })}
                             value=""
                             disabled={busy}
                             onChange={(e) => e.target.value && void send({ op: "mergeCategories", from: c.name, into: e.target.value })}
                           >
-                            <option value="">Merge into…</option>
+                            <option value="">{t("analysisEditor.mergeInto")}</option>
                             {others.map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}
                           </select>
                         )}
                         {!isUncategorized && (
                           <Button disabled={busy} onClick={() => void send({ op: "deleteCategory", name: c.name })}>
-                            Delete<span className="sr-only"> {c.name}</span>
+                            {t("analysisEditor.delete")}<span className="sr-only"> {c.name}</span>
                           </Button>
                         )}
                       </div>
@@ -134,12 +136,12 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
                         <li key={id}>
                           <span>{text}</span>{" "}
                           <select
-                            aria-label={`Move note “${text.slice(0, 40)}” to`}
+                            aria-label={t("analysisEditor.moveAria", { text: text.slice(0, 40) })}
                             value=""
                             disabled={busy}
                             onChange={(e) => e.target.value && void send({ op: "moveNote", noteId: id, to: e.target.value })}
                           >
-                            <option value="">Move to…</option>
+                            <option value="">{t("analysisEditor.moveTo")}</option>
                             {[...others, ...(isUncategorized || cats.some((o) => o.name === UNCATEGORIZED_NAME) ? [] : [{ name: UNCATEGORIZED_NAME }])].map((o) => (
                               <option key={o.name} value={o.name}>{o.name}</option>
                             ))}
@@ -157,11 +159,11 @@ export function AnalysisEditor({ summary, categories, keywords, notes, onEdit }:
 
       {words.length > 0 && (
         <div className="analysis-part">
-          <h4>Keywords</h4>
+          <h4>{t("analysisEditor.keywords")}</h4>
           <ul className="analysis-list analysis-list-wrap">
             {words.map((k) => (
               <li key={k.word}>
-                <Button disabled={busy} aria-label={`Remove keyword ${k.word}`} onClick={() => void send({ op: "removeKeyword", word: k.word })}>
+                <Button disabled={busy} aria-label={t("analysisEditor.removeKeyword", { word: k.word })} onClick={() => void send({ op: "removeKeyword", word: k.word })}>
                   {k.word} ×
                 </Button>
               </li>

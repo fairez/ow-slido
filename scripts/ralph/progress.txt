@@ -34,3 +34,13 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Never `pkill -f` a pattern that appears in your own command line; it kills the shell.
   - Screenshots at 360/1280 of the join page checked: no overflow.
 ---
+
+## 2026-10-20 - US-003
+- Moved host, presenter, moderation, auth, home and app-shell strings (26 files, ~270 keys) to en.ts/id.ts; English output unchanged. All those files are now in the MIGRATED list of tests/no-inline-strings.test.ts.
+- Files: app/{page,dashboard,moderate}, components/* (managers, moderation, presenter-*, analysis-*, auth-form, theme-toggle, ui/app-shell), lib/i18n/{en,id}.ts, tests/{no-inline-strings,home,auth-pages}.test.*
+- **Learnings for future iterations:**
+  - Server pages that call `getT()` are async and need `next/headers` `headers()` mocked (tests/auth-pages.test.tsx) or `@/lib/i18n/server` mocked (tests/home.test.tsx); tests must `await Page()`.
+  - A dev server started before en.ts gained keys renders empty strings for new keys (stale module cache); restart it (kill by PID from `ss -ltnp`, never pkill -f).
+  - Keys built from template literals (`auth.${mode}.title`) are invisible to grep; check typecheck instead.
+  - Browser check: home, login, signup at 360/1280, no overflow. Authenticated pages (dashboard, presenter) were not screenshotted.
+---

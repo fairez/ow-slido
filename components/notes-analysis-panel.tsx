@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/field";
 import type { AnalysisEdit } from "@/lib/analysis-edit";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { useT } from "@/lib/i18n/client";
 
 type Analysis = {
   id: string;
@@ -32,6 +33,7 @@ function formatTime(iso: string) {
 
 /** Host controls for the AI analysis of one shared-notes interaction. Rendered only when AI is configured. */
 export function NotesAnalysisPanel({ interactionId, socket = null }: { interactionId: string; socket?: Socket | null }) {
+  const t = useT();
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -40,12 +42,12 @@ export function NotesAnalysisPanel({ interactionId, socket = null }: { interacti
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/interactions/${interactionId}/analysis`);
-      if (!res.ok) return setError("Could not load the analysis.");
+      if (!res.ok) return setError(t("notesAnalysis.loadFailed"));
       setState((await res.json()) as State);
     } catch {
-      setError("Could not load the analysis.");
+      setError(t("notesAnalysis.loadFailed"));
     }
-  }, [interactionId]);
+  }, [interactionId, t]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -76,7 +78,7 @@ export function NotesAnalysisPanel({ interactionId, socket = null }: { interacti
 
   async function run() {
     if (!state) return;
-    if (state.lastDone?.edited && !window.confirm("You edited the last analysis. Running again replaces your edits. Continue?")) return;
+    if (state.lastDone?.edited && !window.confirm(t("notesAnalysis.confirmRerun"))) return;
     setError(null);
     setStarting(true);
     try {
@@ -132,54 +134,57 @@ export function NotesAnalysisPanel({ interactionId, socket = null }: { interacti
   const disabled = running || starting || noNotes || (needsNotice && !accepted);
   const shown = lastDone;
   const keywordsOnly = shown !== null && shown.status === "done" && !shown.summary;
-  const label = shown ? "Run again" : "Analyze notes";
+  const label = shown ? t("notesAnalysis.runAgain") : t("notesAnalysis.analyze");
 
   return (
-    <section aria-label="Analyze notes" className="analysis">
-      <h3>Analysis</h3>
+    <section aria-label={t("notesAnalysis.analyze")} className="analysis">
+      <h3>{t("notesAnalysis.title")}</h3>
       <p className="analysis-muted">
-        {approvedNoteCount} approved {approvedNoteCount === 1 ? "note" : "notes"}
+        {t(approvedNoteCount === 1 ? "notesAnalysis.approved.one" : "notesAnalysis.approved.other", { n: approvedNoteCount })}
       </p>
       {needsNotice && (
         <Toggle
-          label="I understand that the text of approved notes is sent to a third-party AI service to be analyzed."
+          label={t("notesAnalysis.notice")}
           checked={accepted}
           onChange={(e) => setAccepted(e.target.checked)}
         />
       )}
       <div className="row-actions">
         <Button variant="primary" onClick={run} disabled={disabled} busy={running || starting}>
-          {running ? "Analyzing" : label}
+          {running ? t("notesAnalysis.analyzing") : label}
         </Button>
         {shown?.outdated && !running && (
-          <span className="ui-badge" data-tone="accent">Outdated: notes have changed since this run</span>
+          <span className="ui-badge" data-tone="accent">{t("notesAnalysis.outdated")}</span>
         )}
       </div>
       {shown && shown.status === "done" && (
         <div className="analysis-part">
           <div className="row-actions">
             <Button aria-pressed={shown.published} onClick={() => void setPublished(!shown.published)}>
-              {shown.published ? "Unpublish from participants" : "Publish to participants"}
+              {shown.published ? t("notesAnalysis.unpublish") : t("notesAnalysis.publish")}
             </Button>
           </div>
           <p className="analysis-muted">
-            {shown.published ? "Participants can see this analysis." : "Participants cannot see the analysis until you publish it."}
+            {shown.published ? t("notesAnalysis.visible") : t("notesAnalysis.hidden")}
           </p>
         </div>
       )}
-      {running && <p role="status" className="analysis-muted">Analyzing {analysis?.noteCount} notes. This usually takes under a minute.</p>}
-      {analysis?.status === "failed" && <p role="alert" className="analysis-error">The last run failed: {analysis.error ?? "unknown error"}</p>}
-      {noNotes && <p className="analysis-muted">Approve at least one note to run an analysis.</p>}
+      {running && <p role="status" className="analysis-muted">{t("notesAnalysis.running", { n: analysis?.noteCount ?? "" })}</p>}
+      {analysis?.status === "failed" && <p role="alert" className="analysis-error">{t("notesAnalysis.failed", { error: analysis.error ?? t("notesAnalysis.unknownError") })}</p>}
+      {noNotes && <p className="analysis-muted">{t("notesAnalysis.needNote")}</p>}
       {shown && shown.finishedAt && (
         <p className="analysis-muted">
-          Last analyzed {formatTime(shown.finishedAt)} from {shown.noteCount} {shown.noteCount === 1 ? "note" : "notes"}
-          {shown.edited ? ", edited by you" : ""}.
+          {t(shown.noteCount === 1 ? "notesAnalysis.last.one" : "notesAnalysis.last.other", {
+            time: formatTime(shown.finishedAt),
+            n: shown.noteCount,
+            edited: shown.edited ? t("notesAnalysis.editedByYou") : "",
+          })}
         </p>
       )}
-      {keywordsOnly && <p className="analysis-muted">{shown.error ?? "This run produced keywords only."}</p>}
+      {keywordsOnly && <p className="analysis-muted">{shown.error ?? t("notesAnalysis.keywordsOnly")}</p>}
       {shown && shown.status === "done" && !running && (
         <details>
-          <summary>Review and edit results</summary>
+          <summary>{t("notesAnalysis.review")}</summary>
           <AnalysisEditor
             summary={shown.summary}
             categories={shown.categories}

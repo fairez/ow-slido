@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { listHostNotes, listHostQuestions } from "@/lib/moderation";
 import { verifyModeratorToken } from "@/lib/moderator-token";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +17,15 @@ export default async function ModeratePage({
   searchParams: Promise<{ t?: string | string[] }>;
 }) {
   const { eventId } = await params;
-  const { t } = await searchParams;
-  const token = typeof t === "string" ? t : undefined;
+  const { t: tokenParam } = await searchParams;
+  const t = await getT();
+  const token = typeof tokenParam === "string" ? tokenParam : undefined;
   const valid = isUuid(eventId) && (await verifyModeratorToken(eventId, token));
   if (!valid || !token) {
     return (
       <main id="main" className="page">
-        <h1>Moderator link not valid</h1>
-        <p className="row-meta">This link is invalid or has been revoked. Ask the host for a new one.</p>
+        <h1>{t("moderatePage.invalidTitle")}</h1>
+        <p className="row-meta">{t("moderatePage.invalidBody")}</p>
       </main>
     );
   }
@@ -31,7 +33,7 @@ export default async function ModeratePage({
   return (
     <main id="main" className="page">
       <header className="page-head">
-        <h1>Moderating: {event.name}</h1>
+        <h1>{t("moderatePage.heading", { name: event.name })}</h1>
       </header>
       <ModerationPanel
         eventId={eventId}

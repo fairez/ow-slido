@@ -1,20 +1,22 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getT } from "@/lib/i18n/server";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export async function AppShell({ children }: { children: ReactNode }) {
+  const t = await getT();
   return (
     <>
       <a className="skip-link" href="#main">
-        Skip to content
+        {t("shell.skip")}
       </a>
       <header className="site-header">
         <Link className="site-name" href="/">
-          OW Slido
+          {t("shell.brand")}
         </Link>
-        <nav aria-label="Main" className="site-nav">
-          <Link href="/dashboard">Events</Link>
-          <Link href="/">Join</Link>
+        <nav aria-label={t("shell.navLabel")} className="site-nav">
+          <Link href="/dashboard">{t("shell.events")}</Link>
+          <Link href="/">{t("shell.join")}</Link>
         </nav>
         <ThemeToggle />
       </header>
