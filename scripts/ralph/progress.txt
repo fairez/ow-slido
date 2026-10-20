@@ -386,3 +386,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Full suite 933 tests green (~350s); typecheck and eslint (source dirs) clean. The dev DB was not migrated (US-034 browser check needs `npm run db:migrate`).
   - No UI change, no browser check.
 ---
+## 2026-10-20 - US-034
+- Templates UI. Event page (`PollManager`): "Save as template" on every row and "Save event as template" (only with `canManageTemplates`, i.e. `templates.manage`), "Add from template" next to "Add content" (picker dialog listing each template's items, adds them as drafts and appends the returned interactions). New `/dashboard/templates` page (`TemplatesManager`): usage "n of limit templates used" with a plan hint when full, rename, delete with confirmation, read-only for members without `templates.manage`; "Templates" link in the app shell for every member. The dashboard's New event form has a Template select (only when templates exist) that posts to `/api/events/from-template` and reports skipped items.
+- Plan errors: `lib/api-error.ts` (`apiError(response)` gives message plus a `Lock` on a 402) and `components/plan-error.tsx` show the server message with the tier link. Used by the save dialog (template limit), the picker (type not in plan) and the new event form (monthly event limit, which the plain create form now shows the same way).
+- Files: components/{save-template-dialog,template-picker,template-items,template-types,templates-manager,plan-error,poll-manager,event-manager,ui/app-shell}, app/dashboard/{templates/page,page,events/[id]/page}.tsx, lib/{api-error,type-labels,template-limits,templates,plan-hints}.ts, app/api/templates/route.ts (list moved to `listTemplates`), app/globals.css, lib/i18n/{en,id}.ts (real Indonesian for the new keys), tests/{templates-ui.test.tsx,no-inline-strings.test.ts}, CLAUDE.md
+- **Learnings for future iterations:**
+  - A `Button` with `busy` is `disabled`; inside a dialog that drops focus to the body, so Escape and the Tab trap stop working. In dialogs guard the handler and set `aria-busy` instead (found when a Playwright Escape did nothing after a failed save).
+  - react-hooks/set-state-in-effect forbids resetting state at the top of an effect; mount the loading part only while the dialog is open (a child of `Dialog`) so each opening starts fresh.
+  - `TYPE_LABELS` moved to lib/type-labels.ts (shared by the library list and template lists).
+  - A label named "Start from" made `getByLabel("Start")` ambiguous with the date field; the select is labelled "Template".
+  - The saved notice (with the "View templates" link) is replaced by the next notice (e.g. after adding from a template); it is not persistent.
+  - Browser check at 360/1280 (light and dark): event page, save dialog, limit error with hint, picker, templates page with rename/delete dialogs, dashboard form and result. No horizontal overflow; the only console error was the expected 402 from the limit test. Screenshot users/workspaces deleted from the dev DB; dev DB migrated to 0032 (`npm run db:migrate`).
+  - Full suite 956 tests green, e2e 4 specs pass, typecheck and eslint (source dirs) clean.
+---

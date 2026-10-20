@@ -36,6 +36,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav aria-label={t("shell.navLabel")} className="site-nav">
           <Link href="/dashboard">{t("shell.events")}</Link>
+          {workspaces ? <Link href="/dashboard/templates">{t("templates.nav")}</Link> : null}
           {workspaces?.canManageMembers ? <Link href="/dashboard/members">{t("members.nav")}</Link> : null}
           {workspaces ? <Link href="/dashboard/plan">{t("plan.nav")}</Link> : null}
           <Link href="/">{t("shell.join")}</Link>

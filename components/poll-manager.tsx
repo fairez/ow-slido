@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
@@ -13,12 +14,15 @@ import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
 import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
+import { SaveTemplateDialog, type SaveTarget } from "@/components/save-template-dialog";
+import { TemplatePicker } from "@/components/template-picker";
 import { GripIcon, TypeIcon } from "@/components/type-icon";
 import { useCoalesced } from "@/lib/use-coalesced";
 import type { Lock } from "@/lib/plan-hints";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 import { useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n";
+import { TYPE_LABELS } from "@/lib/type-labels";
 
 export type InteractionItem = {
   id: string;
@@ -42,15 +46,6 @@ export type InteractionItem = {
 };
 
 type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa";
-const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
-  qa: "pollMgr.type.qa",
-  poll: "pollMgr.type.poll",
-  wordcloud: "pollMgr.type.wordcloud",
-  sharedNotes: "pollMgr.type.sharedNotes",
-  openText: "pollMgr.type.openText",
-  rating: "pollMgr.type.rating",
-};
-
 const STATE_LABELS: Record<InteractionItem["state"], MessageKey> = {
   draft: "pollMgr.state.draft",
   live: "pollMgr.state.live",
@@ -115,9 +110,13 @@ type PollManagerProps = {
   initialCounts?: Record<string, number>;
   /** Follow changes made by other members and new responses over the event socket. */
   liveUpdates?: boolean;
+  /** Owners and admins: items and the whole event can be saved as templates. */
+  canManageTemplates?: boolean;
+  /** Starting name when the whole event is saved as a template. */
+  eventName?: string;
 };
 
-export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock, defaultModeration = "open", initialCounts = {}, liveUpdates = false }: PollManagerProps) {
+export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock, defaultModeration = "open", initialCounts = {}, liveUpdates = false, canManageTemplates = false, eventName = "" }: PollManagerProps) {
   const t = useT();
   const typeLabel = (kind: InteractionItem["type"]) => t(TYPE_LABELS[kind]);
   // Mid-sentence type names are lower case, except "Q&A".
@@ -133,6 +132,9 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [deleting, setDeleting] = useState<InteractionItem | null>(null);
+  const [saveTarget, setSaveTarget] = useState<SaveTarget | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [templateNotice, setTemplateNotice] = useState<{ key: "templates.saved" | "templates.added"; name: string } | null>(null);
 
   async function call(url: string, init: RequestInit): Promise<Response | null> {
     setError(null);
@@ -311,6 +313,16 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     <section aria-labelledby="interactions-title" className="stack">
       <h2 id="interactions-title">{t("pollMgr.title")}</h2>
       {error && !draft && <InlineError>{error}</InlineError>}
+      {templateNotice && (
+        <div role="status" className="notice">
+          <p>{t(templateNotice.key, { name: templateNotice.name })}</p>
+          {templateNotice.key === "templates.saved" && (
+            <p>
+              <Link href="/dashboard/templates">{t("templates.viewAll")}</Link>
+            </p>
+          )}
+        </div>
+      )}
       {items.length === 0 ? (
         <EmptyState title={t("pollMgr.emptyTitle")}>{t("pollMgr.emptyBody")}</EmptyState>
       ) : (
@@ -403,6 +415,11 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
                 {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => { setError(null); setRenaming({ id: item.id, name: item.title }); }}>{t("pollMgr.rename")}</Button>}
                 {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
+                {canManageTemplates && (
+                  <Button variant="quiet" aria-label={t("templates.saveItemFor", { title: item.title })} onClick={() => setSaveTarget({ interactionId: item.id, defaultName: item.title })}>
+                    {t("templates.saveItem")}
+                  </Button>
+                )}
                 {item.state === "draft" && <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>}
                 {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
                 {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>}
@@ -516,9 +533,36 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
         </Card>
       ) : eventLock ? null : (
         <div className="add-bar">
-          <AddContentMenu entries={ADD_BUTTONS} locks={lockedTypes} onPick={(kind) => setDraft(blank(kind, defaultModeration))} />
+          <div className="row-actions">
+            <AddContentMenu entries={ADD_BUTTONS} locks={lockedTypes} onPick={(kind) => setDraft(blank(kind, defaultModeration))} />
+            <Button onClick={() => setPicking(true)}>{t("templates.addFrom")}</Button>
+            {canManageTemplates && items.length > 0 && (
+              <Button variant="quiet" onClick={() => setSaveTarget({ defaultName: eventName })}>{t("templates.saveEvent")}</Button>
+            )}
+          </div>
         </div>
       )}
+
+      <SaveTemplateDialog
+        eventId={eventId}
+        target={saveTarget}
+        onClose={() => setSaveTarget(null)}
+        onSaved={(template) => {
+          setSaveTarget(null);
+          setTemplateNotice({ key: "templates.saved", name: template.name });
+        }}
+      />
+      <TemplatePicker
+        eventId={eventId}
+        open={picking}
+        canManage={canManageTemplates}
+        onClose={() => setPicking(false)}
+        onAdded={(template, added) => {
+          setPicking(false);
+          setItems((list) => [...list, ...(added as InteractionItem[])]);
+          setTemplateNotice({ key: "templates.added", name: template.name });
+        }}
+      />
 
       <Dialog open={deleting !== null} title={t("pollMgr.deleteTitle")} onClose={() => setDeleting(null)}>
         <p>{t("pollMgr.deleteBody", { title: deleting?.title ?? "" })}</p>

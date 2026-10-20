@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, templateItems, templates } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { MessageKey } from "@/lib/i18n/en";
@@ -6,8 +6,9 @@ import { copyConfig } from "@/lib/interaction-copy";
 import { isUuid } from "@/lib/events";
 import { assertTemplateSlot } from "@/lib/limits";
 import { getEntitlements } from "@/lib/plans";
+import { TEMPLATE_NAME_MAX } from "@/lib/template-limits";
 
-export const TEMPLATE_NAME_MAX = 80;
+export { TEMPLATE_NAME_MAX };
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -101,4 +102,21 @@ export async function insertTemplateItems(tx: Executor, eventId: string, userId:
       })),
     )
     .returning();
+}
+
+export type TemplateWithItems = TemplateRow & { items: { type: TemplateItemRow["type"]; title: string }[] };
+
+/** The workspace's templates, newest first, each with the type and title of its items in order. */
+export async function listTemplates(workspaceId: string): Promise<TemplateWithItems[]> {
+  const db = getDb();
+  const rows = await db.select().from(templates).where(eq(templates.workspaceId, workspaceId)).orderBy(desc(templates.createdAt), desc(templates.id));
+  if (rows.length === 0) return [];
+  const items = await db
+    .select({ templateId: templateItems.templateId, type: templateItems.type, title: templateItems.title })
+    .from(templateItems)
+    .where(inArray(templateItems.templateId, rows.map((row) => row.id)))
+    .orderBy(asc(templateItems.position));
+  const byTemplate = new Map<string, TemplateWithItems["items"]>();
+  for (const item of items) byTemplate.set(item.templateId, [...(byTemplate.get(item.templateId) ?? []), { type: item.type, title: item.title }]);
+  return rows.map((row) => ({ ...row, items: byTemplate.get(row.id) ?? [] }));
 }

@@ -98,6 +98,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         defaultModeration={event.moderationMode}
         initialCounts={await responseCounts(event.id)}
         liveUpdates
+        canManageTemplates={can(membership.role, "templates.manage")}
+        eventName={event.name}
       />
     </main>
   );

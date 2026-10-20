@@ -6,9 +6,11 @@ import { LiveParticipantCount } from "@/components/live-participant-count";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { InlineError, TextField } from "@/components/ui/field";
+import { InlineError, Select, TextField } from "@/components/ui/field";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
+import { PlanError } from "@/components/plan-error";
 import { PlanHint } from "@/components/plan-hint";
+import { apiError, type ApiError } from "@/lib/api-error";
 import { useT } from "@/lib/i18n/client";
 import type { Lock } from "@/lib/plan-hints";
 
@@ -34,11 +36,15 @@ async function errorFrom(response: Response) {
   return body?.error ?? SERVER_ERROR;
 }
 
-export function EventManager({ initialEvents }: { initialEvents: EventSummary[] }) {
+export type TemplateOption = { id: string; name: string; itemCount: number };
+
+export function EventManager({ initialEvents, templates = [] }: { initialEvents: EventSummary[]; templates?: TemplateOption[] }) {
   const t = useT();
   const [events, setEvents] = useState([...initialEvents].sort(byStart));
   const [created, setCreated] = useState<EventSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<ApiError | null>(null);
+  const [skipped, setSkipped] = useState(0);
   const [pending, setPending] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<EventSummary | null>(null);
@@ -47,28 +53,33 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
+    const templateId = String(data.get("templateId") ?? "");
     setPending(true);
     setError(null);
+    setCreateError(null);
+    setSkipped(0);
     try {
-      const response = await fetch("/api/events", {
+      const response = await fetch(templateId ? "/api/events/from-template" : "/api/events", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: data.get("name"),
           startsAt: new Date(String(data.get("startsAt"))).toISOString(),
           endsAt: new Date(String(data.get("endsAt"))).toISOString(),
+          ...(templateId ? { templateId } : {}),
         }),
       });
       if (!response.ok) {
-        setError(await errorFrom(response));
+        setCreateError(await apiError(response));
         return;
       }
-      const { event: saved } = (await response.json()) as { event: EventSummary };
+      const { event: saved, skipped: left = 0 } = (await response.json()) as { event: EventSummary; skipped?: number };
       setEvents((list) => [...list, saved].sort(byStart));
       setCreated(saved);
+      setSkipped(left);
       form.reset();
     } catch (err) {
-      setError(err instanceof RangeError ? t("eventMgr.invalidDates") : NETWORK_ERROR);
+      setCreateError({ message: err instanceof RangeError ? t("eventMgr.invalidDates") : NETWORK_ERROR, lock: null });
     } finally {
       setPending(false);
     }
@@ -138,7 +149,17 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
             <TextField label={t("eventMgr.start")} name="startsAt" type="datetime-local" required />
             <TextField label={t("eventMgr.end")} name="endsAt" type="datetime-local" required />
           </div>
-          {error && <InlineError>{error}</InlineError>}
+          {templates.length > 0 && (
+            <Select label={t("eventMgr.fromTemplate")} hint={t("eventMgr.fromTemplateHint")} name="templateId" defaultValue="">
+              <option value="">{t("eventMgr.fromTemplateBlank")}</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} ({t(template.itemCount === 1 ? "templates.itemCount.one" : "templates.itemCount.other", { count: template.itemCount })})
+                </option>
+              ))}
+            </Select>
+          )}
+          {createError && <PlanError error={createError} unlock={t("eventMgr.moreEvents")} />}
           <div>
             <Button type="submit" variant="primary" busy={pending}>
               {pending ? t("eventMgr.saving") : t("eventMgr.create")}
@@ -146,6 +167,8 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
           </div>
         </form>
       </Card>
+
+      {error && <InlineError>{error}</InlineError>}
 
       {created && (
         <div role="status" className="notice">
@@ -158,6 +181,7 @@ export function EventManager({ initialEvents }: { initialEvents: EventSummary[] 
           <p>
             {t("eventMgr.joinLink")} <code>{joinUrl(created.joinCode)}</code>
           </p>
+          {skipped > 0 && <p>{t(skipped === 1 ? "eventMgr.skipped.one" : "eventMgr.skipped.other", { count: skipped })}</p>}
         </div>
       )}
 

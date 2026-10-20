@@ -31,3 +31,8 @@ export function seatLock(limits: PlanLimits, seatsUsed: number): Lock | undefine
   if (seatsUsed < limits.seats) return undefined;
   return { requiredPlan: cheapestPlan((p) => PLANS[p].seats > seatsUsed) };
 }
+
+/** The tier that holds more templates than the current plan; shown once every template slot is used. */
+export function templateLock(limits: PlanLimits): Lock {
+  return { requiredPlan: cheapestPlan((p) => PLANS[p].templates > limits.templates) };
+}

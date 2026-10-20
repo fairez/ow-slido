@@ -10,6 +10,7 @@ import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getT } from "@/lib/i18n/server";
+import { listTemplates } from "@/lib/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
     .where(eq(events.workspaceId, membership.workspaceId))
     .orderBy(asc(events.startsAt), asc(events.createdAt));
   const locks = await overLimitEvents(membership.workspaceId);
+  const templates = await listTemplates(membership.workspaceId);
   const initialEvents = list.map((e) => ({
     id: e.id,
     name: e.name,
@@ -46,7 +48,7 @@ export default async function DashboardPage() {
         </div>
         <LogoutButton />
       </header>
-      <EventManager initialEvents={initialEvents} />
+      <EventManager initialEvents={initialEvents} templates={templates.map(({ id, name, items }) => ({ id, name, itemCount: items.length }))} />
     </main>
   );
 }

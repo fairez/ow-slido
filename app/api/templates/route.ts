@@ -1,28 +1,20 @@
-import { desc, eq, inArray } from "drizzle-orm";
-import { templateItems, templates } from "@/db/schema";
 import { requireMember } from "@/lib/auth/require-admin";
-import { getDb } from "@/lib/db";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
 import { getEntitlements } from "@/lib/plans";
 import { eventNotFound, findInteraction, findOwnedEvent, interactionNotFound } from "@/lib/polls";
-import { TEMPLATE_NAME_MAX, parseTemplateName, saveTemplate } from "@/lib/templates";
+import { TEMPLATE_NAME_MAX, listTemplates, parseTemplateName, saveTemplate } from "@/lib/templates";
 
 /** Every member can list: editors pick from the list although only owners and admins manage it. */
 export async function GET(request: Request) {
   const auth = await requireMember(request);
   if (!auth.ok) return auth.response;
 
-  const rows = await getDb().select().from(templates).where(eq(templates.workspaceId, auth.workspaceId)).orderBy(desc(templates.createdAt), desc(templates.id));
-  const items = rows.length
-    ? await getDb().select({ templateId: templateItems.templateId, position: templateItems.position, type: templateItems.type, title: templateItems.title }).from(templateItems).where(inArray(templateItems.templateId, rows.map((t) => t.id))).orderBy(templateItems.position)
-    : [];
-  const byTemplate = new Map<string, { type: string; title: string }[]>();
-  for (const item of items) byTemplate.set(item.templateId, [...(byTemplate.get(item.templateId) ?? []), { type: item.type, title: item.title }]);
+  const list = await listTemplates(auth.workspaceId);
   const { limits } = await getEntitlements(auth.workspaceId);
   return Response.json({
-    templates: rows.map((t) => ({ ...t, items: byTemplate.get(t.id) ?? [] })),
-    usage: { used: rows.length, limit: limits.templates },
+    templates: list,
+    usage: { used: list.length, limit: limits.templates },
   });
 }
 
