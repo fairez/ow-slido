@@ -1,0 +1,1 @@
+ALTER TABLE "workspaces" ADD COLUMN "require_2fa" boolean DEFAULT false NOT NULL;

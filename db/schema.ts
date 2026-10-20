@@ -90,6 +90,8 @@ export const recoveryCodes = pgTable(
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  /** Members without 2FA are held at the security page. Only enforced while the plan has `enforced2fa`. */
+  require2fa: boolean("require_2fa").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

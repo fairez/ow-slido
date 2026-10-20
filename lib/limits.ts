@@ -16,6 +16,7 @@ export type LimitReason =
   | "ai_month_limit"
   | "report_format"
   | "template_limit"
+  | "enforced_2fa"
   | "over_limit";
 
 /**
@@ -120,4 +121,12 @@ export async function assertTemplateSlot(workspaceId: string, db: Db = getDb()) 
   if (used < limits.templates) return;
   const requiredPlan = cheapestPlan((p) => used < PLANS[p].templates);
   throw new PlanLimitError("template_limit", "api.planTemplateLimit", requiredPlan, { limit: limits.templates });
+}
+
+/** Turning the 2FA requirement on is a Team feature; turning it off is always allowed. */
+export async function assertCanEnforceTwoFactor(workspaceId: string, db: Db = getDb()) {
+  const { limits, plan } = await getEntitlements(workspaceId, { db });
+  if (limits.enforced2fa) return;
+  const requiredPlan = cheapestPlan((p) => PLANS[p].enforced2fa);
+  throw new PlanLimitError("enforced_2fa", "api.planTwoFactorNotIncluded", requiredPlan, { plan });
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { TemplatesManager } from "@/components/templates-manager";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getT } from "@/lib/i18n/server";
@@ -21,6 +22,7 @@ export default async function TemplatesPage() {
   if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
 
   const [list, { limits }] = await Promise.all([listTemplates(membership.workspaceId), getEntitlements(membership.workspaceId)]);
 

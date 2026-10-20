@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { ModerationPanel } from "@/components/moderation-panel";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isUuid } from "@/lib/events";
@@ -26,6 +27,7 @@ export default async function ModeratePage({ params }: { params: Promise<{ id: s
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   const { id } = await params;
   if (!membership || !can(membership.role, "moderate") || !isUuid(id)) notFound();
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
   const event = await findOwnedEvent(id, membership.workspaceId);
   if (!event) notFound();
 

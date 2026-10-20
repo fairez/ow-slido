@@ -87,7 +87,7 @@ describe("gated actions in the host screens", () => {
     expect(screen.queryByText(/Pro plan/)).toBeNull();
   });
 
-  const owner = { userId: "o", email: "o@x.test", role: "owner" as const, status: "active" as const, joinedAt: "2026-01-01T00:00:00.000Z", lastLoginAt: null };
+  const owner = { userId: "o", email: "o@x.test", role: "owner" as const, status: "active" as const, joinedAt: "2026-01-01T00:00:00.000Z", lastLoginAt: null, twoFactor: false };
   const tiers = { current: "free" as const, tiers: (["free", "pro", "team"] as const).map((plan) => ({ plan, seats: PLANS[plan].seats })) };
 
   it("turns the invite button into a hint when every seat is taken", () => {

@@ -36,3 +36,9 @@ export function seatLock(limits: PlanLimits, seatsUsed: number): Lock | undefine
 export function templateLock(limits: PlanLimits): Lock {
   return { requiredPlan: cheapestPlan((p) => PLANS[p].templates > limits.templates) };
 }
+
+/** Set when the plan cannot require 2FA, so the switch on the members page becomes a pointer to the plan page. */
+export function twoFactorLock(limits: PlanLimits): Lock | undefined {
+  if (limits.enforced2fa) return undefined;
+  return { requiredPlan: cheapestPlan((p) => PLANS[p].enforced2fa) };
+}

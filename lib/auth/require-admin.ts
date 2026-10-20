@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { memberships, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { can, type Action } from "./permissions";
+import { twoFactorRequiredResponse, twoFactorSetupRequired } from "./two-factor-policy";
 import { parseSessionToken, readSessionToken } from "./session";
 import { WORKSPACE_COOKIE, readCookie, resolveActiveMembership, type MembershipInfo } from "./workspace";
 
@@ -56,12 +57,16 @@ export async function requireAdmin(
 
 export type MemberContext = { user: AuthUser; workspaceId: string; role: MembershipInfo["role"] };
 
-/** The signed-in user together with the workspace the request acts in; null for anonymous, non-member or suspended users. */
+/**
+ * The signed-in user together with the workspace the request acts in; null for anonymous, non-member or suspended
+ * users, and for a member the workspace holds at the security page until they turn on 2FA.
+ */
 export async function getSessionMember(request: Request, workspaceId?: string): Promise<MemberContext | null> {
   const user = await getSessionUser(request);
   if (!user || user.mustChangePassword) return null;
   const membership = resolveActiveMembership(user.memberships, workspaceId ?? readCookie(request, WORKSPACE_COOKIE));
   if (!membership || (workspaceId && membership.workspaceId !== workspaceId)) return null;
+  if (await twoFactorSetupRequired(membership.workspaceId, user.id)) return null;
   return { user, workspaceId: membership.workspaceId, role: membership.role };
 }
 
@@ -83,6 +88,9 @@ export async function requireMember(
   const membership = resolveActiveMembership(user.memberships, workspaceId ?? readCookie(request, WORKSPACE_COOKIE));
   if (!membership || (workspaceId && membership.workspaceId !== workspaceId)) {
     return { ok: false, response: Response.json({ error: serverT(request, "api.forbidden") }, { status: 403 }) };
+  }
+  if (await twoFactorSetupRequired(membership.workspaceId, user.id)) {
+    return { ok: false, response: twoFactorRequiredResponse(serverT(request, "api.twoFactorRequired")) };
   }
   if (action && !can(membership.role, action)) return { ok: false, response: forbidden(request) };
   return { ok: true, user, workspaceId: membership.workspaceId, role: membership.role };

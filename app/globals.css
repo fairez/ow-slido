@@ -646,6 +646,16 @@ textarea:disabled {
   outline: none;
 }
 
+.security-required {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-weight: 600;
+}
+
 .security-status {
   margin: 0 0 var(--space-1);
   font-weight: 600;
@@ -2031,6 +2041,24 @@ a.ui-button:not([data-variant]) {
 
 .section-head h2:focus {
   outline: none;
+}
+
+.member-policy {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.member-policy > * {
+  margin: 0;
+}
+
+.member-policy h2 {
+  font-size: var(--text-lg);
 }
 
 .member-row {

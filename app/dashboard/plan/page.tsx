@@ -5,6 +5,7 @@ import { PlanOverview } from "@/components/plan-overview";
 import { can } from "@/lib/auth/permissions";
 import { getBillingControls } from "@/lib/billing/status";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
@@ -22,6 +23,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
   if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
 
   const canManageBilling = can(membership.role, "billing.manage");
   const { checkout } = await searchParams;

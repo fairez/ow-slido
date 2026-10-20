@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { PresenterView } from "@/components/presenter-view";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { asc, eq } from "drizzle-orm";
@@ -27,6 +28,7 @@ export default async function PresentPage({
   if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
   if (!membership) notFound();
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
 
   const event = await findOwnedEvent((await params).eventId, membership.workspaceId);
   if (!event) notFound();

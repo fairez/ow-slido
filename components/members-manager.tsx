@@ -5,7 +5,7 @@ import { PlanHint } from "@/components/plan-hint";
 import { Button } from "@/components/ui/button";
 import { Badge, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
-import { InlineError, Select, TextField } from "@/components/ui/field";
+import { InlineError, Select, TextField, Toggle } from "@/components/ui/field";
 import { ROLES, type Role } from "@/lib/auth/permissions";
 import { useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n";
@@ -21,6 +21,7 @@ export type MemberRow = {
   suspendedReason?: "seat_limit" | null;
   joinedAt: string;
   lastLoginAt: string | null;
+  twoFactor: boolean;
 };
 export type InvitationRow = { id: string; email: string; role: string; status: string; expiresAt: string };
 
@@ -35,6 +36,7 @@ export function MembersManager({
   initialMembers,
   initialInvitations,
   seatTiers,
+  twoFactorPolicy,
 }: {
   selfId: string;
   actorRole: Role;
@@ -42,6 +44,8 @@ export function MembersManager({
   initialInvitations: InvitationRow[];
   /** Seats each tier includes, cheapest first, with the current tier's name. Omit to never lock the invite button. */
   seatTiers?: { current: PlanId; tiers: { plan: PlanId; seats: number }[] };
+  /** The workspace's 2FA requirement; `lock` is set when the plan cannot enforce it. Omit to hide the control. */
+  twoFactorPolicy?: { required: boolean; lock?: Lock };
 }) {
   const t = useT();
   const roleLabel = (role: string) => t(`role.${role}` as MessageKey);
@@ -49,6 +53,8 @@ export function MembersManager({
   const [invitations, setInvitations] = useState(initialInvitations);
   const [pageError, setPageError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [requireTwoFactor, setRequireTwoFactor] = useState(twoFactorPolicy?.required ?? false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
 
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -111,6 +117,16 @@ export function MembersManager({
     return result.ok;
   }
 
+  async function changePolicy(next: boolean) {
+    if (busy === "policy") return;
+    setBusy("policy");
+    setPolicyError(null);
+    const result = await call("PATCH", "/api/workspaces/active/security", { require2fa: next });
+    if (result.ok) setRequireTwoFactor(next);
+    else setPolicyError(result.error);
+    setBusy(null);
+  }
+
   async function sendInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -164,6 +180,23 @@ export function MembersManager({
 
   return (
     <div className="stack">
+      {twoFactorPolicy && (
+        <section aria-labelledby="policy-heading" className="member-policy">
+          <h2 id="policy-heading">{t("members.policy.title")}</h2>
+          <p className="row-meta">{t("members.policy.lead")}</p>
+          {twoFactorPolicy.lock ? (
+            <PlanHint lock={twoFactorPolicy.lock}>{t("members.policy.toggle")}</PlanHint>
+          ) : (
+            <Toggle
+              label={t("members.policy.toggle")}
+              checked={requireTwoFactor}
+              aria-busy={busy === "policy" || undefined}
+              onChange={(e) => void changePolicy(e.target.checked)}
+            />
+          )}
+          {policyError && <InlineError>{policyError}</InlineError>}
+        </section>
+      )}
       <section aria-labelledby="members-heading">
         <div className="section-head">
           <h2 id="members-heading" ref={headingRef} tabIndex={-1}>
@@ -203,6 +236,7 @@ export function MembersManager({
                   {isSelf && <Badge tone="accent">{t("common.you")}</Badge>}
                   {m.status === "suspended" && <Badge>{t("members.status.suspended")}</Badge>}
                   {!canManage && <Badge>{roleLabel(m.role)}</Badge>}
+                  <Badge tone={m.twoFactor ? "accent" : "neutral"}>{t(m.twoFactor ? "members.twoFactor.on" : "members.twoFactor.off")}</Badge>
                 </div>
                 {canManage && (
                   <div className="member-actions">

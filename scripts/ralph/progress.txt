@@ -50,3 +50,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Screens at 360 and 1280 (light and dark) are in scripts/ralph/screens/us003-*.png; script us003.mjs.
   - Not done: no route to regenerate recovery codes, and the reset form still pushes to /dashboard for a 2FA user (US-002 note); both are outside this story's criteria.
 ---
+
+## 2026-10-21 - US-004
+- `workspaces.require_2fa` (migration 0041). `PATCH /api/workspaces/active/security {require2fa}` needs `members.manage`; turning it on needs the `enforced2fa` entitlement (402 `enforced_2fa`, requiredPlan team) and a configured `TWOFA_ENCRYPTION_KEY` (503, otherwise members could never enrol); turning it off always works. A member without 2FA in a requiring workspace gets 403 `{reason: "two_factor_required"}` from `requireMember`, null from `getSessionMember`, no host/moderator socket, and a redirect to `/account/security` from every workspace page. The members page shows "2FA on/off" per member and the switch (a `PlanHint` below Team); the security page shows a notice when the workspace is what holds the member there.
+- Files: db/schema.ts, db/migrations/0041_*, lib/auth/two-factor-policy.ts, lib/auth/require-admin.ts, lib/realtime/socket-server.ts, lib/limits.ts, lib/plan-hints.ts, lib/members.ts, app/api/workspaces/active/security/route.ts, 7 workspace pages + security page, components/members-manager.tsx, app/globals.css, lib/i18n en/id, tests/two-factor-policy.test.ts (+ members-manager, plan-hints), CLAUDE.md.
+- **Learnings for future iterations:**
+  - Enforcement is only in `requireMember`, `getSessionMember`, the socket `authorize` and the pages. A new page that resolves the membership itself must call `redirectIfTwoFactorMissing`; a new route that calls `getSessionUser` directly is open to held members, so keep that to account/enrolment routes.
+  - The flag only counts while the plan has `enforced2fa` (checked at read time), so a downgrade lifts it without a write and switching it off on a downgraded workspace is allowed.
+  - Only the active workspace is enforced: a member held in A can switch to B (via the `workspace` cookie / `/api/workspaces/active`) and use B normally.
+  - `sql<boolean>` is needed for `x is not null` in a select; Drizzle's `isNotNull(col)` selects as `unknown`.
+  - Two test runs on the same test DB at once produce hundreds of false failures (truncateAll). A background `( a; b; c ) &` chain started from a shell whose cwd is not the repo also ran `next build` in the wrong directory, so check `BUILD_ID` after building and never chain `npm test` twice. `tests/quiz-ui.test.tsx` "returns focus to the button" failed once under full-suite load and passes alone.
+  - Browser checks need `TWOFA_ENCRYPTION_KEY` in the server's environment (the dev `.env.local` has none) to turn the requirement on; script `scripts/ralph/screens/us004.mjs [width]` seeds through SQL on the dev DB and cleans up. Signup is rate limited per IP (3 per run), so run one width per server start.
+---

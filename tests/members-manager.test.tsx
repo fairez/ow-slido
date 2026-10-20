@@ -11,6 +11,7 @@ const member = (id: string, email: string, role: Role, status: "active" | "suspe
   status,
   joinedAt: "2026-01-01T00:00:00.000Z",
   lastLoginAt: id === "o1" ? "2026-10-01T08:00:00.000Z" : null,
+  twoFactor: id === "o1",
 });
 const MEMBERS = [member("o1", "owner@x.test", "owner"), member("e1", "ed@x.test", "editor"), member("v1", "view@x.test", "viewer", "suspended")];
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
@@ -138,5 +139,47 @@ describe("MembersManager", () => {
     ui();
     fireEvent.click(screen.getByRole("button", { name: "Revoke invitation for new@x.test" }));
     await waitFor(() => expect(calls[0]).toMatchObject({ url: "/api/invitations/i1", method: "DELETE" }));
+  });
+
+  it("shows who has 2FA on", () => {
+    ui();
+    const ownerRow = screen.getByText("owner@x.test").closest("li") as HTMLElement;
+    expect(within(ownerRow).getByText("2FA on")).toBeTruthy();
+    const editorRow = screen.getByText("ed@x.test").closest("li") as HTMLElement;
+    expect(within(editorRow).getByText("2FA off")).toBeTruthy();
+  });
+
+  describe("2FA requirement", () => {
+    const withPolicy = (twoFactorPolicy: { required: boolean; lock?: { requiredPlan: "team" } }) =>
+      render(
+        <I18nProvider locale="en">
+          <MembersManager selfId="o1" actorRole="owner" initialMembers={MEMBERS} initialInvitations={INVITES} twoFactorPolicy={twoFactorPolicy} />
+        </I18nProvider>,
+      );
+
+    it("is hidden without a policy", () => {
+      ui();
+      expect(screen.queryByText("Require two-factor authentication for everyone")).toBeNull();
+    });
+
+    it("turns the requirement on and reports a refusal", async () => {
+      const calls = stubFetch(() => Response.json({ require2fa: true }));
+      withPolicy({ required: false });
+      const toggle = screen.getByRole("checkbox", { name: "Require two-factor authentication for everyone" }) as HTMLInputElement;
+      fireEvent.click(toggle);
+      await waitFor(() => expect(toggle.checked).toBe(true));
+      expect(calls[0]).toMatchObject({ url: "/api/workspaces/active/security", method: "PATCH", body: { require2fa: true } });
+
+      stubFetch(() => Response.json({ error: "Not allowed" }, { status: 403 }));
+      fireEvent.click(toggle);
+      expect(await screen.findByText("Not allowed")).toBeTruthy();
+      expect(toggle.checked).toBe(true);
+    });
+
+    it("becomes a plan hint when the plan cannot enforce it", () => {
+      withPolicy({ required: false, lock: { requiredPlan: "team" } });
+      expect(screen.queryByRole("checkbox", { name: /Require two-factor/ })).toBeNull();
+      expect(screen.getByRole("link", { name: "Require two-factor authentication for everyone Team plan" }).getAttribute("href")).toBe("/dashboard/plan");
+    });
   });
 });

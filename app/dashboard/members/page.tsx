@@ -1,15 +1,19 @@
+import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { workspaces } from "@/db/schema";
 import { MembersManager } from "@/components/members-manager";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { getT } from "@/lib/i18n/server";
 import { listInvitations } from "@/lib/invitations";
 import { listMembers } from "@/lib/members";
+import { twoFactorLock } from "@/lib/plan-hints";
 import { reconcileSeats } from "@/lib/seats";
 import { PLAN_IDS, PLANS, getEntitlements } from "@/lib/plans";
 
@@ -23,14 +27,16 @@ export default async function MembersPage() {
   if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
   if (!can(membership.role, "members.manage")) redirect("/dashboard");
 
   const db = getDb();
   await reconcileSeats(membership.workspaceId, { db });
-  const [members, invitations, entitlements] = await Promise.all([
+  const [members, invitations, entitlements, [workspace]] = await Promise.all([
     listMembers(db, membership.workspaceId),
     listInvitations(db, membership.workspaceId),
     getEntitlements(membership.workspaceId, { db }),
+    db.select({ require2fa: workspaces.require2fa }).from(workspaces).where(eq(workspaces.id, membership.workspaceId)),
   ]);
 
   return (
@@ -48,6 +54,7 @@ export default async function MembersPage() {
         selfId={user.id}
         actorRole={membership.role}
         seatTiers={{ current: entitlements.plan, tiers: PLAN_IDS.map((plan) => ({ plan, seats: PLANS[plan].seats })) }}
+        twoFactorPolicy={{ required: workspace?.require2fa ?? false, lock: twoFactorLock(entitlements.limits) }}
         initialMembers={members.map((m) => ({
           ...m,
           joinedAt: m.joinedAt.toISOString(),

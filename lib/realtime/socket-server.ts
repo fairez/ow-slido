@@ -5,6 +5,7 @@ import { events, participants } from "@/db/schema";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import { twoFactorSetupRequired } from "@/lib/auth/two-factor-policy";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
@@ -37,6 +38,7 @@ async function authorize(
     if (!user || user.mustChangePassword) return null;
     const membership = resolveActiveMembership(user.memberships, cookies.get(WORKSPACE_COOKIE));
     if (!membership) return null;
+    if (await twoFactorSetupRequired(membership.workspaceId, user.id, db)) return null;
     if (role === "moderator" && !can(membership.role, "moderate")) return null;
     const [event] = await db
       .select({ id: events.id })

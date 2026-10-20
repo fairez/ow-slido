@@ -8,6 +8,7 @@ import { PlanHint } from "@/components/plan-hint";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
+import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { responseCounts } from "@/lib/content-library";
@@ -29,6 +30,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
   if (!membership) notFound();
+  await redirectIfTwoFactorMissing(membership.workspaceId, user.id);
 
   const event = await findOwnedEvent((await params).id, membership.workspaceId);
   if (!event) notFound();

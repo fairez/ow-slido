@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { createDb } from "@/db/client";
-import { memberships, users } from "@/db/schema";
+import { memberships, userTotp, users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { ROLES, type Role } from "@/lib/auth/permissions";
 import { assertSeatAvailable, reconcileSeats } from "@/lib/seats";
@@ -44,9 +44,11 @@ export async function listMembers(db: Db, workspaceId: string) {
       suspendedReason: memberships.suspendedReason,
       joinedAt: memberships.createdAt,
       lastLoginAt: users.lastLoginAt,
+      twoFactor: sql<boolean>`${userTotp.confirmedAt} is not null`,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(userTotp, eq(userTotp.userId, users.id))
     .where(eq(memberships.workspaceId, workspaceId))
     .orderBy(asc(memberships.createdAt), asc(users.email));
 }
