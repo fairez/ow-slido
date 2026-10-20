@@ -254,3 +254,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Mock checkout reuse: opening the same link twice repeats the same event id, so it is applied once.
   - No UI change (the upgrade/cancel UI is US-024), so no browser check. Full suite: 783 tests, ~310s. Test and dev DBs migrated to 0028.
 ---
+## 2026-10-20 - US-023
+- Added `StripeProvider` (lib/billing/stripe.ts): checkout session, billing portal session and cancel (`cancel_at_period_end`) through Stripe's REST API with `fetch` (form-encoded, 10s timeout, no SDK); `Stripe-Signature` check (HMAC-SHA256 over `t.body`, any one `v1` matches, 300s tolerance). `getBillingProvider()` returns it only for `BILLING_PROVIDER=stripe`. Webhook mapping: only `customer.subscription.*`; plan and interval from the price id (`STRIPE_PRICE_{PRO,TEAM}_{MONTH,YEAR}`), workspace from the subscription metadata that checkout sets, period end from the item or the subscription.
+- `BillingProviderError` (provider refused or failed) is answered as 502 by `billingErrorResponse` (renamed from `notConfiguredResponse`, same 503 for missing config).
+- Files: lib/billing/{stripe,index,types,http}.ts, app/api/billing/**/route.ts (rename only), lib/i18n/{en,id}.ts, tests/billing-stripe.test.ts, docs/billing.md, .env.example, README.md, CLAUDE.md
+- **Learnings for future iterations:**
+  - Stripe keeps status `active` while `cancel_at_period_end` is true; `parseWebhook` stores that as `canceled` with the period end. `unpaid`/`paused`/`canceled` are `canceled`; an `ended_at` earlier than the period end wins (immediate cancel). `incomplete*` and unknown prices or missing workspace metadata return null (acknowledged, not applied).
+  - Env is read when a method runs, so tests use `vi.stubEnv` and a fake fetch via `new StripeProvider({fetch, now})`; sign test payloads with the same HMAC recipe (see `signed()` in the test).
+  - For US-024: checkout always creates a new Stripe subscription (no `customer` is passed), so upgrading Pro to Team on an existing subscription should go through the portal, or checkout needs the existing customer id.
+  - Still not handled: out-of-order webhook delivery (see US-022 notes). Stripe event `created` could be stored to skip older events.
+  - No UI change, no browser check. Full suite: 799 tests, ~314s. No migration.
+---

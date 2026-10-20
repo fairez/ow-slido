@@ -54,3 +54,12 @@ export interface BillingProvider {
 export class BillingSignatureError extends Error {}
 export class BillingPayloadError extends Error {}
 export class BillingNotConfiguredError extends Error {}
+/** Stripe (or another provider) answered a request with an error; the message has no secrets in it. */
+export class BillingProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}

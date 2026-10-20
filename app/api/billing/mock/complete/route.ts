@@ -1,5 +1,5 @@
 import { getBillingProvider, isMockProvider } from "@/lib/billing";
-import { notConfiguredResponse } from "@/lib/billing/http";
+import { billingErrorResponse } from "@/lib/billing/http";
 import { requireMember } from "@/lib/auth/require-admin";
 import { serverT } from "@/lib/i18n/server";
 
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     await provider.completeCheckout(claims);
     return new Response(null, { status: 303, headers: { location: "/dashboard/plan?checkout=success" } });
   } catch (error) {
-    const response = notConfiguredResponse(request, error);
+    const response = billingErrorResponse(request, error);
     if (response) return response;
     throw error;
   }

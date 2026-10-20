@@ -70,7 +70,7 @@ Configure it with the `AI_*` variables above. The platform owner's key belongs o
 
 ## Billing
 
-Payments sit behind a `BillingProvider` interface (`lib/billing/`). `BILLING_PROVIDER=mock` is the default outside production: checkout is a signed link to a local route, and state changes arrive as HMAC-signed webhooks through the same `POST /api/billing/webhook` a real provider would call. In production the variable has no default, so set it explicitly; with it unset, the billing routes answer 503 and no paid plan can be bought. Set `BILLING_WEBHOOK_SECRET` (required in production). Webhooks are verified, recorded once per provider event id, and are the only way a subscription changes. Canceling keeps paid access until the period end. Tests and e2e use the mock and never reach the network.
+Payments sit behind a `BillingProvider` interface (`lib/billing/`). `BILLING_PROVIDER=mock` is the default outside production: checkout is a signed link to a local route, and state changes arrive as HMAC-signed webhooks through the same `POST /api/billing/webhook` a real provider would call. In production the variable has no default, so set it explicitly; with it unset, the billing routes answer 503 and no paid plan can be bought. Set `BILLING_WEBHOOK_SECRET` (required in production). Webhooks are verified, recorded once per provider event id, and are the only way a subscription changes. Canceling keeps paid access until the period end. Tests and e2e use the mock and never reach the network. Real payments use `BILLING_PROVIDER=stripe`; setup for test-mode keys, prices and the webhook URL is in `docs/billing.md`.
 
 ## Architecture
 

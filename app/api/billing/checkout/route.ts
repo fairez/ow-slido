@@ -1,5 +1,5 @@
 import { getBillingProvider, type PaidPlan } from "@/lib/billing";
-import { notConfiguredResponse } from "@/lib/billing/http";
+import { billingErrorResponse } from "@/lib/billing/http";
 import { denyUnlessVerified, requireMember } from "@/lib/auth/require-admin";
 import { serverT } from "@/lib/i18n/server";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     });
     return Response.json({ url: session.url });
   } catch (error) {
-    const response = notConfiguredResponse(request, error);
+    const response = billingErrorResponse(request, error);
     if (response) return response;
     throw error;
   }

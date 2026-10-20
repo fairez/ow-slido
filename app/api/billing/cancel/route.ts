@@ -1,5 +1,5 @@
 import { getBillingProvider } from "@/lib/billing";
-import { getSubscriptionRow, notConfiguredResponse } from "@/lib/billing/http";
+import { getSubscriptionRow, billingErrorResponse } from "@/lib/billing/http";
 import { requireMember } from "@/lib/auth/require-admin";
 import { serverT } from "@/lib/i18n/server";
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     });
     return Response.json({ ok: true });
   } catch (error) {
-    const response = notConfiguredResponse(request, error);
+    const response = billingErrorResponse(request, error);
     if (response) return response;
     throw error;
   }

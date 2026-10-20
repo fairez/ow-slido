@@ -1,5 +1,5 @@
 import { BillingPayloadError, BillingSignatureError, getBillingProvider, receiveWebhook } from "@/lib/billing";
-import { notConfiguredResponse } from "@/lib/billing/http";
+import { billingErrorResponse } from "@/lib/billing/http";
 import { serverT } from "@/lib/i18n/server";
 
 /** Called by the payment provider, not by a browser: no session, the signature is the credential. */
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (error instanceof BillingPayloadError) {
       return Response.json({ error: serverT(request, "api.invalidBody") }, { status: 400 });
     }
-    const response = notConfiguredResponse(request, error);
+    const response = billingErrorResponse(request, error);
     if (response) return response;
     throw error;
   }

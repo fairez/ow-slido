@@ -560,6 +560,7 @@ export const en = {
   "api.participantLimit": "This event is full. Ask the host to let more people in.",
   "api.planAiNotIncluded": "AI analysis is not part of your plan. Upgrade to use it.",
   "api.billingNotConfigured": "Online payments are not set up on this server",
+  "api.billingProviderError": "The payment provider could not complete that. Try again in a moment",
   "api.billingInvalidPlan": "Choose Pro or Team, billed monthly or yearly",
   "api.billingNoSubscription": "This workspace has no paid subscription to change",
   "api.billingBadSignature": "The webhook signature is not valid",

@@ -563,6 +563,7 @@ export const id: Record<MessageKey, string> = {
   "api.participantLimit": "Acara ini sudah penuh. Minta penyelenggara untuk membuka tempat bagi lebih banyak orang.",
   "api.planAiNotIncluded": "Analisis AI tidak termasuk dalam paket Anda. Upgrade untuk memakainya.",
   "api.billingNotConfigured": "Pembayaran online belum disiapkan di server ini",
+  "api.billingProviderError": "Penyedia pembayaran belum bisa menyelesaikannya. Coba lagi sebentar lagi",
   "api.billingInvalidPlan": "Pilih Pro atau Team, dengan tagihan bulanan atau tahunan",
   "api.billingNoSubscription": "Workspace ini tidak punya langganan berbayar yang bisa diubah",
   "api.billingBadSignature": "Tanda tangan webhook tidak valid",
