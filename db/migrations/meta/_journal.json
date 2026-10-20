@@ -183,6 +183,13 @@
       "when": 1792487385424,
       "tag": "0025_great_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792488114158,
+      "tag": "0026_careful_starjammers",
+      "breakpoints": true
     }
   ]
 }

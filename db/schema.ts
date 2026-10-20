@@ -88,6 +88,36 @@ export const memberships = pgTable(
   ],
 );
 
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** Stored lowercase. */
+    email: text("email").notNull(),
+    role: text("role", { enum: ["admin", "editor", "moderator", "viewer"] }).notNull(),
+    invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    /** The single-use `invite` token behind the link. */
+    tokenId: uuid("token_id")
+      .notNull()
+      .references(() => authTokens.id, { onDelete: "cascade" }),
+    /** `expired` is written lazily; treat a pending row past `expires_at` as expired. */
+    status: text("status", { enum: ["pending", "accepted", "revoked", "expired"] })
+      .notNull()
+      .default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("invitations_workspace_idx").on(t.workspaceId),
+    uniqueIndex("invitations_pending_email").on(t.workspaceId, t.email).where(sql`${t.status} = 'pending'`),
+    check("invitations_role", sql`${t.role} in ('admin', 'editor', 'moderator', 'viewer')`),
+    check("invitations_status", sql`${t.status} in ('pending', 'accepted', 'revoked', 'expired')`),
+  ],
+);
+
 export const events = pgTable(
   "events",
   {

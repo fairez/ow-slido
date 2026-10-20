@@ -546,6 +546,16 @@ export const en = {
   "account.password.new": "New password",
   "account.password.submit": "Change password",
   "account.password.logout": "Log out instead",
+  "api.inviteRoleInvalid": "Choose a role: admin, editor, moderator or viewer.",
+  "api.inviteDuplicate": "That email already has a pending invitation. Revoke it to send a new one.",
+  "api.inviteAlreadyMember": "That person is already a member of this workspace.",
+  "api.inviteNotFound": "Invitation not found",
+  "api.inviteNotPending": "That invitation is no longer pending.",
+  "api.inviteInvalid": "This invitation link is not valid. It may have expired, been used or been revoked.",
+  "api.inviteWrongEmail": "This invitation was sent to a different email address. Log in with that account.",
+  "api.inviteLoginRequired": "An account with this email already exists. Log in to accept the invitation.",
+  "email.invite.subject": "You are invited to {workspace}",
+  "email.invite.body": "You have been invited to join {workspace} as {role}.\n\nOpen this link to accept:\n\n{link}\n\nThe link works once and expires in {days} days. If you were not expecting it, ignore this message.",
 };
 
 export type MessageKey = keyof typeof en;

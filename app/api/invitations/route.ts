@@ -1,0 +1,60 @@
+import { denyUnlessVerified, requireMember } from "@/lib/auth/require-admin";
+import { getDb } from "@/lib/db";
+import { apiMessage, serverT } from "@/lib/i18n/server";
+import { createInvitation, listInvitations, parseInviteInput, sendInvitationEmail } from "@/lib/invitations";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { SeatLimitError, assertSeatAvailable } from "@/lib/seats";
+
+const INVITE_LIMIT = 30;
+const INVITE_WINDOW_SECONDS = 60 * 60;
+
+export async function GET(request: Request) {
+  const auth = await requireMember(request, "members.manage");
+  if (!auth.ok) return auth.response;
+  return Response.json({ invitations: await listInvitations(getDb(), auth.workspaceId) });
+}
+
+/** The link is in this response and in the email; it is not stored in a readable form, so it cannot be fetched again. */
+export async function POST(request: Request) {
+  const auth = await requireMember(request, "members.manage");
+  if (!auth.ok) return auth.response;
+  const unverified = denyUnlessVerified(request, auth.user);
+  if (unverified) return unverified;
+
+  const parsed = parseInviteInput(await request.json().catch(() => null));
+  if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: parsed.status });
+
+  const limit = await rateLimit(`invite:${auth.workspaceId}:${clientIp(request)}`, INVITE_LIMIT, INVITE_WINDOW_SECONDS);
+  if (!limit.allowed) {
+    return Response.json(
+      { error: serverT(request, "api.tooManyAttempts") },
+      { status: 429, headers: { "retry-after": String(limit.retryAfterSeconds) } },
+    );
+  }
+
+  try {
+    await assertSeatAvailable(auth.workspaceId);
+  } catch (error) {
+    if (error instanceof SeatLimitError) {
+      return Response.json({ error: error.message, reason: error.reason }, { status: 402 });
+    }
+    throw error;
+  }
+
+  const db = getDb();
+  const created = await createInvitation(db, {
+    workspaceId: auth.workspaceId,
+    email: parsed.value.email,
+    role: parsed.value.role,
+    invitedBy: auth.user.id,
+  });
+  if (!created.ok) return Response.json({ error: apiMessage(request, created) }, { status: created.status });
+
+  const link = `${new URL(request.url).origin}/invite?token=${encodeURIComponent(created.token)}`;
+  const emailSent = await sendInvitationEmail(
+    db,
+    { workspaceId: auth.workspaceId, email: created.invitation.email, role: created.invitation.role, link },
+    (key, params) => serverT(request, key, params),
+  );
+  return Response.json({ invitation: created.invitation, link, emailSent }, { status: 201 });
+}

@@ -7,21 +7,28 @@ type Db = ReturnType<typeof createDb>["db"];
 
 export type TokenPurpose = "verify_email" | "reset_password" | "invite";
 
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-/** Creates a token and returns the raw value to put in a link; only its hash is stored. */
+/** Creates a token and returns its row id and the raw value to put in a link; only the hash is stored. */
+export async function issueTokenRecord(
+  db: Db,
+  input: { userId: string | null; purpose: TokenPurpose; ttlMs: number },
+): Promise<{ id: string; token: string; expiresAt: Date }> {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + input.ttlMs);
+  const [row] = await db
+    .insert(authTokens)
+    .values({ userId: input.userId, purpose: input.purpose, tokenHash: hashToken(token), expiresAt })
+    .returning({ id: authTokens.id });
+  return { id: row.id, token, expiresAt };
+}
+
+/** Creates a token and returns the raw value to put in a link. */
 export async function issueToken(
   db: Db,
   input: { userId: string | null; purpose: TokenPurpose; ttlMs: number },
 ): Promise<string> {
-  const token = randomBytes(32).toString("base64url");
-  await db.insert(authTokens).values({
-    userId: input.userId,
-    purpose: input.purpose,
-    tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + input.ttlMs),
-  });
-  return token;
+  return (await issueTokenRecord(db, input)).token;
 }
 
 /**

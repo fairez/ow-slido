@@ -162,3 +162,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - The forgot route's in-memory limit (9/IP, 3/email per 15 min) trips when a dev server is hit repeatedly by screenshot scripts; restart the server to reset it.
   - Screenshots at 360/1280 (login, forgot, sent, reset missing/bad link, change, forced, error): no overflow. Dev DB migrated to 0025; screenshot user deleted (0 left).
 ---
+## 2026-10-20 - US-015
+- Added `invitations` (migration 0026; cascade from workspaces, partial unique index on pending workspace+email, token via `auth_tokens` `invite` purpose, 7-day expiry). `lib/invitations.ts`: `createInvitation`, `listInvitations`, `revokeInvitation`, `acceptInvitation`, `sendInvitationEmail`. Routes: `GET/POST /api/invitations`, `DELETE /api/invitations/[id]` (all `members.manage`; create also needs a verified email and is rate limited), `POST /api/invitations/accept` (`{token, password?}`).
+- Create returns `{invitation, link, emailSent}` once and emails the link (`/invite?token=`, the page itself is US-017). Owner role cannot be invited, duplicate pending invite and inviting an existing member give 409. Accept: signed-in user must match the invited email (403 `wrong_email`); signed out with an unknown email creates a verified user and signs them in (400 `password_required` if the password is short, link not spent); known email gives 401 `login_required`. The workspace cookie is set to the joined workspace.
+- `lib/seats.ts` has the no-op `assertSeatAvailable(workspaceId)` and `SeatLimitError` (reason `seat_limit`); the create route already maps it to 402. US-019 fills it in.
+- Files: db/schema.ts, db/migrations/0026_*, lib/{invitations,seats}.ts, lib/auth/tokens.ts (`hashToken`, `issueTokenRecord`), app/api/invitations/**, lib/i18n/{en,id}.ts, tests/invitations.test.ts
+- **Learnings for future iterations:**
+  - Drizzle wraps driver errors: the Postgres code (`23505`) is on `error.cause.code`, not `error.code`. Older code checking `error.code` directly may never match.
+  - Pending invitations past `expires_at` are only marked `expired` lazily (list and create call `expireStale`); anything reading invitations must treat pending + past expiry as expired. US-016/US-019 seat counts should only count pending rows with `expires_at > now()`.
+  - Anyone holding the link (the inviter sees it) can accept it as a new user and so create a verified account for an email they do not control, because the spec makes invite-created accounts verified. Worth a look in the security audit; an existing account is protected (it must log in).
+  - No UI change, no browser check. Dev DB migrated to 0026.
+---
