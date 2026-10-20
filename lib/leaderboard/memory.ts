@@ -46,6 +46,11 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
     return this.events.get(eventId)?.size ?? 0;
   }
 
+  async remove(eventId: string, participantId: string) {
+    this.events.get(eventId)?.delete(participantId);
+    this.cache.delete(eventId);
+  }
+
   async reset(eventId: string) {
     this.events.delete(eventId);
     this.cache.delete(eventId);

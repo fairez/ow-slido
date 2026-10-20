@@ -3108,3 +3108,41 @@ button.quiz-option[aria-disabled="true"] {
   opacity: 0.4;
   cursor: default;
 }
+
+.participant-data {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.participant-data > h2,
+.participant-data > p {
+  margin: 0;
+}
+
+.participant-list {
+  max-height: 50vh;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.participant-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.participant-row > .event-main {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.dialog-step {
+  margin: 0;
+  outline: none;
+}

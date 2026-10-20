@@ -29,6 +29,8 @@ export interface LeaderboardStore {
   rankOf(eventId: string, participantId: string): Promise<LeaderboardEntry | null>;
   /** Number of ranked participants. */
   size(eventId: string): Promise<number>;
+  /** Drops one participant's score (data erasure); the rest of the ranking is re-ranked on the next read. */
+  remove(eventId: string, participantId: string): Promise<void>;
   /** Drops every score of one event. */
   reset(eventId: string): Promise<void>;
   /** Replaces everything the store holds with these rows (startup rebuild). */

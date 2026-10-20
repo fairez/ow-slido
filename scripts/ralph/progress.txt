@@ -116,3 +116,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Dates are UTC days (same as the email); the badge computes with a `now` fixed at mount to keep renders stable.
   - Browser check at 360 and 1280 (light/dark) in scripts/ralph/screens/us009-*.png (script us009.mjs); production build on `.next-shot` against the test DB, as in the US-003 note.
 ---
+
+## 2026-10-21 - US-010
+- Event delete: the route, its `event.delete` check and the `event.deleted` audit entry already existed; added the typed name confirmation in the UI (`TypedConfirmDialog`, used by `EventManager`) and a test that walks the foreign-key graph from `events` and proves every table below it is empty after the delete. Participant erasure: `DELETE /api/events/[id]/participants/[participantId]/data` (`event.edit`) deletes the participant row, so the cascade clears all participant-linked tables (incl. votes on their question/note and `quiz_scores`); the live leaderboard store gets `remove`; open screens refresh through `state-changed` and `content:changed`; audited as `participant.data_deleted`. Event page has a "Participant data" section: dialog lists participants (nickname, else author name from a question/note, else "Participant N"), then a confirm step.
+- Files: lib/participant-data.ts, app/api/events/[id]/participants/route.ts and .../[participantId]/data/route.ts, components/participant-data.tsx, components/typed-confirm-dialog.tsx, components/event-manager.tsx, app/dashboard/events/[id]/page.tsx, lib/leaderboard (store, memory), lib/i18n en/id, app/globals.css, tests/participant-data.test.ts, tests/participant-data-ui.test.tsx, tests/event-manager.test.tsx, tests/helpers/seed-event.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - `tests/helpers/seed-event.ts` `seedFullEvent` fills every event table (two participants, votes both ways, analysis, AI call); US-011/US-012 cascade tests can reuse it. Add a row there for every new table.
+  - A participant-linked table is only "covered" when listed in `PARTICIPANT_DATA_TABLES`; the information_schema test enforces it.
+  - `.participant-data h2` style leaked into the dialog because dialogs render inside their parent (no portal): scope section styles with `>`.
+  - Dialog buttons stay enabled; the typed confirmation uses `aria-disabled` and a guard in the submit handler.
+  - Participant numbering in the list is by position, so it shifts after a deletion; a named participant is stable. The id.ts event delete strings were still English; translated the three the dialog uses, the rest is US-022.
+  - Browser check: scripts/ralph/screens/us010.mjs [width], one width per server start (signup limit); screens in scripts/ralph/screens/us010-*.png.
+---

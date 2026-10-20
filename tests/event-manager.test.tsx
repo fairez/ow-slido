@@ -73,7 +73,7 @@ describe("EventManager", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/events/a/duplicate", { method: "POST" });
   });
 
-  it("deletes only after confirmation", async () => {
+  it("deletes only after the event name is typed", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<EventManager initialEvents={[ev("a", "Doomed", "2030-01-01T00:00:00.000Z")]} />);
@@ -81,9 +81,32 @@ describe("EventManager", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
+    const confirm = screen.getByRole("button", { name: "Delete event" });
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(confirm);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const field = screen.getByLabelText("Type “Doomed” to confirm");
+    fireEvent.change(field, { target: { value: "doomed" } });
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.change(field, { target: { value: "Doomed" } });
+    expect(confirm.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(confirm);
     await waitFor(() => expect(screen.queryByText("Doomed")).toBeNull());
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/a", { method: "DELETE" });
+  });
+
+  it("keeps the dialog open and shows the server error when the delete fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "Not allowed" }, { status: 403 })));
+    render(<EventManager initialEvents={[ev("a", "Doomed", "2030-01-01T00:00:00.000Z")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.change(screen.getByLabelText("Type “Doomed” to confirm"), { target: { value: "Doomed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Not allowed");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getAllByText("Doomed").length).toBeGreaterThan(0);
   });
 });

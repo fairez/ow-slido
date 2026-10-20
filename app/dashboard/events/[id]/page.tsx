@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { interactions, workspaces } from "@/db/schema";
 import { Badge } from "@/components/ui/card";
+import { ParticipantData } from "@/components/participant-data";
 import { PlanHint } from "@/components/plan-hint";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
 import { can } from "@/lib/auth/permissions";
@@ -37,6 +38,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (!event) notFound();
 
   const canModerate = can(membership.role, "moderate");
+  const canEditEvent = can(membership.role, "event.edit");
   const canManageWorkspace = can(membership.role, "members.manage");
   const { limits } = await getEntitlements(membership.workspaceId);
   const formatLocks = lockedFormats(limits);
@@ -140,6 +142,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         canManageTemplates={can(membership.role, "templates.manage")}
         eventName={event.name}
       />
+      {canEditEvent && <ParticipantData eventId={event.id} />}
     </main>
   );
 }

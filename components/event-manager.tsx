@@ -5,11 +5,11 @@ import { useState, type FormEvent } from "react";
 import { LiveParticipantCount } from "@/components/live-participant-count";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
 import { InlineError, Select, TextField } from "@/components/ui/field";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 import { PlanError } from "@/components/plan-error";
 import { PlanHint } from "@/components/plan-hint";
+import { TypedConfirmDialog } from "@/components/typed-confirm-dialog";
 import { apiError, type ApiError } from "@/lib/api-error";
 import { useT } from "@/lib/i18n/client";
 import type { Lock } from "@/lib/plan-hints";
@@ -136,19 +136,16 @@ export function EventManager({
     }
   }
 
-  async function confirmDelete(target: EventSummary) {
-    setError(null);
+  async function confirmDelete(target: EventSummary): Promise<string | null> {
     try {
       const response = await fetch(`/api/events/${target.id}`, { method: "DELETE" });
-      if (!response.ok) {
-        setError(await errorFrom(response));
-        return;
-      }
+      if (!response.ok) return await errorFrom(response);
       setEvents((list) => list.filter((e) => e.id !== target.id));
       setCreated((c) => (c?.id === target.id ? null : c));
       setDeleting(null);
+      return null;
     } catch {
-      setError(NETWORK_ERROR);
+      return NETWORK_ERROR;
     }
   }
 
@@ -252,15 +249,15 @@ export function EventManager({
         )}
       </section>
 
-      <Dialog open={deleting !== null} title={t("eventMgr.deleteTitle")} onClose={() => setDeleting(null)}>
-        <p>
-          {t("eventMgr.deleteBody", { name: deleting?.name ?? "" })}
-        </p>
-        <div className="row-actions">
-          <Button onClick={() => setDeleting(null)}>{t("eventMgr.cancel")}</Button>
-          <Button variant="primary" onClick={() => deleting && confirmDelete(deleting)}>{t("eventMgr.deleteConfirm")}</Button>
-        </div>
-      </Dialog>
+      <TypedConfirmDialog
+        open={deleting !== null}
+        title={t("eventMgr.deleteTitle")}
+        body={t("eventMgr.deleteBody", { name: deleting?.name ?? "" })}
+        expected={deleting?.name ?? ""}
+        confirmLabel={t("eventMgr.deleteConfirm")}
+        onConfirm={() => (deleting ? confirmDelete(deleting) : Promise.resolve(null))}
+        onClose={() => setDeleting(null)}
+      />
     </div>
   );
 }
