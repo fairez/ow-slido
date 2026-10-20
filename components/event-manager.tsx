@@ -13,6 +13,7 @@ import { PlanHint } from "@/components/plan-hint";
 import { apiError, type ApiError } from "@/lib/api-error";
 import { useT } from "@/lib/i18n/client";
 import type { Lock } from "@/lib/plan-hints";
+import { deletionDate, deletionIsNear, formatDeletionDay } from "@/lib/retention-schedule";
 
 export type EventSummary = {
   id: string;
@@ -22,6 +23,8 @@ export type EventSummary = {
   joinCode: string;
   /** Set when a downgrade left this event past the plan's monthly limit: it is read-only. */
   lock?: Lock | null;
+  /** When the retention job warned about deleting this event, if it did. */
+  deletionNoticeSentAt?: string | null;
 };
 
 const byStart = (a: EventSummary, b: EventSummary) =>
@@ -38,8 +41,18 @@ async function errorFrom(response: Response) {
 
 export type TemplateOption = { id: string; name: string; itemCount: number };
 
-export function EventManager({ initialEvents, templates = [] }: { initialEvents: EventSummary[]; templates?: TemplateOption[] }) {
+export function EventManager({
+  initialEvents,
+  templates = [],
+  retentionDays = null,
+}: {
+  initialEvents: EventSummary[];
+  templates?: TemplateOption[];
+  /** The workspace's retention period; events get a deletion badge when it is set. */
+  retentionDays?: number | null;
+}) {
   const t = useT();
+  const [now] = useState(() => new Date());
   const [events, setEvents] = useState([...initialEvents].sort(byStart));
   const [created, setCreated] = useState<EventSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +113,7 @@ export function EventManager({ initialEvents, templates = [] }: { initialEvents:
         return;
       }
       const { event: saved } = (await response.json()) as { event: EventSummary };
-      setEvents((list) => list.map((e) => (e.id === saved.id ? saved : e)));
+      setEvents((list) => list.map((e) => (e.id === saved.id ? { ...e, ...saved } : e)));
       setRenaming(null);
     } catch {
       setError(NETWORK_ERROR);
@@ -208,6 +221,7 @@ export function EventManager({ initialEvents, templates = [] }: { initialEvents:
                       <Badge>{t("eventMgr.readOnly")}</Badge>
                     </div>
                   )}
+                  <DeletionBadge event={e} retentionDays={retentionDays} now={now} />
                   <p className="row-meta">
                     {new Date(e.startsAt).toLocaleString()} {t("eventMgr.to")} {new Date(e.endsAt).toLocaleString()}
                   </p>
@@ -247,6 +261,22 @@ export function EventManager({ initialEvents, templates = [] }: { initialEvents:
           <Button variant="primary" onClick={() => deleting && confirmDelete(deleting)}>{t("eventMgr.deleteConfirm")}</Button>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+function DeletionBadge({ event, retentionDays, now }: { event: EventSummary; retentionDays: number | null; now: Date }) {
+  const t = useT();
+  const date = deletionDate({
+    endsAt: new Date(event.endsAt),
+    retentionDays,
+    noticeSentAt: event.deletionNoticeSentAt ? new Date(event.deletionNoticeSentAt) : null,
+    now,
+  });
+  if (!date) return null;
+  return (
+    <div className="row-meta">
+      <Badge tone={deletionIsNear(date, now) ? "accent" : "neutral"}>{t("retention.badge", { date: formatDeletionDay(date) })}</Badge>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { events } from "@/db/schema";
+import { events, workspaces } from "@/db/schema";
 import { EventManager } from "@/components/event-manager";
 import { getDb } from "@/lib/db";
 import { overLimitEvents } from "@/lib/over-limit";
@@ -30,6 +30,10 @@ export default async function DashboardPage() {
     .from(events)
     .where(eq(events.workspaceId, membership.workspaceId))
     .orderBy(asc(events.startsAt), asc(events.createdAt));
+  const [workspace] = await getDb()
+    .select({ retentionDays: workspaces.retentionDays })
+    .from(workspaces)
+    .where(eq(workspaces.id, membership.workspaceId));
   const locks = await overLimitEvents(membership.workspaceId);
   const templates = await listTemplates(membership.workspaceId);
   const initialEvents = list.map((e) => ({
@@ -39,6 +43,7 @@ export default async function DashboardPage() {
     endsAt: e.endsAt.toISOString(),
     joinCode: e.joinCode,
     lock: locks.get(e.id) ?? null,
+    deletionNoticeSentAt: e.deletionNoticeSentAt?.toISOString() ?? null,
   }));
 
   return (
@@ -50,7 +55,7 @@ export default async function DashboardPage() {
         </div>
         <LogoutButton />
       </header>
-      <EventManager initialEvents={initialEvents} templates={templates.map(({ id, name, items }) => ({ id, name, itemCount: items.length }))} />
+      <EventManager initialEvents={initialEvents} retentionDays={workspace?.retentionDays ?? null} templates={templates.map(({ id, name, items }) => ({ id, name, itemCount: items.length }))} />
     </main>
   );
 }

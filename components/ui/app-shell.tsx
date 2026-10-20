@@ -38,6 +38,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
           <Link href="/dashboard">{t("shell.events")}</Link>
           {workspaces ? <Link href="/dashboard/templates">{t("templates.nav")}</Link> : null}
           {workspaces?.canManageMembers ? <Link href="/dashboard/members">{t("members.nav")}</Link> : null}
+          {workspaces?.canManageMembers ? <Link href="/dashboard/settings">{t("settings.nav")}</Link> : null}
           {workspaces?.canViewAudit ? <Link href="/dashboard/audit">{t("audit.nav")}</Link> : null}
           {workspaces ? <Link href="/dashboard/plan">{t("plan.nav")}</Link> : null}
           {workspaces ? <Link href="/account/security">{t("security.nav")}</Link> : null}

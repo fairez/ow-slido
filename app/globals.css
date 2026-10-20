@@ -1062,6 +1062,20 @@ a.ui-button:not([data-variant]) {
   font-weight: 600;
 }
 
+/* Deletion within the warning period: the accent marks the one thing to act on, the export. */
+.notice[data-tone="retention"] {
+  border-color: var(--accent);
+  margin-bottom: var(--space-5);
+}
+
+.notice[data-tone="retention"] .notice-title {
+  font-weight: 600;
+}
+
+.notice[data-tone="retention"] .row-actions {
+  margin-top: var(--space-3);
+}
+
 .notice code {
   overflow-wrap: anywhere;
 }
@@ -2059,6 +2073,43 @@ a.ui-button:not([data-variant]) {
 
 .member-policy h2 {
   font-size: var(--text-lg);
+}
+
+.retention-form {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  width: 100%;
+}
+
+.retention-form > * {
+  margin: 0;
+}
+
+.retention-options {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.retention-options legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.retention-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.retention-saved {
+  color: var(--success);
 }
 
 .member-row {

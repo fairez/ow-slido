@@ -106,3 +106,13 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - The mail uses `DEFAULT_LOCALE`; US-019 (event audience language) may switch it per workspace/event. US-009 builds the settings UI on `GET/PATCH /api/workspaces/active/retention` and should offer the export prompt the email mentions.
   - A full `npm test` took 545 s; `tests/two-factor-routes.test.ts` "rate limits repeated wrong attempts" timed out once under load and passes alone. No Images exist yet, so the job deletes rows only (no files).
 ---
+
+## 2026-10-21 - US-009
+- `/dashboard/settings` (needs `members.manage`; nav link "Settings") with `RetentionSettings`: radio group 30 / 90 / 365 days or Keep, a sentence that updates with the choice (what is removed, the 7-day email, that changing the period restarts the warning), Save through `PATCH /api/workspaces/active/retention`, polite saved status. The dashboard list shows a "Deletes YYYY-MM-DD" badge on every event while retention is set (accent tone within 7 days). The event page shows the date under the join code, and when deletion is within 7 days a bordered notice with a primary "Download everything (ZIP)" button (+ a link to settings for owners/admins).
+- Files: lib/retention-schedule.ts (new, client-safe), lib/retention.ts, components/retention-settings.tsx, components/event-manager.tsx, components/ui/app-shell.tsx, app/dashboard/settings/page.tsx, app/dashboard/page.tsx, app/dashboard/events/[id]/page.tsx, app/globals.css, lib/i18n en/id (`settings.*`, `retention.*`), tests/retention-ui.test.tsx, CLAUDE.md.
+- **Learnings for future iterations:**
+  - `lib/retention.ts` imports the db and email, so anything a client component needs (constants, date rule) goes in `lib/retention-schedule.ts`; `runRetention` now uses the same `deletionDate`, so the email date and the on-screen date cannot drift.
+  - The no-inline-strings test flags string literals inside JSX expressions, even a permission name in `can(role, "members.manage")`: hoist it to a const above the return.
+  - Dates are UTC days (same as the email); the badge computes with a `now` fixed at mount to keep renders stable.
+  - Browser check at 360 and 1280 (light/dark) in scripts/ralph/screens/us009-*.png (script us009.mjs); production build on `.next-shot` against the test DB, as in the US-003 note.
+---

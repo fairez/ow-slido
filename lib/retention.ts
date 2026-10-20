@@ -4,16 +4,18 @@ import { recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { getEmailSender } from "@/lib/email";
 import { DEFAULT_LOCALE, t } from "@/lib/i18n";
+import {
+  DAY_MS,
+  RETENTION_NOTICE_DAYS,
+  RETENTION_OPTIONS,
+  deletionDate,
+  formatDeletionDay,
+  type RetentionDays,
+} from "@/lib/retention-schedule";
 
 type Db = ReturnType<typeof getDb>;
 
-export const RETENTION_OPTIONS = [30, 90, 365] as const;
-export type RetentionDays = (typeof RETENTION_OPTIONS)[number];
-
-/** How long before an automatic delete the owners and admins are warned. */
-export const RETENTION_NOTICE_DAYS = 7;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+export { RETENTION_NOTICE_DAYS, RETENTION_OPTIONS, type RetentionDays };
 
 export function parseRetentionDays(value: unknown): { ok: true; value: RetentionDays | null } | { ok: false } {
   if (value === null) return { ok: true, value: null };
@@ -115,12 +117,12 @@ export async function runRetention(db: Db = getDb(), now: Date = new Date()): Pr
         ),
       );
     for (const event of pending) {
-      // The date is the later of the period's end and a full notice period from today.
-      const deleteOn = new Date(Math.max(event.endsAt.getTime() + days * DAY_MS, now.getTime() + RETENTION_NOTICE_DAYS * DAY_MS));
+      // The later of the period's end and a full notice period from today.
+      const deleteOn = deletionDate({ endsAt: event.endsAt, retentionDays: days, noticeSentAt: null, now }) as Date;
       const sent = await sendNotices(recipients.map((r) => r.email), {
         event: event.name,
         workspace: workspace.name,
-        date: deleteOn.toISOString().slice(0, 10),
+        date: formatDeletionDay(deleteOn),
       });
       // Nobody reachable: try again on the next run rather than delete without a warning.
       if (recipients.length > 0 && sent === 0) continue;

@@ -140,7 +140,7 @@
       ],
       "id": "US-009",
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M7"
     },
     {

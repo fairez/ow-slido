@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { interactions } from "@/db/schema";
+import { interactions, workspaces } from "@/db/schema";
 import { Badge } from "@/components/ui/card";
 import { PlanHint } from "@/components/plan-hint";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
@@ -19,6 +19,7 @@ import { aiLock, lockedFormats, lockedTypes } from "@/lib/plan-hints";
 import { getEntitlements, type PlanId } from "@/lib/plans";
 import { findOwnedEvent } from "@/lib/polls";
 import { getT } from "@/lib/i18n/server";
+import { deletionDate, deletionIsNear, formatDeletionDay } from "@/lib/retention-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,22 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (!event) notFound();
 
   const canModerate = can(membership.role, "moderate");
+  const canManageWorkspace = can(membership.role, "members.manage");
   const { limits } = await getEntitlements(membership.workspaceId);
   const formatLocks = lockedFormats(limits);
+
+  const [workspace] = await getDb()
+    .select({ retentionDays: workspaces.retentionDays })
+    .from(workspaces)
+    .where(eq(workspaces.id, membership.workspaceId));
+  const now = new Date();
+  const deleteOn = deletionDate({
+    endsAt: event.endsAt,
+    retentionDays: workspace?.retentionDays ?? null,
+    noticeSentAt: event.deletionNoticeSentAt,
+    now,
+  });
+  const deletionSoon = deleteOn !== null && deletionIsNear(deleteOn, now);
 
   const list = await getDb()
     .select()
@@ -63,6 +78,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <p className="row-meta">
             {t("dash.joinCode")} <Badge>{event.joinCode}</Badge>
           </p>
+          {deleteOn && !deletionSoon && (
+            <p className="row-meta">{t("retention.eventMeta", { date: formatDeletionDay(deleteOn) })}</p>
+          )}
         </div>
         <div className="row-actions">
           <Link href={`/present/${event.id}`} className="ui-button" data-variant="primary">
@@ -83,6 +101,22 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {formatLocks.xlsx && <PlanHint lock={formatLocks.xlsx}>{t("dash.exportXlsx")}</PlanHint>}
         </div>
       </header>
+      {deleteOn && deletionSoon && (
+        <div className="notice" data-tone="retention">
+          <p className="notice-title">{t("retention.soonTitle", { date: formatDeletionDay(deleteOn) })}</p>
+          <p>{t("retention.soonBody")}</p>
+          <div className="row-actions">
+            <a href={`/api/events/${event.id}/export.zip`} download className="ui-button" data-variant="primary">
+              {t("retention.soonExport")}
+            </a>
+            {canManageWorkspace && (
+              <Link href="/dashboard/settings" className="ui-button" data-variant="quiet">
+                {t("retention.soonSettings")}
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
       {eventLock && (
         <div role="status" className="notice" data-tone="locked">
           <p className="notice-title">{t("dash.eventReadOnlyTitle")}</p>
