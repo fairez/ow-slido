@@ -96,6 +96,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: Particip
   const { socket } = useEventSocket(eventId, "participant");
   const [current, setCurrent] = useState<ParticipantQa | null>(initial.current);
   const [earlier, setEarlier] = useState<ParticipantQa[]>(initial.earlier);
+  const [notOpen, setNotOpen] = useState(initial.notOpen === true);
   const [text, setText] = useState("");
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -119,6 +120,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: Particip
       const body = (await res.json()) as ParticipantQaView;
       setCurrent(body.current);
       setEarlier(body.earlier);
+      setNotOpen(body.notOpen === true);
     } catch {
       // Offline: the next reconnect refetches.
     }
@@ -229,7 +231,11 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: Particip
     <section aria-labelledby="qa-title" className="qa-panel">
       <h2 id="qa-title">{current?.title ?? t("qa.title")}</h2>
       {current && current.prompt && <p className="qa-prompt">{current.prompt}</p>}
-      {readOnly && current ? (
+      {notOpen && !current ? (
+        <div className="after-form">
+          <EmptyState title={t("qa.notOpenTitle")}>{t("qa.notOpenBody")}</EmptyState>
+        </div>
+      ) : readOnly && current ? (
         <p role="status" className="waiting">
           {t(current.state === "closed" ? "qa.readOnlyClosed" : "qa.readOnlyPaused")}
         </p>
@@ -264,7 +270,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: Particip
         </form>
       )}
       {readOnly && error && <InlineError>{error}</InlineError>}
-      {!showCurrentList ? (
+      {notOpen && !current ? null : !showCurrentList ? (
         <div className="after-form">
           <EmptyState title={t("qa.emptyTitle")}>{readOnly ? null : t("qa.emptyBody")}</EmptyState>
         </div>

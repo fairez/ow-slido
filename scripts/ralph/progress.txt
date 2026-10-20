@@ -337,3 +337,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - US-030 (host/presenter) still uses the old event paths and does not filter by `interactionId`.
   - Browser check at 360/1280 (live, paused, closed with earlier section open, light and dark): no overflow, no console errors; screenshot event and user deleted from the dev DB. Full suite 889 tests green, e2e smoke and presenter-qa pass.
 ---
+## 2026-10-20 - US-030
+- Q&A is host content. `PollManager` has "New Q&A" (name, prompt, Open/Moderated, profanity filter; starts on the event's moderation default) and Edit for draft Q&As; start, pause, close, duplicate, reorder and delete already worked. A new event now gets one draft Q&A at position 0 (`POST /api/events`). `events.moderation_mode` is only the default for new Q&As: the event PATCH no longer copies it onto them.
+- A started Q&A can switch `moderation`/`profanityFilter` through the interaction PATCH (title and prompt answer 409); other types remain draft-only.
+- Moderation panel works on one Q&A: picker when there are several, its own mode switch (interaction PATCH), queue via `/api/events/[id]/moderation?interaction=`, questions moderated through `/api/interactions/[id]/questions/...`, socket messages filtered by `interactionId`. Presenter follows the live (else first) Q&A, filters messages by `interactionId`, refetches on state changes, uses the Q&A's name as the heading and shows a live Q&A by itself when no other interaction is live (the Show Q&A toggle is hidden then).
+- Participants: while every Q&A is a draft, `getParticipantQa` returns `notOpen: true` (tab says "Q&A has not started") and the event-level submit answers 409 `api.qaNotOpen`. `resolveEventQa` sorts drafts last.
+- Files: app/api/events/{route,[id]/route,[id]/moderation/route,[id]/interactions/[interactionId]/route}.ts, app/{dashboard/events/[id],present/[eventId]}/page.tsx, app/dashboard/events/[id]/moderate/page.tsx, components/{poll-manager,moderation-panel,presenter-view,qa-tab}.tsx, lib/{questions,question-routes,question-types}.ts, lib/i18n/{en,id}.ts, e2e/{presenter-qa,smoke}.spec.ts, 11 test files, CLAUDE.md
+- **Learnings for future iterations:**
+  - Every event created through `POST /api/events` now has a draft Q&A at position 0: tests that count interactions, check positions, reorder (needs all ids) or ask questions must account for it (set its state `live` before asking). Events inserted directly have no Q&A.
+  - Two "Start" buttons on the event page now: e2e specs scope to the interaction's row (`listitem` filter by title).
+  - Playwright's screenshot caret hiding adds `caret-color` to inputs and triggers a hydration warning in the console log; it is not an app error.
+  - Mid-sentence type names are lower-cased in the builder, except "Q&A" (`typeInSentence`).
+  - Browser check at 360/1280 (event page with default and new Q&A, builder, moderation with picker, presenter with live Q&A, participant "not started"): no overflow. Screenshot users and workspaces deleted from the dev DB. Full suite 904 tests green, e2e 4 specs pass, typecheck and eslint clean.
+---

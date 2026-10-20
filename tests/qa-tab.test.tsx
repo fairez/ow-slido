@@ -199,3 +199,15 @@ it("still takes the first question of an event that has no Q&A yet, then adopts 
   expect((fetchMock.mock.calls[1] as unknown as [string])[0]).toBe("/api/events/e1/qa");
   expect(await screen.findByRole("heading", { name: "Q&A" })).toBeTruthy();
 });
+
+it("tells participants the Q&A has not started when the host has only drafts, then opens when it starts", async () => {
+  const opened = view([]);
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify(opened), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<QaTab eventId="e1" initial={{ ...noQa, notOpen: true }} />);
+  expect(screen.getByText("Q&A has not started")).toBeTruthy();
+  expect(screen.queryByLabelText("Your question")).toBeNull();
+  act(() => void fake.emit("state-changed", {}));
+  expect(await screen.findByLabelText("Your question")).toBeTruthy();
+  expect(screen.queryByText("Q&A has not started")).toBeNull();
+});

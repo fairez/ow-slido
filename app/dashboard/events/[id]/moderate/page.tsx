@@ -8,7 +8,11 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isUuid } from "@/lib/events";
 import { getT } from "@/lib/i18n/server";
-import { listEventHostQuestions, listHostNotes } from "@/lib/moderation";
+import { listHostNotes, listHostQuestions } from "@/lib/moderation";
+import { readQaConfig, resolveEventQa } from "@/lib/questions";
+import { and, asc, eq } from "drizzle-orm";
+import { interactions } from "@/db/schema";
+import { getDb } from "@/lib/db";
 import { findOwnedEvent } from "@/lib/polls";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +29,15 @@ export default async function ModeratePage({ params }: { params: Promise<{ id: s
   const event = await findOwnedEvent(id, membership.workspaceId);
   if (!event) notFound();
 
+  const qas = (
+    await getDb()
+      .select()
+      .from(interactions)
+      .where(and(eq(interactions.eventId, event.id), eq(interactions.type, "qa")))
+      .orderBy(asc(interactions.position), asc(interactions.createdAt))
+  ).map((row) => ({ id: row.id, title: row.title, state: row.state, moderation: readQaConfig(row.config).moderation }));
+  const initialQaId = await resolveEventQa(getDb(), event.id);
+
   return (
     <main id="main" className="page">
       <Link href={`/dashboard/events/${event.id}`} className="back-link">{t("dash.backToEvent")}</Link>
@@ -33,8 +46,9 @@ export default async function ModeratePage({ params }: { params: Promise<{ id: s
       </header>
       <ModerationPanel
         eventId={event.id}
-        initialMode={event.moderationMode}
-        initialQuestions={await listEventHostQuestions(event.id)}
+        qas={qas}
+        initialQaId={initialQaId}
+        initialQuestions={initialQaId ? await listHostQuestions(initialQaId) : []}
         initialNotes={await listHostNotes(event.id)}
         canChangeMode={can(membership.role, "event.edit")}
       />

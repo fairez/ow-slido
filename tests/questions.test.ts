@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { eq } from "drizzle-orm";
-import { participants, questionVotes, questions } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { interactions, participants, questionVotes, questions } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -51,9 +51,12 @@ const list = async (c: string | null = cookie) => {
   const res = await route.GET(req("GET", undefined, c), ctx());
   return { res, json: await res.json() };
 };
-// Moderation lives on the Q&A's config; the event-level PATCH is what sets it for the event's Q&As.
-const setMode = (moderationMode: "open" | "moderated") =>
-  eventRoute.PATCH(req("PATCH", { moderationMode }, hostCookie), ctx());
+// Moderation lives on the Q&A's config.
+const setMode = (moderation: "open" | "moderated") =>
+  db
+    .update(interactions)
+    .set({ config: sql`jsonb_set(${interactions.config}, '{moderation}', to_jsonb(${moderation}::text))` })
+    .where(eq(interactions.eventId, eventId));
 
 beforeEach(async () => {
   await truncateAll(db);
@@ -74,6 +77,8 @@ beforeEach(async () => {
     req("POST", { name: "Town hall", startsAt: "2026-11-01T10:00:00Z", endsAt: "2026-11-01T12:00:00Z" }, hostCookie),
   );
   eventId = (await created.json()).event.id;
+  // A new event's Q&A is a draft; participants can only ask once the host has started it.
+  await db.update(interactions).set({ state: "live" }).where(eq(interactions.eventId, eventId));
   cookie = await join();
 });
 
@@ -121,11 +126,19 @@ test("rejected questions are never listed", async () => {
   expect((await list()).json.questions.map((q: { text: string }) => q.text)).toEqual(["Keep"]);
 });
 
-test("changing the mode to moderated applies to later questions only", async () => {
+test("changing the Q&A to moderated applies to later questions only", async () => {
   await ask({ text: "Before" });
-  await eventRoute.PATCH(req("PATCH", { moderationMode: "moderated" }, hostCookie), ctx());
+  await setMode("moderated");
   await ask({ text: "After" });
   expect((await list()).json.questions.map((q: { text: string }) => q.text)).toEqual(["Before"]);
+});
+
+test("the event's moderation mode is only the default for new Q&As", async () => {
+  const res = await eventRoute.PATCH(req("PATCH", { moderationMode: "moderated" }, hostCookie), ctx());
+  expect(res.status).toBe(200);
+  const [qa] = await db.select().from(interactions).where(eq(interactions.eventId, eventId));
+  expect(qa.config).toMatchObject({ moderation: "open" });
+  expect((await (await ask({ text: "Still open" })).json()).status).toBe("approved");
 });
 
 test("pinned questions come first", async () => {

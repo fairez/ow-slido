@@ -18,7 +18,7 @@ import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
 
-export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed" };
+export type NavItem = { id: string; state: "draft" | "live" | "paused" | "closed"; type?: string; title?: string };
 export type PresenterScreen = "interaction" | "qa";
 
 type Counts = { interactionId: string; counts: Record<string, number>; total: number };
@@ -31,6 +31,7 @@ export function PresenterView({
   joinCode,
   items,
   initialQuestions = [],
+  initialQaId = null,
   initialScreen = "interaction",
 }: {
   eventId: string;
@@ -38,6 +39,8 @@ export function PresenterView({
   joinCode: string;
   items: NavItem[];
   initialQuestions?: PublicQuestion[];
+  /** The Q&A `initialQuestions` belongs to: the live one, else the first. */
+  initialQaId?: string | null;
   initialScreen?: PresenterScreen;
 }) {
   const t = useT();
@@ -49,6 +52,7 @@ export function PresenterView({
   // Which screen the projector shows. It only changes this page: participants and interaction states are untouched.
   const [screen, setScreen] = useState<PresenterScreen>(initialScreen);
   const [questions, setQuestions] = useState<PublicQuestion[]>(initialQuestions);
+  const [qaId, setQaId] = useState<string | null>(initialQaId);
   const [qaSort, setQaSort] = useState<QaSort>("popular");
   // Last interaction shown, so arrows still work from the "nothing live" screen.
   const cursor = useRef<string | null>(initial?.id ?? null);
@@ -69,7 +73,7 @@ export function PresenterView({
       const res = await fetch(`/api/events/${eventId}/interactions`);
       if (!res.ok) return;
       const body = (await res.json()) as { interactions: NavItem[] };
-      setList(body.interactions.map((i) => ({ id: i.id, state: i.state })));
+      setList(body.interactions.map((i) => ({ id: i.id, state: i.state, type: i.type, title: i.title })));
     } catch {
       // Keep the last known list.
     }
@@ -92,7 +96,9 @@ export function PresenterView({
     try {
       const res = await fetch(`/api/events/${eventId}/present/questions`);
       if (!res.ok) return;
-      setQuestions(((await res.json()) as { questions: PublicQuestion[] }).questions);
+      const body = (await res.json()) as { interactionId: string | null; questions: PublicQuestion[] };
+      setQaId(body.interactionId);
+      setQuestions(body.questions);
     } catch {
       // Offline: the next reconnect refetches.
     }
@@ -168,6 +174,8 @@ export function PresenterView({
     const onChange = () => {
       void refetch();
       void refetchList();
+      // Starting or pausing a Q&A can change which one the Q&A screen shows.
+      void refetchQuestions();
     };
     // Messages missed while disconnected are not replayed.
     const onConnect = () => {
@@ -200,8 +208,10 @@ export function PresenterView({
       forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
     const onRating = (msg: { results: RatingResults }) =>
       setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
-    const onQuestion = (name: "question:added" | "question:votes" | "question:updated" | "question:removed") => (msg: object) =>
-      setQuestions((cur) => applyQuestionEvent(cur, { name, ...msg } as never));
+    // Only the shown Q&A's messages apply; another Q&A of the event stays off this screen.
+    const onQuestion = (name: "question:added" | "question:votes" | "question:updated" | "question:removed") => (msg: { interactionId?: string }) => {
+      if (msg.interactionId === qaId) setQuestions((cur) => applyQuestionEvent(cur, { name, ...msg } as never));
+    };
     const onQuestionAdded = onQuestion("question:added");
     const onQuestionVotes = onQuestion("question:votes");
     const onQuestionUpdated = onQuestion("question:updated");
@@ -240,7 +250,7 @@ export function PresenterView({
       socket.off("state-changed", onChange);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch, refetchList, refetchQuestions]);
+  }, [socket, refetch, refetchList, refetchQuestions, qaId]);
 
   const corner = (
     <aside className="present-join" aria-label={t("presenter.joinLabel")}>
@@ -260,12 +270,16 @@ export function PresenterView({
       {corner}
     </header>
   );
+  // A live Q&A has no results screen of its own, so with nothing else live it fills the projector.
+  const qaFillsScreen = !poll && list.some((i) => i.type === "qa" && i.state === "live");
   const extras = (
     <>
       <div className="present-controls">
-        <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
-          {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
-        </Button>
+        {!qaFillsScreen && (
+          <Button aria-keyshortcuts="Q" onClick={() => changeScreen(screen === "qa" ? "interaction" : "qa")}>
+            {screen === "qa" ? t("presenter.showInteraction") : t("presenter.showQa")}
+          </Button>
+        )}
         <Button onClick={() => void document.documentElement.requestFullscreen?.()}>{t("presenter.fullscreen")}</Button>
       </div>
       {notice && (
@@ -276,10 +290,11 @@ export function PresenterView({
     </>
   );
 
-  if (screen === "qa") {
+  if (screen === "qa" || qaFillsScreen) {
+    const qaTitle = list.find((i) => i.id === qaId)?.title;
     return (
       <section aria-labelledby="present-title">
-        {head(t("presenter.qaTitle"))}
+        {head(qaTitle || t("presenter.qaTitle"))}
         <PresenterQa questions={questions} sort={qaSort} onSortChange={setQaSort} joinCode={joinCode} />
         {extras}
       </section>

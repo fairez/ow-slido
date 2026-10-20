@@ -24,12 +24,46 @@ describe("PollManager", () => {
     expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
   });
 
-  it("labels a Q&A interaction and offers no editor for it", () => {
+  it("labels a Q&A interaction and offers the same draft actions as other types", () => {
     const qa: InteractionItem = { id: "q", type: "qa", title: "Q&A", state: "draft", position: 0, config: { prompt: "Ask a question", moderation: "open" } };
     render(<PollManager eventId="e" initialInteractions={[qa]} />);
     expect(screen.getByText(/^Q&A$/, { selector: ".row-meta" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Duplicate" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
+  });
+
+  it("adds a Q&A with its name, prompt, moderation and the event's default mode", async () => {
+    const created: InteractionItem = { id: "q2", type: "qa", title: "Town hall", state: "draft", position: 1, config: { prompt: "Ask us", moderation: "moderated" } };
+    const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[]} defaultModeration="moderated" />);
+    fireEvent.click(screen.getByRole("button", { name: "New Q&A" }));
+    expect((screen.getByLabelText(/Moderated: questions wait/) as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Town hall" } });
+    fireEvent.change(screen.getByLabelText("Prompt shown above the ask box"), { target: { value: "Ask us" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Q&A" }));
+    await waitFor(() => expect(screen.getByText("Town hall")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/events/e/interactions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ type: "qa", title: "Town hall", prompt: "Ask us", moderation: "moderated", profanityFilter: true }),
+      }),
+    );
+  });
+
+  it("edits a draft Q&A through PATCH", async () => {
+    const qa: InteractionItem = { id: "q", type: "qa", title: "Q&A", state: "draft", position: 0, config: { prompt: "Ask a question", moderation: "open", profanityFilter: false } };
+    const fetchMock = vi.fn(async () => Response.json({ interaction: { ...qa, title: "Renamed" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[qa]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect((screen.getByLabelText("Block profane questions") as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Renamed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Q&A" }));
+    await waitFor(() => expect(screen.getByText("Renamed")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e/interactions/q", expect.objectContaining({ method: "PATCH" }));
   });
 
   it("enforces 2-10 options", () => {

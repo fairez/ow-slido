@@ -226,17 +226,17 @@ it("the sort buttons switch between most upvoted and newest", () => {
 });
 
 it("stays current from the question events, even while another screen is shown", () => {
-  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[question("1")]} />);
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[question("1")]} initialQaId="qa1" />);
   act(() => {
-    fake.emit("question:added", { question: question("2") });
-    fake.emit("question:votes", { questionId: "1", upvotes: 4 });
+    fake.emit("question:added", { interactionId: "qa1", question: question("2") });
+    fake.emit("question:votes", { interactionId: "qa1", questionId: "1", upvotes: 4 });
   });
   fireEvent.keyDown(window, { key: "q" });
   expect(screen.getByText("2 questions")).toBeTruthy();
   expect(listItems()[0]).toMatch(/Question 1.*4 upvotes/);
   act(() => {
-    fake.emit("question:updated", { questionId: "2", pinned: true, answered: false });
-    fake.emit("question:removed", { questionId: "1" });
+    fake.emit("question:updated", { interactionId: "qa1", questionId: "2", pinned: true, answered: false });
+    fake.emit("question:removed", { interactionId: "qa1", questionId: "1" });
   });
   expect(screen.getByText("1 question")).toBeTruthy();
   expect(listItems()[0]).toMatch(/Question 2.*Pinned/);
@@ -271,4 +271,26 @@ it("an arrow key leaves the Q&A screen and moves to the next interaction", async
   fireEvent.keyDown(window, { key: "ArrowRight" });
   expect(screen.getByText("Total votes: 0")).toBeTruthy();
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/interactions/i2/start", { method: "POST" }));
+});
+
+it("ignores question messages for another Q&A of the event", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={null} initialQuestions={[question("1")]} initialQaId="qa1" initialScreen="qa" />);
+  act(() => void fake.emit("question:added", { interactionId: "qa2", question: question("2") }));
+  act(() => void fake.emit("question:removed", { interactionId: "qa2", questionId: "1" }));
+  expect(screen.getByText("1 question")).toBeTruthy();
+});
+
+it("shows the live Q&A on the projector, under its own name, when no other interaction is live", () => {
+  render(
+    <PresenterView
+      eventId="e1"
+      joinCode="1234"
+      items={[{ id: "qa1", state: "live", type: "qa", title: "Ask the board" }]}
+      initial={null}
+      initialQuestions={[question("1")]}
+      initialQaId="qa1"
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "Ask the board" })).toBeTruthy();
+  expect(screen.getByText("Question 1")).toBeTruthy();
 });

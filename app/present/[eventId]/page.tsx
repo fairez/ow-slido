@@ -9,7 +9,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { findOwnedEvent } from "@/lib/polls";
 import { getPresenterState } from "@/lib/presenter";
-import { listEventQuestions } from "@/lib/questions";
+import { listApprovedQuestions, resolveEventQa } from "@/lib/questions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +30,12 @@ export default async function PresentPage({
   if (!event) notFound();
 
   const items = await getDb()
-    .select({ id: interactions.id, state: interactions.state })
+    .select({ id: interactions.id, state: interactions.state, type: interactions.type, title: interactions.title })
     .from(interactions)
     .where(eq(interactions.eventId, event.id))
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
+
+  const qaId = await resolveEventQa(getDb(), event.id);
 
   return (
     <main id="main" className="present">
@@ -42,7 +44,8 @@ export default async function PresentPage({
         initial={await getPresenterState(event.id)}
         joinCode={event.joinCode}
         items={items}
-        initialQuestions={await listEventQuestions(event.id)}
+        initialQuestions={qaId ? await listApprovedQuestions(qaId) : []}
+        initialQaId={qaId}
         initialScreen={(await searchParams).view === "qa" ? "qa" : "interaction"}
       />
     </main>

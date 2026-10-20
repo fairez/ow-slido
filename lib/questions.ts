@@ -56,17 +56,31 @@ export async function findQaInteraction(
 }
 
 /**
- * The Q&A that the event-level routes stand for: the live one, else the first by position. Null when the
- * event has none.
+ * The Q&A that the event-level routes stand for: the live one, else the first by position, drafts last. Null
+ * when the event has none.
  */
 export async function resolveEventQa(conn: Conn, eventId: string): Promise<string | null> {
   const [row] = await conn
     .select({ id: interactions.id })
     .from(interactions)
     .where(and(eq(interactions.eventId, eventId), eq(interactions.type, "qa")))
-    .orderBy(sql`(${interactions.state} = 'live') desc`, asc(interactions.position), asc(interactions.createdAt))
+    .orderBy(
+      sql`(${interactions.state} = 'live') desc`,
+      sql`(${interactions.state} = 'draft') asc`,
+      asc(interactions.position),
+      asc(interactions.createdAt),
+    )
     .limit(1);
   return row?.id ?? null;
+}
+
+/** True when the event has Q&As but every one is still a draft: participants cannot ask until the host starts one. */
+export async function hasOnlyDraftQa(eventId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ state: interactions.state })
+    .from(interactions)
+    .where(and(eq(interactions.eventId, eventId), eq(interactions.type, "qa")));
+  return rows.length > 0 && rows.every((r) => r.state === "draft");
 }
 
 /** `resolveEventQa`, creating a Q&A (moderation copied from the event) when the event has none: live if nothing else is, else paused. */
@@ -250,7 +264,7 @@ export async function getParticipantQa(eventId: string, participantId?: string):
     .where(and(eq(interactions.eventId, eventId), eq(interactions.type, "qa"), inArray(interactions.state, ["live", "paused", "closed"])))
     .orderBy(desc(interactions.position), desc(interactions.createdAt));
   const current = rows.find((r) => r.state === "live") ?? rows[0];
-  if (!current) return { current: null, earlier: [] };
+  if (!current) return (await hasOnlyDraftQa(eventId)) ? { current: null, earlier: [], notOpen: true } : { current: null, earlier: [] };
   const toQa = async (row: Interaction): Promise<ParticipantQa> => ({
     id: row.id,
     title: row.title,

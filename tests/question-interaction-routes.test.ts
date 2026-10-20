@@ -241,10 +241,31 @@ test("the event-level path creates a Q&A for an event without one, but only for 
   expect(await empty.json()).toEqual({ interactionId: null, questions: [] });
 });
 
-test("switching the event moderation mode sets it on the event's Q&As", async () => {
+test("the event moderation mode no longer changes the event's Q&As", async () => {
   const res = await eventRoute.PATCH(req("PATCH", hostCookie, { moderationMode: "moderated" }), ctx({ id: eventId }));
   expect(res.status).toBe(200);
   const rows = await db.select().from(interactions).where(eq(interactions.eventId, eventId));
-  expect(rows.map((r) => (r.config as { moderation: string }).moderation)).toEqual(["moderated", "moderated"]);
-  expect(rows.every((r) => (r.config as { prompt: string }).prompt === "Ask")).toBe(true);
+  expect(rows.map((r) => (r.config as { moderation: string }).moderation)).toEqual(["open", "open"]);
+});
+
+test("the event-level moderation route lists the queue of the Q&A named by ?interaction=", async () => {
+  await addQuestion(first, "On the first", "pending");
+  await addQuestion(second, "On the second", "pending");
+  const ask = async (qs: string, id = eventId) => {
+    const request = new Request(`http://localhost/api${qs}`, { headers: { cookie: hostCookie } });
+    return oldModerationRoute.GET(request, ctx({ id }));
+  };
+  const named = await (await ask(`?interaction=${second}`)).json();
+  expect(named.interactionId).toBe(second);
+  expect(named.questions.map((q: { text: string }) => q.text)).toEqual(["On the second"]);
+  const fallback = await (await ask("")).json();
+  expect(fallback.interactionId).toBe(first);
+  expect((await ask("?interaction=not-an-id")).status).toBe(404);
+  expect((await ask(`?interaction=${first}`, "00000000-0000-4000-8000-000000000000")).status).toBe(404);
+});
+
+test("a draft Q&A comes after started ones when the event-level paths pick one", async () => {
+  await db.update(interactions).set({ state: "draft" }).where(eq(interactions.id, first));
+  const res = await oldPresentRoute.GET(req("GET", hostCookie), ctx({ id: eventId }));
+  expect((await res.json()).interactionId).toBe(second);
 });

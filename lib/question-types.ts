@@ -32,4 +32,9 @@ export type ParticipantQa = {
  * What the participant Q&A tab shows. `current` is the live Q&A, else the latest paused or closed one (read-only);
  * `earlier` holds the other closed ones, newest first.
  */
-export type ParticipantQaView = { current: ParticipantQa | null; earlier: ParticipantQa[] };
+export type ParticipantQaView = {
+  current: ParticipantQa | null;
+  earlier: ParticipantQa[];
+  /** Set when the event's Q&As are all drafts: the host has not opened one, so there is nothing to ask yet. */
+  notOpen?: true;
+};

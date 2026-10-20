@@ -98,8 +98,9 @@ test("list returns interactions in position order", async () => {
   await createPoll({ ...poll, question: "two" });
   const res = await collection.GET(req("GET"), ctx(eventId));
   const { interactions: list } = await res.json();
-  expect(list.map((i: { title: string }) => i.title)).toEqual(["one", "two"]);
-  expect(list.map((i: { position: number }) => i.position)).toEqual([0, 1]);
+  // A new event starts with its default Q&A at position 0.
+  expect(list.map((i: { title: string }) => i.title)).toEqual(["Q&A", "one", "two"]);
+  expect(list.map((i: { position: number }) => i.position)).toEqual([0, 1, 2]);
 });
 
 test("edit updates a draft but keeps ids of retained options", async () => {
@@ -146,7 +147,7 @@ test("duplicate copies the poll as a draft with fresh option ids at the end", as
   expect(copy.id).not.toBe(src.id);
   expect(copy.state).toBe("draft");
   expect(copy.title).toBe(src.title);
-  expect(copy.position).toBe(1);
+  expect(copy.position).toBe(2);
   expect(copy.config.options.map((o: { label: string }) => o.label)).toEqual(["A", "B"]);
   expect(copy.config.options[0].id).not.toBe(src.config.options[0].id);
 });
@@ -154,10 +155,11 @@ test("duplicate copies the poll as a draft with fresh option ids at the end", as
 test("reorder rewrites positions", async () => {
   const a = (await createPoll({ ...poll, question: "a" })).json.interaction;
   const b = (await createPoll({ ...poll, question: "b" })).json.interaction;
-  const res = await reorder.POST(req("POST", { ids: [b.id, a.id] }), ctx(eventId));
+  const qa = (await (await collection.GET(req("GET"), ctx(eventId))).json()).interactions[0];
+  const res = await reorder.POST(req("POST", { ids: [b.id, a.id, qa.id] }), ctx(eventId));
   expect(res.status).toBe(200);
   const list = (await (await collection.GET(req("GET"), ctx(eventId))).json()).interactions;
-  expect(list.map((i: { title: string }) => i.title)).toEqual(["b", "a"]);
+  expect(list.map((i: { title: string }) => i.title)).toEqual(["b", "a", "Q&A"]);
   expect((await reorder.POST(req("POST", { ids: [a.id] }), ctx(eventId))).status).toBe(400);
 });
 

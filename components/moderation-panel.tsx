@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { InlineError, Toggle } from "@/components/ui/field";
+import { InlineError, Select, Toggle } from "@/components/ui/field";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { useCoalesced } from "@/lib/use-coalesced";
 import type { HostNote } from "@/lib/note-types";
@@ -19,16 +19,24 @@ const byPinnedThenNewest = (a: HostQuestion, b: HostQuestion) =>
 const notesByPinnedThenNewest = (a: HostNote, b: HostNote) =>
   Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt);
 
-/** Host Q&A controls: the Open/Moderated switch, the pending queue, and approved-question actions. */
+export type QaOption = { id: string; title: string; state: "draft" | "live" | "paused" | "closed"; moderation: Mode };
+
+/**
+ * Host Q&A controls for the selected Q&A: its Open/Moderated switch, the pending queue, and approved-question
+ * actions. An event with several Q&As gets a picker; notes stay event-wide.
+ */
 export function ModerationPanel({
   eventId,
-  initialMode,
+  qas,
+  initialQaId,
   initialQuestions,
   initialNotes = [],
   canChangeMode = true,
 }: {
   eventId: string;
-  initialMode: Mode;
+  qas: QaOption[];
+  /** The Q&A whose questions `initialQuestions` holds: the live one, else the first. */
+  initialQaId: string | null;
   initialQuestions: HostQuestion[];
   initialNotes?: HostNote[];
   /** False for roles that may moderate but not edit the event: hides the mode switch. */
@@ -36,14 +44,17 @@ export function ModerationPanel({
 }) {
   const t = useT();
   const { socket } = useEventSocket(eventId, canChangeMode ? "host" : "moderator");
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [qaList, setQaList] = useState<QaOption[]>(qas);
+  const [qaId, setQaId] = useState<string | null>(initialQaId);
+  const qa = qaList.find((q) => q.id === qaId) ?? null;
+  const mode: Mode = qa?.moderation ?? "open";
   const [questions, setQuestions] = useState<HostQuestion[]>(initialQuestions);
   const [notes, setNotes] = useState<HostNote[]>(initialNotes);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (forId: string | null = qaId) => {
     try {
-      const res = await fetch(`/api/events/${eventId}/moderation`);
+      const res = await fetch(`/api/events/${eventId}/moderation${forId ? `?interaction=${forId}` : ""}`);
       if (!res.ok) return;
       const data = (await res.json()) as { questions: HostQuestion[]; notes?: HostNote[] };
       setQuestions(data.questions);
@@ -51,7 +62,7 @@ export function ModerationPanel({
     } catch {
       // Offline: the next reconnect refetches.
     }
-  }, [eventId]);
+  }, [eventId, qaId]);
 
   // Many note events can arrive together; refetch the list once after they settle.
   const refetchSoon = useCoalesced(() => void refetch());
@@ -60,9 +71,14 @@ export function ModerationPanel({
     if (!socket) return;
     const upsert = (question: HostQuestion) =>
       setQuestions((cur) => [question, ...cur.filter((q) => q.id !== question.id)].sort(byPinnedThenNewest));
-    const onPending = (msg: { question: HostQuestion }) => upsert({ ...msg.question, status: "pending" });
-    const onAdded = (msg: { question: HostQuestion }) => upsert({ ...msg.question, status: "approved" });
-    const onVotes = (msg: { questionId: string; upvotes: number }) =>
+    // Messages for the event's other Q&As do not belong in this queue.
+    const mine = (msg: { interactionId?: string }) => msg.interactionId === qaId;
+    const onPending = (msg: { interactionId?: string; question: HostQuestion }) =>
+      mine(msg) && upsert({ ...msg.question, status: "pending" });
+    const onAdded = (msg: { interactionId?: string; question: HostQuestion }) =>
+      mine(msg) && upsert({ ...msg.question, status: "approved" });
+    const onVotes = (msg: { interactionId?: string; questionId: string; upvotes: number }) =>
+      mine(msg) &&
       setQuestions((cur) => cur.map((q) => (q.id === msg.questionId ? { ...q, upvotes: msg.upvotes } : q)));
     const onConnect = () => void refetch();
     const onNoteChange = () => refetchSoon();
@@ -89,7 +105,7 @@ export function ModerationPanel({
       socket.off("question:votes", onVotes);
       socket.off("connect", onConnect);
     };
-  }, [socket, refetch, refetchSoon]);
+  }, [socket, refetch, refetchSoon, qaId]);
 
   const request = async (url: string, init: RequestInit, failure: string) => {
     setError(null);
@@ -103,18 +119,25 @@ export function ModerationPanel({
     return null;
   };
 
+  const pickQa = (id: string) => {
+    setQaId(id);
+    setQuestions([]);
+    void refetch(id);
+  };
+
   const changeMode = async (next: Mode) => {
+    if (!qaId) return;
     const res = await request(
-      `/api/events/${eventId}`,
-      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ moderationMode: next }) },
+      `/api/events/${eventId}/interactions/${qaId}`,
+      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ moderation: next }) },
       t("moderation.modeError"),
     );
-    if (res) setMode(next);
+    if (res) setQaList((list) => list.map((q) => (q.id === qaId ? { ...q, moderation: next } : q)));
   };
 
   const change = async (id: string, body: Record<string, unknown>) => {
     const res = await request(
-      `/api/events/${eventId}/questions/${id}`,
+      `/api/interactions/${qaId}/questions/${id}`,
       { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       t("moderation.questionUpdateError"),
     );
@@ -128,7 +151,7 @@ export function ModerationPanel({
   };
 
   const remove = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE" }, t("moderation.questionDeleteError"));
+    const res = await request(`/api/interactions/${qaId}/questions/${id}`, { method: "DELETE" }, t("moderation.questionDeleteError"));
     if (res) setQuestions((cur) => cur.filter((q) => q.id !== id));
   };
 
@@ -158,10 +181,23 @@ export function ModerationPanel({
   return (
     <section aria-labelledby="moderation-title" className="moderation">
       <h2 id="moderation-title">{t("moderation.title")}</h2>
-      {canChangeMode && <Toggle label={t("moderation.moderatedToggle")} checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
-      <p className="row-meta">
-        {t("moderation.modeLabel")} <strong>{mode === "moderated" ? t("moderation.modeModerated") : t("moderation.modeOpen")}</strong>
-      </p>
+      {qaList.length === 0 && <p className="row-meta">{t("moderation.noQa")}</p>}
+      {qaList.length > 1 && (
+        <Select label={t("moderation.qaPicker")} value={qaId ?? ""} onChange={(e) => pickQa(e.target.value)}>
+          {qaList.map((q) => (
+            <option key={q.id} value={q.id}>
+              {q.title} ({q.state})
+            </option>
+          ))}
+        </Select>
+      )}
+      {qa && canChangeMode && <Toggle label={t("moderation.moderatedToggle")} checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
+      {qa && (
+        <p className="row-meta">
+          {t("moderation.modeLabel")} <strong>{mode === "moderated" ? t("moderation.modeModerated") : t("moderation.modeOpen")}</strong>
+        </p>
+      )}
+      {qa?.state === "draft" && <p className="row-meta">{t("moderation.draftNote")}</p>}
       {error && <InlineError>{error}</InlineError>}
 
       <h3>{t("moderation.pendingHeading", { n: pending.length })}</h3>

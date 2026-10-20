@@ -136,6 +136,7 @@ test("duplicating a qa interaction copies its config and none of its questions",
 });
 
 test("ensureQaInteraction creates one paused Q&A per event and reuses it", async () => {
+  await db.delete(interactions).where(eq(interactions.eventId, eventId));
   const [live] = await db
     .insert(interactions)
     .values({ eventId, type: "poll", title: "P", state: "live", position: 0, config: {} })
@@ -149,12 +150,47 @@ test("ensureQaInteraction creates one paused Q&A per event and reuses it", async
 });
 
 test("ensureQaInteraction copies the event moderation mode and survives parallel calls", async () => {
+  await db.delete(interactions).where(eq(interactions.eventId, eventId));
   await db.update(events).set({ moderationMode: "moderated" }).where(eq(events.id, eventId));
   const ids = await Promise.all([1, 2, 3, 4].map(() => ensureQaInteraction(db, eventId)));
   expect(new Set(ids).size).toBe(1);
   const rows = await db.select().from(interactions).where(eq(interactions.eventId, eventId));
   expect(rows).toHaveLength(1);
   expect(rows[0].config).toMatchObject({ moderation: "moderated" });
+});
+
+test("a new event comes with one draft Q&A that takes the event's moderation mode", async () => {
+  const rows = await db.select().from(interactions).where(eq(interactions.eventId, eventId));
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ type: "qa", title: "Q&A", state: "draft", position: 0 });
+  expect(rows[0].config).toMatchObject({ moderation: "open", profanityFilter: true });
+  const moderated = await eventsRoute.POST(
+    req("POST", { name: "M", startsAt: "2026-01-01T10:00:00Z", endsAt: "2026-01-01T12:00:00Z", moderationMode: "moderated" }),
+  );
+  const id = (await moderated.json()).event.id;
+  const [qa] = await db.select().from(interactions).where(eq(interactions.eventId, id));
+  expect(qa.config).toMatchObject({ moderation: "moderated" });
+});
+
+test("a Q&A can switch moderation while live, but keeps its name and prompt", async () => {
+  const { json } = await create({ type: "qa", title: "Board", prompt: "Ask" });
+  const id = json.interaction.id;
+  await db.update(interactions).set({ state: "live" }).where(eq(interactions.id, id));
+  const switched = await item.PATCH(req("PATCH", { moderation: "moderated", profanityFilter: false }), ctx(eventId, id));
+  expect(switched.status).toBe(200);
+  expect((await switched.json()).interaction).toMatchObject({
+    title: "Board",
+    state: "live",
+    config: { prompt: "Ask", moderation: "moderated", profanityFilter: false },
+  });
+  expect((await item.PATCH(req("PATCH", { title: "Renamed" }), ctx(eventId, id))).status).toBe(409);
+  expect((await item.PATCH(req("PATCH", { prompt: "New prompt" }), ctx(eventId, id))).status).toBe(409);
+});
+
+test("other types still refuse edits once started", async () => {
+  const { json } = await create({ type: "rating", prompt: "Rate it" });
+  await db.update(interactions).set({ state: "live" }).where(eq(interactions.id, json.interaction.id));
+  expect((await item.PATCH(req("PATCH", { scale: "numeric10" }), ctx(eventId, json.interaction.id))).status).toBe(409);
 });
 
 test("deleting the event removes its questions and votes", async () => {

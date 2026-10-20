@@ -43,7 +43,9 @@ export async function PATCH(request: Request, context: Context) {
   const loaded = await load(request, context, "event.edit");
   if (!loaded.interaction) return loaded.response;
   const current = loaded.interaction;
-  if (current.state !== "draft") return notDraft(request);
+  // A started Q&A keeps its name and prompt, but the host can still switch moderation while it runs.
+  const qaSettingsOnly = current.type === "qa" && current.state !== "draft";
+  if (current.state !== "draft" && !qaSettingsOnly) return notDraft(request);
   try {
     await assertNotOverLimit(loaded.auth.workspaceId, { eventId: current.eventId, type: current.type });
   } catch (error) {
@@ -54,7 +56,9 @@ export async function PATCH(request: Request, context: Context) {
   let title: string | undefined;
   let config: Record<string, unknown>;
   if (isNewInteractionType(current.type)) {
-    const parsed = parseNewInteractionInput(current.type, await request.json().catch(() => null), true);
+    const body = await request.json().catch(() => null);
+    if (qaSettingsOnly && body && typeof body === "object" && ("title" in body || "prompt" in body)) return notDraft(request);
+    const parsed = parseNewInteractionInput(current.type, body, true);
     if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
     title = parsed.value.title;
     config = newInteractionConfig(current.type, { ...current.config, ...parsed.value.config });
@@ -73,7 +77,7 @@ export async function PATCH(request: Request, context: Context) {
   const [interaction] = await getDb()
     .update(interactions)
     .set({ ...(title !== undefined && { title }), config })
-    .where(and(eq(interactions.id, current.id), eq(interactions.state, "draft")))
+    .where(and(eq(interactions.id, current.id), eq(interactions.state, current.state)))
     .returning();
   return interaction ? Response.json({ interaction }) : notDraft(request);
 }

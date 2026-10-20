@@ -34,15 +34,16 @@ async function ask(browser: Browser, code: string, text: string) {
 
 test("the presenter can show the Q&A screen; waiting questions stay hidden until approved", async ({ browser, page }) => {
   const code = await createEvent(page);
+  // A new event comes with a draft Q&A; participants can ask once the host starts it.
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.getByTestId("state")).toHaveText("live");
   const presenterHref = (await page.getByRole("link", { name: "Open presenter view" }).getAttribute("href"))!;
 
   const presenter = await page.context().newPage();
   await presenter.goto(presenterHref);
-  await expect(presenter.getByText("No live interaction")).toBeVisible();
-  await presenter.getByRole("button", { name: /Show Q&A/ }).click();
+  // The live Q&A fills the projector by itself.
   await expect(presenter.getByRole("heading", { name: "Q&A" })).toBeVisible();
   await expect(presenter.getByText(/No questions yet/)).toBeVisible();
-  expect(new URL(presenter.url()).searchParams.get("view")).toBe("qa");
 
   // Open mode: a new question shows up on the projector without a refresh.
   const first = await ask(browser, code, "When does the next session start?");
@@ -62,11 +63,10 @@ test("the presenter can show the Q&A screen; waiting questions stay hidden until
   await modPage.getByRole("button", { name: "Approve" }).first().click();
   await expect(presenter.getByText("Is the recording shared?")).toBeVisible();
 
-  // The screen survives a reload, and the Q key goes back to the interaction view.
+  // The screen survives a reload.
   await presenter.reload();
   await expect(presenter.getByRole("heading", { name: "Q&A" })).toBeVisible();
-  await presenter.keyboard.press("q");
-  await expect(presenter.getByText("No live interaction")).toBeVisible();
+  await expect(presenter.getByText("Is the recording shared?")).toBeVisible();
 
   await first.context.close();
   await second.context.close();

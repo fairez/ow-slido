@@ -89,6 +89,16 @@ test("an event with no Q&A has nothing to show", async () => {
   expect(await view()).toEqual({ current: null, earlier: [] });
 });
 
+test("an event whose Q&As are all drafts is not open yet, and the event-level path refuses a question", async () => {
+  await addQa("Not yet", "draft");
+  expect(await view()).toEqual({ current: null, earlier: [], notOpen: true });
+  const postRoute = (await import("@/app/api/events/[id]/questions/route")) as unknown as Handlers;
+  const res = await postRoute.POST(req("POST", guest, { text: "Too early" }), ctx({ id: eventId }));
+  expect(res.status).toBe(409);
+  expect(await db.select().from(questions)).toHaveLength(0);
+  expect(await db.select().from(interactions)).toHaveLength(1);
+});
+
 test("the live Q&A is shown with its prompt and approved questions only; drafts are never shown", async () => {
   const older = await addQa("Older", "closed");
   const live = await addQa("Now", "live");

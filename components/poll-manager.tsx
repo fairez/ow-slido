@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
-import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN, OPEN_TEXT_MAX, OPEN_TEXT_MIN } from "@/lib/interaction-config";
+import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN, OPEN_TEXT_MAX, OPEN_TEXT_MIN, QA_DEFAULT_PROMPT, QA_DEFAULT_TITLE } from "@/lib/interaction-config";
 import { NotesAnalysisPanel } from "@/components/notes-analysis-panel";
 import { OpenTextHostPanel } from "@/components/open-text-host-panel";
 import { Button } from "@/components/ui/button";
@@ -31,13 +31,14 @@ export type InteractionItem = {
     maxEntriesPerParticipant?: number;
     maxNotesPerParticipant?: number;
     moderation?: "open" | "moderated";
+    profanityFilter?: boolean;
     showAuthorNames?: boolean;
     maxResponsesPerParticipant?: number;
     scale?: "stars5" | "numeric10";
   };
 };
 
-type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
+type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa";
 const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
   qa: "pollMgr.type.qa",
   poll: "pollMgr.type.poll",
@@ -53,11 +54,12 @@ const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
   { kind: "sharedNotes", label: "pollMgr.newSharedNotes" },
   { kind: "openText", label: "pollMgr.newOpenText" },
   { kind: "rating", label: "pollMgr.newRating" },
+  { kind: "qa", label: "pollMgr.newQa" },
 ];
 
-type Draft = { kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
+type Draft = { qaPrompt: string; profanity: boolean; kind: Kind; scale: "stars5" | "numeric10"; maxResponses: number; maxNotes: number; moderated: boolean; showAuthors: boolean; maxEntries: number; id: string | null; question: string; options: { id?: string; label: string }[]; multiSelect: boolean; showResults: boolean };
 
-const blank = (kind: Draft["kind"] = "poll"): Draft => ({ kind, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: false, showAuthors: false, maxEntries: 3, id: null, question: "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
+const blank = (kind: Draft["kind"] = "poll", defaultModeration: "open" | "moderated" = "open"): Draft => ({ kind, qaPrompt: QA_DEFAULT_PROMPT, profanity: true, scale: "stars5", maxResponses: 1, maxNotes: 3, moderated: kind === "qa" && defaultModeration === "moderated", showAuthors: false, maxEntries: 3, id: null, question: kind === "qa" ? QA_DEFAULT_TITLE : "", options: [{ label: "" }, { label: "" }], multiSelect: false, showResults: false });
 
 async function errorFrom(response: Response) {
   const body = await response.json().catch(() => null);
@@ -76,11 +78,15 @@ type PollManagerProps = {
   itemLocks?: Record<string, Lock>;
   /** Set when the whole event is past the plan's monthly limit: nothing new can be added to it. */
   eventLock?: Lock;
+  /** The event's moderation mode: the starting choice for a new Q&A. */
+  defaultModeration?: "open" | "moderated";
 };
 
-export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock }: PollManagerProps) {
+export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock, defaultModeration = "open" }: PollManagerProps) {
   const t = useT();
   const typeLabel = (kind: InteractionItem["type"]) => t(TYPE_LABELS[kind]);
+  // Mid-sentence type names are lower case, except "Q&A".
+  const typeInSentence = (kind: InteractionItem["type"]) => (kind === "qa" ? typeLabel(kind) : typeLabel(kind).toLowerCase());
   const base = `/api/events/${eventId}/interactions`;
   // Only needed for live analysis status; stays disconnected when AI is off.
   const { socket } = useEventSocket(eventId, "host", aiEnabled);
@@ -115,7 +121,15 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     event.preventDefault();
     if (!draft) return;
     const body =
-      draft.kind === "rating"
+      draft.kind === "qa"
+        ? {
+            type: "qa",
+            title: draft.question,
+            prompt: draft.qaPrompt,
+            moderation: draft.moderated ? "moderated" : "open",
+            profanityFilter: draft.profanity,
+          }
+        : draft.kind === "rating"
         ? { type: "rating", prompt: draft.question, scale: draft.scale }
         : draft.kind === "openText"
         ? { type: "openText", prompt: draft.question, maxResponsesPerParticipant: draft.maxResponses }
@@ -183,10 +197,11 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     if (response) setItems(next);
   }
 
-  // Q&A has no builder here yet, so the Edit button is not shown for it.
   function edit(item: InteractionItem & { type: Kind }) {
     setError(null);
     setDraft({
+      qaPrompt: item.config.prompt ?? QA_DEFAULT_PROMPT,
+      profanity: item.config.profanityFilter ?? true,
       kind: item.type,
       scale: item.config.scale ?? "stars5",
       maxResponses: item.config.maxResponsesPerParticipant ?? 1,
@@ -267,7 +282,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               ))}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
-                  {!lock && item.type !== "qa" && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
+                  {!lock && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
                   {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                   <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>
                   {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
@@ -283,9 +298,9 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
       {draft ? (
         <Card aria-labelledby="draft-title">
           <form onSubmit={save} className="form-stack">
-            <h3 id="draft-title">{t(draft.id ? "pollMgr.editType" : "pollMgr.newType", { type: typeLabel(draft.kind).toLowerCase() })}</h3>
+            <h3 id="draft-title">{t(draft.id ? "pollMgr.editType" : "pollMgr.newType", { type: typeInSentence(draft.kind) })}</h3>
             <TextField
-              label={draft.kind === "poll" ? t("pollMgr.question") : t("pollMgr.prompt")}
+              label={draft.kind === "poll" ? t("pollMgr.question") : draft.kind === "qa" ? t("pollMgr.qaName") : t("pollMgr.prompt")}
               value={draft.question}
               onChange={(e) => setDraft({ ...draft, question: e.target.value })}
               required
@@ -325,6 +340,27 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                 <Toggle label={t("pollMgr.showResults")} checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} />
               </fieldset>
             )}
+            {draft.kind === "qa" && (
+              <>
+                <TextField
+                  label={t("pollMgr.qaPrompt")}
+                  value={draft.qaPrompt}
+                  onChange={(e) => setDraft({ ...draft, qaPrompt: e.target.value })}
+                  required
+                  maxLength={INTERACTION_PROMPT_MAX}
+                />
+                <fieldset className="form-group">
+                  <legend>{t("pollMgr.moderation")}</legend>
+                  <label className="ui-toggle">
+                    <input type="radio" name="moderation" checked={!draft.moderated} onChange={() => setDraft({ ...draft, moderated: false })} /> {t("pollMgr.qaModOpen")}
+                  </label>
+                  <label className="ui-toggle">
+                    <input type="radio" name="moderation" checked={draft.moderated} onChange={() => setDraft({ ...draft, moderated: true })} /> {t("pollMgr.qaModModerated")}
+                  </label>
+                </fieldset>
+                <Toggle label={t("pollMgr.profanityFilter")} checked={draft.profanity} onChange={(e) => setDraft({ ...draft, profanity: e.target.checked })} />
+              </>
+            )}
             {draft.kind === "wordcloud" && numberField(t("pollMgr.entriesPer"), draft.maxEntries, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_MAX_ENTRIES, (n) => setDraft({ ...draft, maxEntries: n }))}
             {draft.kind === "openText" && numberField(t("pollMgr.responsesPer"), draft.maxResponses, OPEN_TEXT_MIN, OPEN_TEXT_MAX, (n) => setDraft({ ...draft, maxResponses: n }))}
             {draft.kind === "rating" && (
@@ -355,7 +391,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
             )}
             {error && <InlineError>{error}</InlineError>}
             <div className="row-actions">
-              <Button type="submit" variant="primary" busy={pending}>{pending ? t("pollMgr.saving") : t("pollMgr.saveType", { type: typeLabel(draft.kind).toLowerCase() })}</Button>
+              <Button type="submit" variant="primary" busy={pending}>{pending ? t("pollMgr.saving") : t("pollMgr.saveType", { type: typeInSentence(draft.kind) })}</Button>
               <Button onClick={() => { setError(null); setDraft(null); }}>{t("pollMgr.cancel")}</Button>
             </div>
           </form>
@@ -369,7 +405,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               return lock ? (
                 <PlanHint key={kind} lock={lock}>{t(label)}</PlanHint>
               ) : (
-                <Button key={kind} onClick={() => setDraft(blank(kind))}>{t(label)}</Button>
+                <Button key={kind} onClick={() => setDraft(blank(kind, defaultModeration))}>{t(label)}</Button>
               );
             })}
           </div>

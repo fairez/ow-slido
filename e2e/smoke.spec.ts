@@ -27,8 +27,10 @@ test("host runs a poll and a participant's vote reaches the presenter page", asy
   await page.getByRole("textbox", { name: "Option 1" }).fill("TypeScript");
   await page.getByRole("textbox", { name: "Option 2" }).fill("Rust");
   await page.getByRole("button", { name: "Save poll" }).click();
-  await page.getByRole("button", { name: "Start" }).click();
-  await expect(page.getByTestId("state")).toHaveText("live");
+  // The event also holds its default Q&A, so work inside the poll's row.
+  const row = page.getByRole("listitem").filter({ hasText: "Best language?" });
+  await row.getByRole("button", { name: "Start" }).click();
+  await expect(row.getByTestId("state")).toHaveText("live");
 
   const presenter = await page.context().newPage();
   const presentHref = await page.getByRole("link", { name: "Open presenter view" }).getAttribute("href");

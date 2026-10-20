@@ -94,6 +94,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         aiLock={aiLock(limits)}
         itemLocks={itemLocks}
         eventLock={eventLock ?? undefined}
+        defaultModeration={event.moderationMode}
       />
     </main>
   );

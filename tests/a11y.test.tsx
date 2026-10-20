@@ -109,7 +109,7 @@ it("dashboard: event list, poll builder, moderation, auth and join forms", async
   cleanup();
   const host = { ...question("q1", "Why?"), status: "pending" as const };
   expect(
-    await violations(<ModerationPanel eventId="e1" initialMode="moderated" initialQuestions={[host as never]} />),
+    await violations(<ModerationPanel eventId="e1" qas={[{ id: "qa1", title: "Q&A", state: "live", moderation: "moderated" }]} initialQaId="qa1" initialQuestions={[host as never]} />),
   ).toEqual([]);
   cleanup();
   expect(await violations(<AuthForm mode="login" />)).toEqual([]);

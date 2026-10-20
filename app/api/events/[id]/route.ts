@@ -1,6 +1,6 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
-import { and, eq, sql } from "drizzle-orm";
-import { events, interactions } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { events } from "@/db/schema";
 import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { isUuid, parseEventInput } from "@/lib/events";
@@ -48,17 +48,8 @@ export async function PATCH(request: Request, { params }: Context) {
     return Response.json({ error: serverT(request, "api.endBeforeStart") }, { status: 400 });
   }
 
-  const event = await getDb().transaction(async (tx) => {
-    const [updated] = await tx.update(events).set(changes).where(eq(events.id, current.id)).returning();
-    // Questions follow the moderation of their Q&A, so the event-level switch sets it on the event's Q&As.
-    if (changes.moderationMode) {
-      await tx
-        .update(interactions)
-        .set({ config: sql`jsonb_set(${interactions.config}, '{moderation}', to_jsonb(${changes.moderationMode}::text))` })
-        .where(and(eq(interactions.eventId, current.id), eq(interactions.type, "qa")));
-    }
-    return updated;
-  });
+  // `moderationMode` is only the default for Q&As created later; each Q&A keeps its own mode.
+  const [event] = await getDb().update(events).set(changes).where(eq(events.id, current.id)).returning();
   return Response.json({ event });
 }
 

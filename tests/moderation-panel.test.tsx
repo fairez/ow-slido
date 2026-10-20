@@ -22,6 +22,10 @@ const q = (id: string, text: string, extra = {}) => ({
   ...extra,
 });
 
+const qas = (moderation: "open" | "moderated") => [
+  { id: "qa1", title: "Q&A", state: "live" as const, moderation },
+];
+
 beforeEach(() => fake.removeAllListeners());
 afterEach(() => {
   cleanup();
@@ -33,11 +37,11 @@ it("approves a pending question and moves it to the approved list", async () => 
     async () => new Response(JSON.stringify({ ok: true, question: q("1", "Why?") }), { status: 200 }),
   );
   vi.stubGlobal("fetch", fetchMock);
-  render(<ModerationPanel eventId="e1" initialMode="moderated" initialQuestions={[q("1", "Why?", { status: "pending" })]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("moderated")} initialQaId="qa1" initialQuestions={[q("1", "Why?", { status: "pending" })]} />);
   fireEvent.click(screen.getByRole("button", { name: "Approve" }));
   await waitFor(() => expect(screen.getByLabelText("Approved questions")).toBeTruthy());
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/events/e1/questions/1",
+    "/api/interactions/qa1/questions/1",
     expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "approved" }) }),
   );
   expect(screen.getByText("No pending questions.")).toBeTruthy();
@@ -45,27 +49,27 @@ it("approves a pending question and moves it to the approved list", async () => 
 
 it("rejecting removes the question from the queue", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, question: null }), { status: 200 })));
-  render(<ModerationPanel eventId="e1" initialMode="moderated" initialQuestions={[q("1", "Spam", { status: "pending" })]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("moderated")} initialQaId="qa1" initialQuestions={[q("1", "Spam", { status: "pending" })]} />);
   fireEvent.click(screen.getByRole("button", { name: "Reject" }));
   await waitFor(() => expect(screen.queryByText("Spam")).toBeNull());
 });
 
 it("shows new pending questions arriving over the socket", () => {
-  render(<ModerationPanel eventId="e1" initialMode="moderated" initialQuestions={[]} />);
-  act(() => void fake.emit("question:pending", { question: q("2", "Live one") }));
+  render(<ModerationPanel eventId="e1" qas={qas("moderated")} initialQaId="qa1" initialQuestions={[]} />);
+  act(() => void fake.emit("question:pending", { interactionId: "qa1", question: q("2", "Live one") }));
   const pending = screen.getByLabelText("Pending questions");
   expect(within(pending).getByText("Live one")).toBeTruthy();
 });
 
-it("toggles moderation mode via the event PATCH endpoint", async () => {
+it("toggles moderation mode via the Q&A interaction PATCH endpoint", async () => {
   const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
-  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("open")} initialQaId="qa1" initialQuestions={[]} />);
   fireEvent.click(screen.getByLabelText(/Moderated Q&A/));
   await waitFor(() => expect(screen.getByText("Moderated")).toBeTruthy());
   expect(fetchMock).toHaveBeenCalledWith(
-    "/api/events/e1",
-    expect.objectContaining({ method: "PATCH", body: JSON.stringify({ moderationMode: "moderated" }) }),
+    "/api/events/e1/interactions/qa1",
+    expect.objectContaining({ method: "PATCH", body: JSON.stringify({ moderation: "moderated" }) }),
   );
 });
 
@@ -78,7 +82,7 @@ it("pin, answered and delete actions on approved questions", async () => {
         }),
   );
   vi.stubGlobal("fetch", fetchMock);
-  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[q("1", "Hello")]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("open")} initialQaId="qa1" initialQuestions={[q("1", "Hello")]} />);
   fireEvent.click(screen.getByRole("button", { name: "Pin" }));
   await waitFor(() => expect(screen.getByText(/Pinned/)).toBeTruthy());
   expect(screen.getByText(/Answered/)).toBeTruthy();
@@ -94,7 +98,7 @@ it("without canChangeMode the mode switch is hidden and moderation still works",
   render(
     <ModerationPanel
       eventId="e1"
-      initialMode="moderated"
+      qas={qas("moderated")} initialQaId="qa1"
       initialQuestions={[q("1", "Why?", { status: "pending" })]}
       canChangeMode={false}
     />,
@@ -102,7 +106,7 @@ it("without canChangeMode the mode switch is hidden and moderation still works",
   expect(screen.queryByRole("checkbox")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Approve" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-  expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/questions/1", expect.objectContaining({ method: "PATCH" }));
+  expect(fetchMock).toHaveBeenCalledWith("/api/interactions/qa1/questions/1", expect.objectContaining({ method: "PATCH" }));
 });
 
 const note = (id: string, text: string, extra = {}) => ({
@@ -123,7 +127,7 @@ it("approves a pending note and offers Pin and Delete afterwards", async () => {
     async () => new Response(JSON.stringify({ ok: true, note: note("n1", "Idea", { status: "approved" }) }), { status: 200 }),
   );
   vi.stubGlobal("fetch", fetchMock);
-  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[]} initialNotes={[note("n1", "Idea")]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("open")} initialQaId="qa1" initialQuestions={[]} initialNotes={[note("n1", "Idea")]} />);
   fireEvent.click(screen.getByRole("button", { name: "Approve note" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Pin note" })).toBeTruthy());
   expect(fetchMock).toHaveBeenCalledWith(
@@ -135,7 +139,35 @@ it("approves a pending note and offers Pin and Delete afterwards", async () => {
 
 it("rejecting a note removes it from the queue", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, note: null }), { status: 200 })));
-  render(<ModerationPanel eventId="e1" initialMode="open" initialQuestions={[]} initialNotes={[note("n1", "Spam")]} />);
+  render(<ModerationPanel eventId="e1" qas={qas("open")} initialQaId="qa1" initialQuestions={[]} initialNotes={[note("n1", "Spam")]} />);
   fireEvent.click(screen.getByRole("button", { name: "Reject note" }));
   await waitFor(() => expect(screen.queryByText("Spam")).toBeNull());
+});
+
+it("ignores questions that arrive for another Q&A of the event", () => {
+  render(<ModerationPanel eventId="e1" qas={qas("moderated")} initialQaId="qa1" initialQuestions={[]} />);
+  act(() => void fake.emit("question:pending", { interactionId: "other", question: q("3", "Elsewhere") }));
+  expect(screen.queryByText("Elsewhere")).toBeNull();
+});
+
+it("picks another Q&A and loads its queue and moderation mode", async () => {
+  const fetchMock = vi.fn(
+    async () => new Response(JSON.stringify({ interactionId: "qa2", questions: [q("9", "Second", { status: "pending" })] }), { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const both = [
+    { id: "qa1", title: "Main", state: "live" as const, moderation: "open" as const },
+    { id: "qa2", title: "Backstage", state: "paused" as const, moderation: "moderated" as const },
+  ];
+  render(<ModerationPanel eventId="e1" qas={both} initialQaId="qa1" initialQuestions={[q("1", "First")]} />);
+  fireEvent.change(screen.getByLabelText("Q&A to moderate"), { target: { value: "qa2" } });
+  await waitFor(() => expect(screen.getByText("Second")).toBeTruthy());
+  expect(screen.queryByText("First")).toBeNull();
+  expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/moderation?interaction=qa2");
+  expect(screen.getByText("Moderated")).toBeTruthy();
+});
+
+it("says so when the event has no Q&A", () => {
+  render(<ModerationPanel eventId="e1" qas={[]} initialQaId={null} initialQuestions={[]} />);
+  expect(screen.getByText(/no Q&A yet/)).toBeTruthy();
 });

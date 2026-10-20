@@ -175,9 +175,9 @@ test("duplicate copies interactions as drafts with a new join code and no respon
   const src = json.event;
   const [live] = await db
     .insert(interactions)
-    .values({ eventId: src.id, type: "poll", title: "Q?", position: 0, state: "live", config: { options: [{ id: "a", label: "A" }] } })
+    .values({ eventId: src.id, type: "poll", title: "Q?", position: 1, state: "live", config: { options: [{ id: "a", label: "A" }] } })
     .returning();
-  await db.insert(interactions).values({ eventId: src.id, type: "wordcloud", title: "Cloud", position: 1, state: "closed" });
+  await db.insert(interactions).values({ eventId: src.id, type: "wordcloud", title: "Cloud", position: 2, state: "closed" });
   const [p] = await db.insert(participants).values({ eventId: src.id }).returning();
   await db.insert(pollVotes).values({ interactionId: live.id, participantId: p.id, optionIds: ["a"] });
   await db.insert(questions).values({ eventId: src.id, interactionId: await qaFor(db, src.id), participantId: p.id, text: "Why?", status: "approved" });
@@ -190,8 +190,8 @@ test("duplicate copies interactions as drafts with a new join code and no respon
   expect(copy.moderationMode).toBe("moderated");
 
   const copied = await db.select().from(interactions).where(eq(interactions.eventId, copy.id)).orderBy(interactions.position);
-  expect(copied.map((i) => [i.title, i.state, i.position])).toEqual([["Q?", "draft", 0], ["Cloud", "draft", 1], ["Q&A", "draft", 2]]);
-  expect(copied[0].config).toEqual({ options: [{ id: "a", label: "A" }] });
+  expect(copied.map((i) => [i.title, i.state, i.position])).toEqual([["Q&A", "draft", 0], ["Q?", "draft", 1], ["Cloud", "draft", 2]]);
+  expect(copied[1].config).toEqual({ options: [{ id: "a", label: "A" }] });
   expect(await db.select().from(participants).where(eq(participants.eventId, copy.id))).toHaveLength(0);
   expect(await db.select().from(questions).where(eq(questions.eventId, copy.id))).toHaveLength(0);
   const votes = await db.select().from(pollVotes);

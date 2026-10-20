@@ -13,6 +13,7 @@ import {
   ensureQaInteraction,
   findQaInteraction,
   getParticipantQa,
+  hasOnlyDraftQa,
   listApprovedQuestions,
   resolveEventQa,
   submitQuestion,
@@ -73,6 +74,7 @@ export async function postQuestion(request: Request, eventId: string, interactio
 
   if (!interactionId) {
     if (!(await eventExists(eventId))) return notFound(request, "api.eventNotFound");
+    if (await hasOnlyDraftQa(eventId)) return Response.json({ error: serverT(request, "api.qaNotOpen") }, { status: 409 });
     interactionId = await ensureQaInteraction(getDb(), eventId);
   }
   const result = await submitQuestion(interactionId, participantId, input);
