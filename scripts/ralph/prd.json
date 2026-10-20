@@ -1,822 +1,487 @@
 {
   "project": "OW Slido",
-  "branchName": "ralph/phase3-m1-m4",
-  "description": "Phase 3 milestones M1-M4 (tasks/prd-slido-clone-phase3.md): foundation (i18n base, workspaces, roles, sign-up, members), plans and billing in test mode, unified content (Q&A as an interaction, library, templates), ranking, quiz and survey. M5-M8 are not in this run.",
+  "branchName": "ralph/phase3-m7-m8",
+  "description": "Phase 3 milestones M7 and M8 (tasks/prd-slido-clone-phase3.md): security, operations and branding; Indonesian UI, pricing and legal pages, e2e, docs and final audit. M5 (images, reports) and M6 (AI Insights) are deliberately not built in this run. Branches from ralph/phase3-m1-m4.",
   "userStories": [
     {
-      "title": "i18n core: message files, t() helper, locale",
-      "description": "As a developer, I need one translation helper so that no UI string is written inline from now on.",
+      "title": "2FA: secrets, TOTP and recovery codes (library and schema)",
+      "description": "As a developer, I need TOTP two-factor building blocks.",
       "acceptanceCriteria": [
-        "Add `lib/i18n/` with `en.ts` and `id.ts` message files (flat dotted keys), `t(locale, key, params?)` with `{name}` interpolation, and `Locale = 'en' | 'id'`; hand-written, no new dependency",
-        "Locale is resolved from a `lang` cookie, then the Accept-Language header, then `en`; a server helper `getLocale()` and a client `I18nProvider` + `useT()` hook are available to server and client components",
-        "`id.ts` is typed to have exactly the keys of `en.ts` (compile error when they drift) and a test also fails on missing or extra keys",
-        "Move every string currently exported from `lib/copy.ts` into the message files and keep `lib/copy.ts` re-exporting through `t('en', ...)` so existing imports keep working",
-        "Indonesian values may be copies of the English text for now (real translation is a later story); document that in `docs/i18n.md` with the rule: no inline UI strings in new code",
-        "Add the rule to CLAUDE.md under a new `## i18n` heading",
+        "Add `user_totp` (user_id unique, secret_encrypted, confirmed_at, created_at) and `recovery_codes` (user_id, code_hash, used_at) with a migration and cascade from users; the secret is encrypted with AES-256-GCM using a key from env `TWOFA_ENCRYPTION_KEY` (documented in `.env.example`; tests set it with `vi.stubEnv`; the code refuses to enable 2FA when it is unset)",
+        "`lib/auth/totp.ts` implements RFC 6238 TOTP (SHA-1, 6 digits, 30 s, +/-1 step window) with no new dependency, plus otpauth URI creation; unit test uses the RFC test vectors",
+        "10 recovery codes are generated randomly, shown once, stored only as hashes and each works once",
+        "Verification attempts are rate limited per user through the existing rate-limit interface",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
       "id": "US-001",
       "priority": 1,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Move participant-facing strings to message files",
-      "description": "As a developer, I want participant screens to read text from the message files.",
+      "title": "2FA: login step and enrolment API",
+      "description": "As a member, I want to turn on 2FA and be asked for the code when I log in.",
       "acceptanceCriteria": [
-        "All user-visible strings in the join page, join form, participant view, Q&A tab, notes, open text, rating and published-analysis components move to keys in `en.ts` and `id.ts`, using `useT()`/`getLocale()`",
-        "Rendered output in English is unchanged (existing component tests still pass without edits to expected text)",
-        "A lint-style test (`tests/no-inline-strings.test.ts`) scans the migrated files for JSX text literals and fails on any",
+        "Endpoints to start enrolment (returns otpauth URI and secret), confirm with a first code (then returns the recovery codes once), and disable (needs password and a valid code)",
+        "Login with 2FA enabled returns a short-lived pending-2FA token instead of a session; a second endpoint accepts a TOTP or a recovery code and then sets the normal session cookie; wrong codes are rate limited and never reveal which part failed",
+        "Existing sessions are not affected by enabling 2FA; disabling 2FA and using a recovery code set `sessions_valid_after` for other devices",
+        "Tests: enrol, login with code, login with recovery code (second use rejected), disable, rate limit",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Typecheck passes"
       ],
       "id": "US-002",
       "priority": 2,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Move host, presenter and auth strings to message files",
-      "description": "As a developer, I want host-side screens to read text from the message files.",
+      "title": "2FA: account security page and login screen",
+      "description": "As a member, I want to manage 2FA from my account.",
       "acceptanceCriteria": [
-        "All user-visible strings in dashboard, event page, managers, presenter views, moderation panel, login, signup, home and the app shell move to keys",
-        "English output is unchanged; existing tests pass",
-        "The no-inline-strings test now also covers these files",
-        "Tests pass (npm run lint, typecheck and test are green)",
+        "`/account/security` shows 2FA status, a QR code (generated without a third-party service) plus the manual secret, a code field, the recovery codes shown once with a copy/download action, and a disable action",
+        "The login page shows the code step after a correct password; recovery code entry is a clearly labelled alternative",
+        "Keyboard operable, errors announced, no code or secret in the URL",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-003",
       "priority": 3,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Move API error messages to message files",
-      "description": "As a developer, I want API error text translatable too.",
+      "title": "2FA: workspace requirement for Team",
+      "description": "As an owner of a Team workspace, I want to require 2FA for all members.",
       "acceptanceCriteria": [
-        "API routes return their `error` message via a server helper `serverT(request, key, params)` that uses the request locale; the HTTP status and response shape do not change",
-        "Client code that shows API errors shows the returned message as-is",
-        "Tests that assert error copy are updated to use the keys' English text; add one test that the same route returns the `id` text when `lang=id` cookie is sent",
+        "Add `workspaces.require_2fa` (default false) with a migration; setting it needs `members.manage` and the `enforced2fa` entitlement (402 otherwise)",
+        "A member without 2FA in a workspace that requires it is redirected to `/account/security` for every page and gets 403 `{reason: 'two_factor_required'}` on APIs until enrolled (security page, logout and enrolment endpoints stay open)",
+        "The members page shows who has 2FA on; the plan hint appears for tiers without the entitlement",
+        "Tests: enforcement, allowed endpoints, and the entitlement check",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-004",
       "priority": 4,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Workspaces and memberships tables",
-      "description": "As a developer, I need events and billing to belong to a workspace instead of a single user.",
+      "title": "Audit log: table and writer",
+      "description": "As a developer, I need an append-only record of sensitive actions.",
       "acceptanceCriteria": [
-        "Add `workspaces` (id, name, created_at) and `memberships` (workspace_id, user_id, role in owner|admin|editor|moderator|viewer, status active|suspended, created_at; unique per user and workspace) with a migration",
-        "Backfill in the same migration: every existing user gets a personal workspace named after their email prefix and an `owner` membership; every existing event gets `workspace_id` of its owner's workspace; then `events.workspace_id` is NOT NULL with `onDelete: cascade`",
-        "Add `users.must_change_password` (default false) and `users.last_login_at`; set `last_login_at` on login",
-        "Keep `events.owner_id` as the creator (rename of semantics only, no column drop yet)",
-        "Cascade test: deleting a workspace removes its memberships and events and everything below them; migration test on seeded users and events shows nothing is lost",
-        "Add the new tables' convention to CLAUDE.md (every data table must reach a workspace through `events`)",
+        "Add `audit_log` (id, workspace_id nullable, actor_user_id nullable, actor_label, action, target_type, target_id, metadata jsonb, ip, created_at) with a migration, cascade from workspaces, an index on (workspace_id, created_at), and database triggers that reject UPDATE and DELETE except through the workspace cascade",
+        "`recordAudit(db, {...})` in `lib/audit.ts` is the only writer; it strips a deny-list of keys (password, token, secret, key, text, note) from metadata and never stores request bodies; failures to write are logged without content and do not break the request",
+        "Tests: append works, update and delete are rejected, deny-list stripping, cascade from workspace",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
       "id": "US-005",
       "priority": 5,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Active workspace in the session and workspace-scoped event access",
-      "description": "As a user, I want every request to act inside one workspace I belong to.",
+      "title": "Audit log: record sensitive actions",
+      "description": "As an owner, I want sensitive actions recorded.",
       "acceptanceCriteria": [
-        "`getSessionUser` also returns the user's memberships; add `requireMember(request, workspaceId?)` that resolves the active workspace (cookie `workspace`, default: first active membership) and rejects non-members and suspended members",
-        "All event and interaction routes, dashboard pages and `/present`, `/e/...` host pages find events by `workspace_id` of the active workspace rather than `owner_id`; a user cannot read or change another workspace's event (404)",
-        "Event creation sets the active workspace; the join-by-code path for participants is unchanged",
-        "Tests: a member of workspace A gets 404 on workspace B's event, interaction and export routes; a user with two workspaces can switch via `POST /api/workspaces/active`",
+        "Call `recordAudit` for: login success and failure, logout-everywhere/password change, 2FA enable/disable, role change, member add/suspend/remove, invitation create/revoke, plan change and cancel (from billing events), event delete, template delete, CSV/ZIP export, AI analysis run and AI notice acceptance, workspace settings change",
+        "Each entry has the actor, action, target, time and IP; none holds note text, passwords, tokens or keys (a test inspects metadata of every action)",
+        "Tests: one per action group proving an entry is written",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
       "id": "US-006",
       "priority": 6,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Permission matrix module",
-      "description": "As a developer, I need one function that says what each role may do.",
+      "title": "Audit log page",
+      "description": "As an owner or admin, I want to read the audit log.",
       "acceptanceCriteria": [
-        "Add `lib/auth/permissions.ts` with the actions and roles from the permission matrix in `tasks/prd-slido-clone-phase3.md` Section 7 and `can(role, action, {ownsContent?})`",
-        "Actions include: billing.manage, members.manage, branding.manage, templates.manage, event.create, event.edit, event.delete, live.run, moderate, insights.manage, export, results.view, audit.view",
-        "A table-driven test asserts every cell of the matrix, including the `own` rule for editor deletes",
-        "No route uses it yet in this story",
+        "`/dashboard/audit` (permission `audit.view`, Team tier via the `auditLog` entitlement; other tiers see a plan hint) lists entries newest first with filters for action and actor and a date range, paged 50 at a time",
+        "Roles without `audit.view` get 403 on the API and no menu item",
+        "Entries show the time in the user's time zone with the UTC value on hover or in text",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-007",
       "priority": 7,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Apply permissions to event, interaction and live routes",
-      "description": "As a workspace owner, I want roles to limit what teammates can do with events.",
+      "title": "Retention settings and the daily deletion job",
+      "description": "As an owner, I want to decide how long event data is kept.",
       "acceptanceCriteria": [
-        "`requireMember(request, action)` combines membership and `can`; event create/edit/delete, interaction create/edit/delete/reorder/duplicate and start/pause/close routes call it with the right action",
-        "Denied calls return 403 with `{error}`; unauthenticated calls return 401; deleting needs `event.delete` (editors only for content they created: add `created_by` to interactions and events via migration, backfilled from owner)",
-        "Tests: one allowed and one denied request per role for create, edit, delete and run-live",
+        "Add `workspaces.retention_days` (null = keep forever; allowed 30, 90, 365) and `events.deletion_notice_sent_at` with a migration; setting it needs `members.manage` and is audited",
+        "A daily job (run beside `expireSubscriptions` in server.ts) deletes events whose `ends_at` is older than the retention period, cascading to all their data; it sends the 7-day warning email (through the email adapter, once per event) to owners and admins before deleting",
+        "The job takes `now` as a parameter; deleting writes an audit entry without content",
+        "Tests with fixed dates: not yet due, warning sent once, deleted after the period, nothing happens when retention is null",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
       "id": "US-008",
       "priority": 8,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Apply permissions to moderation, export, AI and results routes",
-      "description": "As a workspace owner, I want moderators, viewers and editors limited to their roles on the rest of the host API.",
+      "title": "Retention settings UI and pre-delete export prompt",
+      "description": "As an owner, I want to set retention and see what will be deleted.",
       "acceptanceCriteria": [
-        "Moderation of questions, notes and open text uses `moderate`; CSV export uses `export`; AI analysis start/edit/publish, notice acceptance and AI test use `insights.manage`; results/presenter data reads use `results.view`",
-        "Tests: one allowed and one denied request per role for each of these groups",
-        "Audience (no login) can still join, answer, ask, upvote and view results the host shows; add one allowed and one denied test per audience capability (denied: any host route returns 401)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "`/dashboard/settings` has a Data retention control (30, 90, 365 days or Keep) with a clear sentence about what is removed; events scheduled for deletion show a badge and the date on the dashboard and event page",
+        "The event page offers the ZIP export prominently when deletion is within 7 days",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-009",
       "priority": 9,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Retire the moderator link",
-      "description": "As a workspace owner, I want the moderator role to replace the shared moderator link.",
+      "title": "Permanent event delete and delete one participant's data",
+      "description": "As a host, I want to remove an event or one person's data for good.",
       "acceptanceCriteria": [
-        "Remove `app/moderate`, the moderator-link route, `components/moderator-link-manager.tsx`, `lib/moderator-token.ts` and `lib/auth/require-moderation.ts`; migration drops `events.moderator_nonce`",
-        "Old `/moderate/<id>` URLs return 404 with a note pointing to log in",
-        "A signed-in moderator, editor, admin or owner opens the moderation queue from the event page at `/dashboard/events/[id]/moderate`; roles without `moderate` do not see it",
-        "Socket.IO moderation channel authorises by session membership instead of the old token",
-        "Update tests and e2e that used the moderator link",
+        "Deleting an event needs a typed confirmation of its name in the UI, requires `event.delete`, cascades to every table (a test enumerates all tables with an `event_id` or reaching `events` and proves they are empty), and is audited",
+        "`DELETE /api/events/[id]/participants/[participantId]/data` removes that participant's responses, votes, notes, questions, quiz answers, survey submissions and ranking answers, keeps aggregated counts consistent, and anonymises nothing else; permission `event.edit`",
+        "A host action 'Delete participant data' exists on the event page with a confirmation",
+        "Tests: every participant-linked table is cleared for the participant and untouched for others",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-010",
       "priority": 10,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Drop users.role and add the workspace switcher",
-      "description": "As a user in several workspaces, I want to see and switch my active workspace.",
+      "title": "Workspace data export (ZIP job)",
+      "description": "As an owner, I want to download all my workspace data.",
       "acceptanceCriteria": [
-        "Migration removes `users.role` and the `users_role_admin` check; code reading `user.role` uses the active membership role instead",
-        "App shell shows the active workspace name and role; a switcher lists the user's workspaces and posts to `/api/workspaces/active`",
-        "A user with one workspace sees no switcher, only the name",
+        "`POST /api/workspace/export` (owner only) starts a background job that builds a ZIP with, per event, the per-interaction CSVs from the registry, plus templates as JSON, members (email and role only) as CSV and the plan; the job reports queued/running/done/failed",
+        "A status endpoint and a short-lived download link; files are kept 24 hours then removed; no participant tokens, IPs or password hashes appear (test scans the output)",
+        "Rate limited to one running export per workspace; audited",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Typecheck passes"
       ],
       "id": "US-011",
       "priority": 11,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Email adapter and one-time tokens",
-      "description": "As a developer, I need to send emails and issue single-use links.",
+      "title": "Account deletion and workspace deletion",
+      "description": "As a customer, I want to delete my account or my workspace.",
       "acceptanceCriteria": [
-        "Add `lib/email/` with an `EmailSender` interface, a `log` adapter (default in dev and test; writes the message to a captured in-memory outbox, never to disk or the console with link tokens in production) and an SMTP adapter selected by `EMAIL_PROVIDER` and env vars documented in `.env.example`",
-        "Add `auth_tokens` (id, user_id, purpose verify_email|reset_password|invite, token_hash, expires_at, used_at); tokens are random, only the hash is stored, single use, with expiry checks in one helper `consumeToken`",
-        "Tests: token consumes once; expired and wrong-purpose tokens are rejected; outbox helper works in tests",
+        "A member can delete their own account (password confirmation); an owner who is the only owner of a workspace with other members must first transfer ownership or delete the workspace (409 with the reason); their memberships end and content they created stays with the workspace",
+        "Owners can delete a workspace after typing its name: it cancels the subscription through the billing provider (mock in tests), removes all data by cascade, and keeps one audit-style record with no content in a `deleted_workspaces` table (id, deleted_at, plan)",
+        "Tests: transfer rule, deletion cascade across all workspace-level tables, billing cancel called once",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-012",
       "priority": 12,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Sign-up creates a workspace and sends a verification email",
-      "description": "As a new customer, I want to sign up by myself and get my own workspace.",
+      "title": "Rate limits per workspace and global AI spend cap",
+      "description": "As the platform owner, I want guards against abuse and runaway cost.",
       "acceptanceCriteria": [
-        "Sign-up (email + password) creates the user, a workspace and an owner membership in one transaction, then sends a verification email; `ALLOW_SIGNUP=false` still closes sign-up",
-        "Sign-up and verification resend are rate limited per IP and email through the existing rate limiter",
-        "`/verify?token=` page marks the email verified (`users.email_verified_at`, migration; existing users are backfilled as verified) and shows a clear result",
-        "Until verified: a banner with a Resend button shows, and the server refuses starting an interaction and sending invitations (403 with reason `email_unverified`)",
-        "Tests for each rule above",
+        "Per-workspace limits behind the existing rate-limit interface for exports, ZIP jobs, AI starts and invitations, with 429 `{error, retryAfter}`; audience limits per IP stay as they are",
+        "A global daily AI call cap `AI_GLOBAL_DAILY_CAP` (env, documented) stops every AI start with 503 `ai_paused` when reached, regardless of workspace limits; hosts see 'AI is paused for today' (translated)",
+        "Tests: workspace limit, global cap reached, and counters reset on a new UTC day (pass `now`)",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Typecheck passes"
       ],
       "id": "US-013",
       "priority": 13,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Forgot password, reset and session invalidation",
-      "description": "As a user, I want to recover my password without help.",
+      "title": "Health endpoint and job recording",
+      "description": "As the platform owner, I want to know when something is broken.",
       "acceptanceCriteria": [
-        "`/forgot` and `/reset?token=` pages plus APIs; the link is single use and expires in 60 minutes; the response never reveals whether the email exists",
-        "Add `users.sessions_valid_after`; session tokens carry an issued-at time and are rejected if issued before it; a password change or reset sets it to now and issues a fresh cookie for the current device only",
-        "Forced change: when `must_change_password` is true, every page and API except the change-password page and logout redirects/returns 403 until the password is changed",
-        "Tests: reset flow, token reuse rejected, other sessions end after change, forced change enforced",
+        "`GET /api/health` reports migrations pending, database reachable, the daily job last-run time and the export/analysis job runner state; it fails (503) when migrations are pending or the database is unreachable and never exposes configuration values",
+        "Failed background jobs (analysis, export) are retried up to 3 times with backoff and the last error class (not content) is stored on the job row",
+        "Tests: healthy, pending migration, retry then failure recorded",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Typecheck passes"
       ],
       "id": "US-014",
       "priority": 14,
-      "passes": true,
-      "notes": "Milestone M1"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Invitations: create, list, revoke and accept API",
-      "description": "As an owner or admin, I want to invite teammates by email with a role.",
+      "title": "Platform operator flag and /ops workspace list",
+      "description": "As the platform owner, I want an internal console that customers cannot see.",
       "acceptanceCriteria": [
-        "Add `invitations` (workspace_id, email, role, invited_by, token via `auth_tokens`, status pending|accepted|revoked|expired, expires_at 7 days) with a migration and cascade from workspaces",
-        "Create/list/revoke endpoints use `members.manage`; the link is returned once in the create response and also emailed through the adapter; owner role cannot be invited; duplicate pending invites to one email are rejected",
-        "Accept endpoint: a logged-in user whose email matches joins with the role; a new user sets a password and is created, verified and joined; accepting twice or after expiry fails",
-        "A seat-check hook `assertSeatAvailable(workspaceId)` is called before creating an invite (no-op until the plans story)",
-        "Tests for create, revoke, accept (new and existing user), expiry and wrong email",
+        "Operator users are those whose email is in env `OPERATOR_EMAILS` (comma list, documented) and who have a verified email; there is no UI to grant it",
+        "`/ops` and `/api/ops/*` return 404 for everyone else (including logged-in members and anonymous visitors), and never appear in navigation for them",
+        "`/ops` lists workspaces with plan, status, seats used, events this month, AI calls this month and members count, with search by name or owner email, paged",
+        "Tests: operator allowed, member and anonymous get 404, unverified operator email denied",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-015",
-      "priority": 15,
-      "passes": true,
-      "notes": "Milestone M1"
-    },
-    {
-      "title": "Member management API",
-      "description": "As an owner or admin, I want to manage existing members.",
-      "acceptanceCriteria": [
-        "Endpoints to change role, suspend, reactivate and remove a member, and to reset a member's password (generates a temporary password returned once, sets `must_change_password` and `sessions_valid_after`; no email)",
-        "Suspended members cannot use the workspace and their sessions for it end; admins cannot change owners or promote anyone to owner; only an owner can grant or remove owner",
-        "The last active owner cannot be removed, demoted or suspended; a member cannot suspend themselves",
-        "Tests for each rule, including cascade of removal not deleting content they created (content stays with the workspace)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-016",
-      "priority": 16,
-      "passes": true,
-      "notes": "Milestone M1"
-    },
-    {
-      "title": "Members page and invite screens",
-      "description": "As an owner or admin, I want a page to see and manage my team.",
-      "acceptanceCriteria": [
-        "`/dashboard/members` lists members and pending invitations with role, status and last login; owners/admins can invite (email + role), change role, suspend/reactivate, remove, reset password (temporary password shown once in a dialog with a copy button) and revoke invites",
-        "`/invite?token=` page lets someone accept an invitation (new users set a password); `/change-password` page handles forced change",
-        "Controls that the viewer's role may not use are hidden, not disabled; errors from the API are shown in the page",
-        "Keyboard operable dialogs with focus return",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
-      "id": "US-017",
-      "priority": 17,
-      "passes": true,
-      "notes": "Milestone M1"
+      "id": "US-015",
+      "priority": 15,
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Plans module and entitlements",
-      "description": "As a developer, I need one place that defines what each tier allows.",
+      "title": "Operator actions: suspend, plan override, reset 2FA",
+      "description": "As the platform owner, I want to support customers safely.",
       "acceptanceCriteria": [
-        "Add `lib/plans.ts` defining Free, Pro and Team with: seats, eventsPerMonth, participantsPerEvent, allowedTypes, templates, imageStorageMb, aiCallsPerEvent, aiCallsPerMonth, reportFormats, branding, auditLog, enforced2fa; defaults from the Phase 3 PRD US-013 (Free = 1 seat, 100 participants, poll/wordcloud/qa/rating/sharedNotes/openText, no AI, CSV only; Pro = 3 seats, 1000 participants, all types, AI, PDF/Excel; Team = 15 seats, 5000 participants, branding, audit log, 2FA enforcement); prices as integer minor units with an ISO currency in the same file",
-        "Add `subscriptions` (workspace_id unique, plan, status active|trialing|past_due|canceled, interval month|year, current_period_end, provider, provider_customer_id, provider_subscription_id, plan_override, plan_override_until, plan_override_reason) with a migration; every workspace is backfilled to Free, except workspaces that have any `note_analyses` row, which are backfilled to Pro with `plan_override_reason = 'grandfathered'`",
-        "`getEntitlements(workspaceId)` is the only way to read limits; it applies a valid override over the plan and treats `past_due` within grace and `canceled` after period end correctly",
-        "Month boundaries are computed in UTC in one helper",
-        "Tests for each tier, override and expiry, and the backfill",
+        "Add `workspaces.suspended_at/suspended_reason`; a suspended workspace blocks every `requireMember` call with 403 `{reason: 'workspace_suspended'}` and shows a notice page; participants of its events see a neutral 'event unavailable' message",
+        "Operator can suspend and reactivate a workspace, set a plan override with an end date and a required reason (stored in the existing override columns), and reset a member's 2FA (removes their secret and recovery codes)",
+        "Every operator action writes an audit entry with the operator as actor, visible in the workspace's own audit log for Team and always in a platform-level view",
+        "`/ops` shows the active AI provider and model (never keys), a Test connection button that uses the existing AI test route, and today's global AI count against the cap",
+        "Tests: suspension blocks hosts and participants, override applies and expires, 2FA reset, audit entries",
+        "Tests pass (npm run lint, typecheck and test are green)",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+      ],
+      "id": "US-016",
+      "priority": 16,
+      "passes": false,
+      "notes": "Milestone M7"
+    },
+    {
+      "title": "Branding: accent colour with contrast check",
+      "description": "As an owner on a plan with branding, I want my accent colour on audience screens.",
+      "acceptanceCriteria": [
+        "Add `workspaces.brand_accent` (nullable hex) with a migration; setting needs `branding.manage` and the `branding` entitlement (402 otherwise, with the plan hint in the UI)",
+        "The server computes WCAG contrast of the colour against the light and dark surface tokens in `DESIGN.md` for text-on-accent and accent-on-surface use, and rejects colours that fail AA with a message naming the failing pair; a pure function `checkAccentContrast(hex)` is unit tested with passing and failing colours",
+        "The logo upload is out of scope for this run (images are not built yet): leave a clearly marked TODO in docs, not in code",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
+      ],
+      "id": "US-017",
+      "priority": 17,
+      "passes": false,
+      "notes": "Milestone M7"
+    },
+    {
+      "title": "Branding: apply the accent and settings screen",
+      "description": "As an owner, I want to preview and apply my colour.",
+      "acceptanceCriteria": [
+        "`/dashboard/settings` has a colour input with a live preview and the contrast result; saving applies the accent to the participant, join and presenter screens through the semantic CSS variable for the accent in both light and dark (no hardcoded colours elsewhere)",
+        "Removing the colour restores the default accent",
+        "Screenshots at 360px and 1280px, light and dark, with a branded and an unbranded event",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-018",
       "priority": 18,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M7"
     },
     {
-      "title": "Enforce type, event and seat limits",
-      "description": "As the platform owner, I want limits enforced by the server.",
+      "title": "Language preference and event audience language",
+      "description": "As a host, I want my interface and my audience's screens in the right language.",
       "acceptanceCriteria": [
-        "Creating or duplicating an interaction of a type not in `allowedTypes`, creating an event over `eventsPerMonth`, and creating an invitation or accepting one past `seats` (pending invitations count) return 402 with `{error, reason, requiredPlan}`",
-        "`assertSeatAvailable` from the invitations story now uses entitlements",
-        "Tests: one allowed and one denied request per limit",
+        "Add `users.locale` (en|id, nullable) and `events.audience_locale` (en|id, default en) with a migration; the host chooses UI language in settings (stored in the `lang` cookie too) and the audience language when creating or editing an event",
+        "Join, participant and presenter pages for an event render in the event's audience language; participants can switch language on the join screen (choice kept in the cookie for that event); host pages use the host's language",
+        "Template copy and duplicate keep the audience language; the dashboard shows it per event",
+        "Tests: locale resolution order (event audience, participant choice, host setting, Accept-Language, en)",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-019",
       "priority": 19,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Enforce participant cap, AI caps and report format",
-      "description": "As the platform owner, I want audience size, AI use and exports limited by tier.",
+      "title": "Indonesian translation: join and participant screens",
+      "description": "As an Indonesian participant, I want every screen I see to read naturally.",
       "acceptanceCriteria": [
-        "Joining an event beyond `participantsPerEvent` distinct participants returns a clear participant-facing message (translated) and does not create a participant; rejoining with an existing token still works at the cap",
-        "AI analysis start checks `aiCallsPerEvent` and `aiCallsPerMonth` from entitlements in addition to the existing env caps; Free has none and returns 402",
-        "Export route checks `reportFormats`; `csv` is allowed on every tier (PDF/Excel keys are checked later when they exist)",
-        "Tests: one allowed and one denied request per limit; participant at the cap can still rejoin",
+        "Replace the English placeholders in `id.ts` for the join page, join form, participant view, Q&A, notes, open text, rating, ranking, quiz (incl. nickname, timer, result) and survey participant screens with natural Indonesian (read `docs/antislop/skills/antislop-copywriting/SKILL.md`: no word-for-word translation, no forced slang, consistent kamu/Anda choice documented in `docs/i18n.md`, polite and short)",
+        "A test fails if an `id` value equals its `en` value for these keys unless the key is on an explicit allow-list (names, 'OK', numbers)",
+        "Screenshots of the join and participant flow in Indonesian at 360px",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-020",
       "priority": 20,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Plan and usage page, with locked hints",
-      "description": "As a workspace owner, I want to see my plan and what I have used.",
+      "title": "Indonesian translation: presenter and results screens",
+      "description": "As an Indonesian host presenting to an Indonesian audience, I want the big screen in Indonesian.",
       "acceptanceCriteria": [
-        "`/dashboard/plan` shows the tier, seats used/total, events this month, participants peak, AI calls used/cap and storage, each with a progress bar that also prints the numbers",
-        "Anywhere a gated action is offered (add content menu, invite button, AI button, export format) it stays visible with the tier name that unlocks it and links to this page; AI is hidden only when AI is unconfigured",
-        "Only roles with `billing.manage` see price and change buttons; others see read-only usage",
+        "Translate presenter views and results for poll, word cloud, Q&A, shared notes, open text, rating, ranking, quiz (leaderboard, podium) and survey, plus published analysis labels",
+        "The same equality test covers these keys",
+        "Screenshots of presenter views at 1280px in Indonesian, light and dark",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-021",
       "priority": 21,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Billing provider interface, mock provider and webhook",
-      "description": "As a developer, I need billing behind an interface that tests can drive.",
+      "title": "Indonesian translation: host dashboard, event page and templates",
+      "description": "As an Indonesian host, I want to build and run events in Indonesian.",
       "acceptanceCriteria": [
-        "Add `lib/billing/` with a `BillingProvider` interface (createCheckout, createPortalSession, cancelSubscription, parseWebhook) and a `mock` provider selected by `BILLING_PROVIDER=mock` (default in dev, test and e2e) that completes checkout through a local route",
-        "`POST /api/billing/webhook` verifies the signature (mock uses an HMAC secret), is idempotent through a `billing_events` table with a unique provider event id, and updates `subscriptions` (plan, status, interval, period end)",
-        "Checkout, portal and cancel endpoints require `billing.manage`; cancel keeps access until period end",
-        "Secrets read only from env; nothing logged; tests never reach a network",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-022",
-      "priority": 22,
-      "passes": true,
-      "notes": "Milestone M2"
-    },
-    {
-      "title": "Stripe provider implementation",
-      "description": "As the platform owner, I want the real Stripe provider ready to switch on.",
-      "acceptanceCriteria": [
-        "Implement `StripeProvider` against the Stripe REST API with `fetch` (no SDK needed) for checkout sessions, billing portal and cancel, and Stripe webhook signature verification (`Stripe-Signature`, timestamp tolerance)",
-        "Env vars `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` documented in `.env.example`; selected only when `BILLING_PROVIDER=stripe`",
-        "Unit tests use a mocked `fetch` and fixed webhook payloads; no real call is ever made",
-        "`docs/billing.md` lists how the owner sets up test-mode keys and the webhook URL",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-023",
-      "priority": 23,
-      "passes": true,
-      "notes": "Milestone M2"
-    },
-    {
-      "title": "Upgrade, cancel and billing status UI",
-      "description": "As a workspace owner, I want to upgrade, switch or cancel from the plan page.",
-      "acceptanceCriteria": [
-        "Plan page lists tiers with limits from `lib/plans.ts`, a monthly/yearly toggle and an upgrade button that starts checkout; the mock provider returns to the plan page with the new plan active",
-        "Shows renewal date, a Manage billing button (portal) and Cancel with a confirmation that states access ends on the period end date",
-        "A banner shows `past_due` and the end of the grace period; hidden otherwise",
+        "Translate dashboard, event page, content library, add-content menu, builders for every type, templates, moderation panel, settings, AI analysis panels and notices",
+        "The equality test covers these keys; plan hints stay consistent with the tier names (tier names are not translated)",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
-      "id": "US-024",
-      "priority": 24,
-      "passes": true,
-      "notes": "Milestone M2"
+      "id": "US-022",
+      "priority": 22,
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Payment failure grace and fall back to Free",
-      "description": "As a workspace owner, I want a predictable result when a payment fails.",
+      "title": "Indonesian translation: account, members, plan and billing",
+      "description": "As an Indonesian owner, I want account and billing screens in Indonesian.",
       "acceptanceCriteria": [
-        "`past_due` starts a 7-day grace period (constant in `lib/plans.ts`); entitlements stay at the paid plan during grace",
-        "After grace, or after a canceled period ends, `getEntitlements` returns Free without needing a cron: it is computed from stored dates; a daily job also writes the state back",
-        "Tests with fixed dates cover grace start, end, recovery after a successful payment and cancel at period end",
+        "Translate login, sign-up, verify, forgot/reset, change password, security (2FA), members, invitations, plan and billing, audit log, retention, workspace and account deletion, operator console and branding screens",
+        "Amounts and dates use `Intl` with the active locale (e.g. 20 Okt 2026, Rp format when the currency is IDR)",
+        "The equality test covers these keys",
+        "Tests pass (npm run lint, typecheck and test are green)",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+      ],
+      "id": "US-023",
+      "priority": 23,
+      "passes": false,
+      "notes": "Milestone M8"
+    },
+    {
+      "title": "Indonesian translation: API errors and emails",
+      "description": "As an Indonesian user, I want error messages and emails in Indonesian.",
+      "acceptanceCriteria": [
+        "Translate every API error key and the verification, reset and invitation emails (subject and body, plain text plus the simple HTML if present); emails use the recipient's `users.locale` or the request locale at send time",
+        "The equality test covers these keys; a test sends each email in both languages through the log adapter and checks that links and tokens are intact",
+        "Tests pass (npm run lint, typecheck and test are green)",
+        "Typecheck passes"
+      ],
+      "id": "US-024",
+      "priority": 24,
+      "passes": false,
+      "notes": "Milestone M8"
+    },
+    {
+      "title": "Word-cloud stop words by event language",
+      "description": "As an Indonesian host, I want clean word clouds in my language.",
+      "acceptanceCriteria": [
+        "The frequency word cloud and the keyword fallback pick the stop-word list from the event's audience language (existing Indonesian list in `lib/note-stopwords.ts`, English list added if missing); mixed text uses both lists",
+        "Unit tests with an Indonesian and an English sample show connectors removed and content words kept",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
       "id": "US-025",
       "priority": 25,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Downgrade keeps data and makes over-limit content read-only",
-      "description": "As a workspace owner, I want a downgrade to never delete my content.",
+      "title": "Layout pass for longer Indonesian strings",
+      "description": "As an Indonesian user on a phone, I want layouts that hold with longer text.",
       "acceptanceCriteria": [
-        "Content using a type not allowed by the current plan (and events beyond limits) stays visible with results and CSV export but cannot be started, edited or duplicated (403 `over_limit`); the UI shows a lock and the plan needed",
-        "Members beyond the seat limit become `suspended` automatically, newest first, never the last owner; they are listed with a reason and are reactivated when seats free up",
-        "Tests: downgrade Pro → Free with Pro-only content and extra members; upgrade back restores everything",
-        "Tests pass (npm run lint, typecheck and test are green)",
+        "Run every key page in Indonesian at 360px and 1280px, light and dark (join, participant per type, presenter per type, dashboard, event page, members, plan, settings, login): no horizontal overflow, no clipped buttons, tap targets stay 44px",
+        "Fix every overflow with layout changes (wrapping, min-width, grid) instead of shortening copy where the copy is correct; screenshots saved to `scripts/ralph/screens/` and a summary table in `docs/mobile-audit.md`",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-026",
       "priority": 26,
-      "passes": true,
-      "notes": "Milestone M2"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Add the qa interaction type and migrate existing questions",
-      "description": "As a developer, I need Q&A to live in the shared interactions model.",
+      "title": "Public pricing page",
+      "description": "As a visitor, I want to see plans and limits before signing up.",
       "acceptanceCriteria": [
-        "`interactions.type` and its check accept `qa`; config schema `qa`: prompt (max 200, default 'Ask a question'), moderation 'open'|'moderated'; validated in `lib/interaction-config.ts` and wired into create, PATCH and duplicate (duplicate copies config only, never questions)",
-        "`questions` gains `interaction_id` (references interactions, cascade). The migration creates one `qa` interaction (title 'Q&A', state 'live' only if the event had no live interaction, else 'paused', moderation copied from the event) for every event that has questions or has no interaction yet, and attaches all questions to it; then `interaction_id` is NOT NULL",
-        "Votes, status and pins are untouched; a test on a seeded database proves counts per event before and after are identical",
-        "A down migration or documented SQL reverses it, exercised in a test",
-        "Cascade test: deleting an event or the Q&A interaction removes its questions and votes",
+        "`/pricing` is public and renders the tiers, prices (integer minor units formatted with `Intl`), limits and feature flags from `lib/plans.ts` only (a test fails if the page defines its own numbers), with a monthly/yearly toggle and a sign-up link",
+        "Linked from the home page and the footer; works in both languages; follows DESIGN.md and 360px",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-027",
       "priority": 27,
-      "passes": true,
-      "notes": "Milestone M3"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Q&A API and realtime scoped to the interaction",
-      "description": "As a developer, I want all question endpoints to work per Q&A interaction.",
+      "title": "Terms and privacy pages",
+      "description": "As a visitor and as an audience member, I want to read the legal terms.",
       "acceptanceCriteria": [
-        "Submit, list, upvote, pin, hide/approve/reject and delete question routes take the interaction id (new paths under `/api/interactions/[id]/questions`); old event-scoped paths keep working by resolving to the event's live Q&A, else its first Q&A, so existing clients and links do not break",
-        "Moderation mode and the profanity filter come from the interaction config; `lib/questions.ts` and `lib/moderation.ts` take `interactionId`",
-        "Socket events for questions carry `interactionId`",
-        "Updated tests plus one test that the old paths still resolve",
+        "`/terms` and `/privacy` exist in both languages, linked from the footer, sign-up and join screens; the body is a clearly marked placeholder (visible banner 'Placeholder text, supplied by the project owner') because the legal text is not written yet",
+        "The privacy page states in plain language: what is stored, that approved note text may be sent to a third-party AI service when a host starts an analysis, how to delete data, and how long data is kept (retention setting)",
+        "A test fails if the placeholder banner is removed without the text file `docs/legal/REVIEWED` existing",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-028",
       "priority": 28,
-      "passes": true,
-      "notes": "Milestone M3"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Participant Q&A with several Q&A interactions",
-      "description": "As a participant, I want to see the Q&A that is live, and read closed ones.",
+      "title": "End-to-end tests for the Phase 3 flows",
+      "description": "As a developer, I want the new flows covered in a real browser.",
       "acceptanceCriteria": [
-        "The participant Q&A tab shows the live `qa` interaction; when none is live it shows the most recently closed or paused one read-only with a note; an event with several Q&A items lists closed ones under a 'Earlier questions' section",
-        "The old single Q&A tab/URL still opens and shows the right data",
-        "Submitting, upvoting and sorting work as before; live updates only for the shown interaction",
+        "Playwright e2e (mock billing, log email, mock AI) covers: sign-up and verify through the outbox, invite and accept with role limits, upgrade through the mock provider and a gated feature locking after downgrade, 2FA login, suspended workspace notice, Indonesian join flow, and an audit-log entry appearing for an export (Team plan)",
+        "Existing quiz, ranking and survey e2e from the previous run still pass",
+        "`npm run lint`, `typecheck`, `test` and `test:e2e` all pass",
         "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Typecheck passes"
       ],
       "id": "US-029",
       "priority": 29,
-      "passes": true,
-      "notes": "Milestone M3"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Host and presenter Q&A as content",
-      "description": "As a host, I want to create and run Q&A like any other content.",
+      "title": "Docs and environment reference",
+      "description": "As the platform owner, I want a single list of what to configure.",
       "acceptanceCriteria": [
-        "'Add content' offers Q&A; the host can name it, set moderation mode, start, pause, close, duplicate, reorder and delete it like other types",
-        "The presenter Q&A screen and the moderation queue work from the selected Q&A interaction; creating a new event also creates a default Q&A interaction in draft state",
-        "`events.moderation_mode` is kept only as the default for new Q&A and is no longer read for live behavior",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
+        "Update `.env.example`, README and `docs/deploy-railway.md` with every new env var: billing (`BILLING_PROVIDER`, `STRIPE_*`, `BILLING_WEBHOOK_SECRET`), email (`EMAIL_PROVIDER` and SMTP), `TWOFA_ENCRYPTION_KEY`, `OPERATOR_EMAILS`, `AI_GLOBAL_DAILY_CAP`, storage-free items only, with a one-line meaning and whether it is required in production",
+        "Add `docs/launch-checklist.md`: Stripe test-mode keys and webhook URL, SMTP, legal text supplied and `docs/legal/REVIEWED` created, operator emails set, retention default, and the items skipped in this run (images, PDF/Excel reports, AI Insights, workspace logo) so nothing is forgotten",
+        "No secret values appear anywhere in the docs",
+        "Typecheck passes"
       ],
       "id": "US-030",
       "priority": 30,
-      "passes": true,
-      "notes": "Milestone M3"
+      "passes": false,
+      "notes": "Milestone M8"
     },
     {
-      "title": "Checkpoint: e2e and full suite after the Q&A migration",
-      "description": "As a developer, I want proof that the Q&A migration broke nothing before building on it.",
+      "title": "Final audit: design, accessibility and antislop",
+      "description": "As the owner, I want the new screens to meet the design and accessibility bar.",
       "acceptanceCriteria": [
-        "Update the Playwright e2e for the new Q&A flow and run `npm run test:e2e`, `npm run build`, lint, typecheck and the full unit tests; fix every failure caused by the migration",
-        "Run the migration on a copy of the dev database (create a temporary database, never touch other databases) and record the question counts before and after in progress.txt",
-        "Document in progress.txt which old Q&A routes remain as aliases",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
+        "Antislop mode `after`: audit every screen added in Phase 3 (workspace, members, plan, billing, templates, library, ranking, quiz, survey, security, audit, settings, operator, pricing, legal) and write `docs/antislop-audit/audit-002.md`; fix every HIGH and MEDIUM finding and write `audit-002-report.md`",
+        "Real-browser axe run (colour contrast on, WCAG 2 A/AA) over the new pages in English and Indonesian, light and dark: no serious violations; keyboard walkthrough of invite, quiz play, ranking and 2FA login",
+        "All new screens work at 360px and with prefers-reduced-motion; `npm run lint`, `typecheck`, `test`, `build` and `test:e2e` pass",
+        "Typecheck passes",
+        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
       ],
       "id": "US-031",
       "priority": 31,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Content library list",
-      "description": "As a host, I want one list of everything in my event.",
-      "acceptanceCriteria": [
-        "The event page shows all interactions of every type in one ordered list with type icon (text label too), title, state and response count",
-        "Reorder by drag with up/down buttons as the keyboard path; rename, duplicate, delete, start, pause and close work for every type from the list",
-        "'Add content' menu lists every type; types not allowed by the plan show a lock and the plan name instead of being hidden",
-        "The list updates live when another member changes it (socket event)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-032",
-      "priority": 32,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Templates: schema and API",
-      "description": "As a host, I want to save content as a template and reuse it.",
-      "acceptanceCriteria": [
-        "Add `templates` (workspace_id, name, kind interaction|event, created_by) and `template_items` (template_id, position, type, title, config) with a migration and cascade from workspaces",
-        "Endpoints: save one interaction or a whole event's list as a template; list/rename/delete templates (`templates.manage`); add template items to an event; create an event from a template",
-        "Copy rules: config, options and images are copied; responses, participants, questions and notes never are; state is always draft",
-        "Template count is limited by `templates` in entitlements (402 beyond it)",
-        "Cascade tests and tests for each copy rule",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-033",
-      "priority": 33,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Templates: UI",
-      "description": "As a host, I want to use templates from the event page and the dashboard.",
-      "acceptanceCriteria": [
-        "Library list has 'Save as template' per item and for the whole event; 'Add from template' opens a picker; dashboard 'New event' offers 'From template'",
-        "A Templates page lists, renames and deletes templates, showing the count against the limit",
-        "Errors such as the limit being reached are shown with the plan hint",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-034",
-      "priority": 34,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Interaction module registry",
-      "description": "As a developer, I want every type to expose results and CSV through one interface.",
-      "acceptanceCriteria": [
-        "Add `lib/interaction-modules.ts` with an `InteractionModule` interface (type, validateConfig, results(interactionId), csv(interactionId), responseCount) and register poll, wordcloud, qa, sharedNotes, openText and rating",
-        "Refactor `lib/export.ts`, `lib/presenter.ts` and `lib/live-view.ts` to call the registry instead of switching on type; the response counts in the library list come from `responseCount`",
-        "No behavior change: existing export, presenter and live-view tests pass unchanged; a test fails when a type in `interactions.type` is not registered",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-035",
-      "priority": 35,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Event ZIP export of every interaction",
-      "description": "As a host, I want to download all results of an event at once.",
-      "acceptanceCriteria": [
-        "`GET /api/events/[id]/export.zip` (permission `export`) returns a ZIP with one CSV per interaction named by position and title, using the registry's `csv`; a ZIP library from npm or a small hand-written store-only writer",
-        "CSVs contain no participant tokens, emails or IPs (a test scans the output for the participant ids); quiz leaderboard files, when they exist, may hold nicknames",
-        "An 'Export all' button on the event page; Free is allowed (CSV)",
-        "Tests: ZIP lists the expected files for a seeded event with several types",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-036",
-      "priority": 36,
-      "passes": true,
-      "notes": "Milestone M3"
-    },
-    {
-      "title": "Ranking: type, config, responses and scoring",
-      "description": "As a developer, I need the ranking type and its scoring on the server.",
-      "acceptanceCriteria": [
-        "`interactions.type` accepts `ranking`; config: prompt (max 200), options 2-10 (id, text max 80) validated in `lib/interaction-config.ts`; migration, create/PATCH/duplicate wired",
-        "`ranking_responses` (interaction_id, participant_id, order jsonb of option ids, unique per participant) with cascade and a cascade test",
-        "Submit endpoint: only while the interaction is live, order must be a permutation of the option ids, one submission per participant enforced by the database (a second submit returns 409)",
-        "`scoreRanking(options, responses)`: 1st place = N points … last = 1; unit tests include ties and partial data; register the module in the registry (results + csv)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-037",
-      "priority": 37,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Ranking: participant screen",
-      "description": "As a participant, I want to order options on my phone.",
-      "acceptanceCriteria": [
-        "Options can be reordered by drag-and-drop and by up/down buttons (the keyboard and touch path), each button labelled with the option name and position",
-        "Submit sends the order; after submit the screen shows 'Answer sent'; reconnecting shows the same state",
-        "44px tap targets, visible focus, announces position changes to screen readers",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-038",
-      "priority": 38,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Ranking: host builder, presenter and CSV",
-      "description": "As a host, I want to create a ranking and see the group's priorities.",
-      "acceptanceCriteria": [
-        "Builder in 'Add content' with prompt and 2-10 options; validation errors shown",
-        "Presenter shows options sorted by score with the score value and rank number printed (not colour alone), updating live",
-        "CSV export: one row per option with score and per-position counts",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-039",
-      "priority": 39,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: type, config and answer storage",
-      "description": "As a developer, I need the quiz question model.",
-      "acceptanceCriteria": [
-        "`interactions.type` accepts `quiz`; config: prompt (max 200), options 2-6 (id, text), correctOptionIds (at least one, subset of options), timeLimitSeconds 5-120, points default 1000; validated; migration, create/PATCH/duplicate wired",
-        "`quiz_answers` (interaction_id, participant_id, option_ids, answered_at, elapsed_ms, correct, points; unique per participant) with cascade and a cascade test",
-        "When a quiz question is started the server stores `started_at`/`deadline_at` in its state (new nullable columns on `interactions`, migration)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-040",
-      "priority": 40,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: answer endpoint, deadline and scoring",
-      "description": "As a participant, I want my answer scored fairly by the server clock.",
-      "acceptanceCriteria": [
-        "Answer endpoint accepts only while the interaction is live and `now <= deadline_at` (small configurable grace of 300 ms); later answers get 409 'Time is up'; one answer per participant",
-        "`scoreQuizAnswer({correct, elapsedMs, timeLimitMs, points})`: 0 if wrong, otherwise points scaled linearly down to 50% at the deadline; unit tests at 0%, 50% and 100% of the time",
-        "Multiple correct options: the answer is correct only when the selected set equals the correct set",
-        "Register the quiz module in the registry (results = counts per option plus correct %, csv)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-041",
-      "priority": 41,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: participant screen with timer",
-      "description": "As a participant, I want clear answer buttons and a countdown.",
-      "acceptanceCriteria": [
-        "Large answer buttons that differ by colour and shape (triangle, circle, square, diamond, star, hexagon) with the option text; selection can be changed until submit or locked on tap (host-agnostic: lock on tap)",
-        "Countdown driven by the server `deadline_at` (client clock offset corrected from a server timestamp), announced to screen readers at 10 s and 5 s, and honours `prefers-reduced-motion`",
-        "After close the participant sees correct/incorrect and the points earned",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-042",
-      "priority": 42,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: presenter screen and host builder",
-      "description": "As a host, I want to build a quiz question and run it on the big screen.",
-      "acceptanceCriteria": [
-        "Builder: prompt, 2-6 options, mark correct ones, time limit, points; validation errors shown",
-        "Presenter shows the question, a countdown bar that also prints seconds left, live answer count, and after close the correct options with counts per option",
-        "Host can start, close early and reveal",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-043",
-      "priority": 43,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: cumulative scores behind a leaderboard interface",
-      "description": "As a developer, I need live scores that do not depend on Redis.",
-      "acceptanceCriteria": [
-        "Add `lib/leaderboard/` with a `LeaderboardStore` interface (add points, top N, rank of participant, reset) and an in-memory adapter; persisted totals in `quiz_scores` (event_id, participant_id, points, answered_count; cascade) written when a question closes, and the in-memory store is rebuilt from the table on server start",
-        "Scores accumulate across all quiz questions of the same event; a host endpoint resets the event's leaderboard (permission `live.run`)",
-        "A late joiner is ranked by the questions they answered; a reconnecting participant (same token) keeps nickname and score",
-        "Unit tests for ranking order, ties (earlier total time wins), reset and rebuild",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-044",
-      "priority": 44,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: nickname entry",
-      "description": "As a participant, I want to pick a display name before a quiz.",
-      "acceptanceCriteria": [
-        "Before the first quiz question the participant is asked for a nickname (max 20 chars) stored in `participants.nickname`; empty, duplicate-in-event and profanity-filtered nicknames are rejected with a clear message",
-        "The nickname is a display name only, can be changed until the first answer, and the same participant token keeps it",
-        "The screen explains that the name is shown on the leaderboard",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-045",
-      "priority": 45,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: leaderboard, rank and podium",
-      "description": "As a participant and host, I want to see standings.",
-      "acceptanceCriteria": [
-        "After each question the presenter shows the top 10 with nickname, score and rank number; the participant sees their own rank and score",
-        "A final podium screen shows the top 3 when the host ends the quiz; animations stop under `prefers-reduced-motion`",
-        "Leaderboard CSV (rank, nickname, points, correct answers) is added to the quiz export; nicknames appear only here",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-046",
-      "priority": 46,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Quiz: load test script",
-      "description": "As a developer, I want evidence the leaderboard holds at 500 participants.",
-      "acceptanceCriteria": [
-        "Add `scripts/load/quiz.mjs` that starts against a running server (test DB), joins 500 simulated participants over Socket.IO/HTTP, runs one timed question, and prints the p50/p95 time from the last answer to the leaderboard update",
-        "Passing target: p95 under 1 second; the result is written to `docs/load-test-quiz.md` with the machine description",
-        "If the target is missed, fix the hot path (coalesce updates, avoid per-answer full recompute) and rerun",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-047",
-      "priority": 47,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Survey: type, config, responses and submit API",
-      "description": "As a developer, I need the survey type and its storage.",
-      "acceptanceCriteria": [
-        "`interactions.type` accepts `survey`; config: title, questions list (max 20; each id, kind choice|rating|openText, text, required, options for choice with single|multi, scale for rating) validated; migration, create/PATCH/duplicate wired",
-        "`survey_submissions` (interaction_id, participant_id unique) and `survey_answers` (submission_id, question_id, value jsonb) with cascade and a cascade test",
-        "Submit endpoint validates every answer against its question, rejects missing required ones with the question id, and a second submission returns 409 'Already submitted'; profanity filter applies to open text",
-        "Register the survey module (results per question, csv with one row per submission and no identifiers)",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes"
-      ],
-      "id": "US-048",
-      "priority": 48,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Survey: host builder",
-      "description": "As a host, I want to build a survey.",
-      "acceptanceCriteria": [
-        "Builder to add, edit, reorder (keyboard-accessible) and delete questions of the three kinds, mark required, set options and scale; unsaved changes warn before leaving",
-        "A preview shows what participants will see",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-049",
-      "priority": 49,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Survey: own link and participant form",
-      "description": "As a participant, I want to fill in a survey from a link, before or after the event.",
-      "acceptanceCriteria": [
-        "Each survey has its own link `/survey/<interactionId>` (host copies it) that works when the survey is `live` even if another interaction is also live; it creates or reuses the event participant from the cookie token",
-        "Form shows a progress indicator, required markers, and blocks submission with a clear message per missing question; focus moves to the first error",
-        "A second attempt shows 'Already submitted'; closed surveys show a closed message",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-050",
-      "priority": 50,
-      "passes": true,
-      "notes": "Milestone M4"
-    },
-    {
-      "title": "Survey: presenter results and export",
-      "description": "As a host, I want to see survey results.",
-      "acceptanceCriteria": [
-        "Presenter/results view shows per question: counts and percentages with printed values for choice, average and distribution for rating, and the latest answers for open text; response and completion counts at the top",
-        "The library list shows the response count from the registry; CSV export works through the event ZIP",
-        "Add Playwright e2e covering: ranking submit and result, one quiz question with leaderboard, survey submit twice, all using the test DB",
-        "Tests pass (npm run lint, typecheck and test are green)",
-        "Typecheck passes",
-        "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
-      ],
-      "id": "US-051",
-      "priority": 51,
-      "passes": true,
-      "notes": "Milestone M4"
+      "passes": false,
+      "notes": "Milestone M8"
     }
   ]
 }

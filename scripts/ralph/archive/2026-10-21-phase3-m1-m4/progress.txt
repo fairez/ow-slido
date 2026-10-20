@@ -1,0 +1,608 @@
+# Ralph Progress Log
+Started: Tue Oct 20 01:49:09 PM CST 2026
+Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run archived in archive/2026-10-20-phase2a-shared-notes-ai-ui/ (its per-story learnings are worth skimming).
+---
+
+## Codebase Patterns
+- No zod here: config validation is hand-written `parse*Input(body, partial)` returning `{ok, value|error}` (see lib/polls.ts, lib/wordclouds.ts, lib/interaction-config.ts).
+- New tables must cascade from `events`/`interactions` (`onDelete: "cascade"`) and get a cascade test.
+- Full `npm test` takes ~100s; run it in the background and read the output file.
+
+- Phase 3 source of truth: tasks/prd-slido-clone-phase3.md (permission matrix in Section 7, milestones in Section 10). From the first story on, no inline UI strings: use the i18n helper.
+- Never call real Stripe, email or AI services from tests, e2e or Ralph runs: use BILLING_PROVIDER=mock, EMAIL_PROVIDER=log, AI_PROVIDER=mock.
+- Do not touch databases other than ow_slido and ow_slido_test (a temporary database for a migration rehearsal is allowed if it is dropped afterwards).
+---
+
+## 2026-10-20 - US-001
+- Added lib/i18n (en.ts, id.ts, locale.ts, index.ts `t()`, server.ts `getLocale()/getT()`, client.tsx `I18nProvider/useT()`); root layout resolves the locale, sets `<html lang>` and mounts the provider. lib/copy.ts now re-exports via `t('en', ...)`.
+- Files: lib/i18n/*, lib/copy.ts, app/layout.tsx, tests/i18n.test.tsx, docs/i18n.md, CLAUDE.md (## i18n)
+- **Learnings for future iterations:**
+  - `id` is `Record<MessageKey, string>`, so a missing/extra key fails typecheck; `en` is a plain object (not `as const`) so values stay `string`.
+  - `server-only` package is not installed; lib/i18n/server.ts imports next/headers directly. Never import it from client code.
+  - The root layout reads cookies/headers, so every page is now dynamic.
+  - Browser check not needed (no visible UI change).
+---
+
+## 2026-10-20 - US-002
+- Moved participant-facing text (join form/redirect, participant view, live view, Q&A tab, shared notes, open text, rating, published analysis, word cloud) to `en.ts`/`id.ts` keys via `useT()`. English output unchanged.
+- Added tests/no-inline-strings.test.ts: TypeScript-AST scan for JSX text, string literals in JSX expressions and text props (`aria-label`, `title`, `placeholder`...). Add a file to its MIGRATED list once its strings move.
+- Files: components/{join-form,join-redirect,participant-view,live-view,qa-tab,shared-notes-panel,open-text-form,rating-form,published-analysis,word-cloud}.tsx, lib/i18n/{en,id}.ts, tests/no-inline-strings.test.ts
+- **Learnings for future iterations:**
+  - Running `npm run dev` with NEXT_DIST_DIR=.next-shot rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
+  - `npm run lint` fails on generated files in a nested `ow-slido/.next` dir and on scripts/ralph/screens/*.mjs; these errors predate this story and none are in source files.
+  - Full `npm test` now takes ~180s; run it in the background.
+  - Never `pkill -f` a pattern that appears in your own command line; it kills the shell.
+  - Screenshots at 360/1280 of the join page checked: no overflow.
+---
+
+## 2026-10-20 - US-003
+- Moved host, presenter, moderation, auth, home and app-shell strings (26 files, ~270 keys) to en.ts/id.ts; English output unchanged. All those files are now in the MIGRATED list of tests/no-inline-strings.test.ts.
+- Files: app/{page,dashboard,moderate}, components/* (managers, moderation, presenter-*, analysis-*, auth-form, theme-toggle, ui/app-shell), lib/i18n/{en,id}.ts, tests/{no-inline-strings,home,auth-pages}.test.*
+- **Learnings for future iterations:**
+  - Server pages that call `getT()` are async and need `next/headers` `headers()` mocked (tests/auth-pages.test.tsx) or `@/lib/i18n/server` mocked (tests/home.test.tsx); tests must `await Page()`.
+  - A dev server started before en.ts gained keys renders empty strings for new keys (stale module cache); restart it (kill by PID from `ss -ltnp`, never pkill -f).
+  - Keys built from template literals (`auth.${mode}.title`) are invisible to grep; check typecheck instead.
+  - Browser check: home, login, signup at 360/1280, no overflow. Authenticated pages (dashboard, presenter) were not screenshotted.
+---
+
+## 2026-10-20 - US-004
+- API error text now comes from `api.*` keys. `serverT(request, key, params)` and `apiMessage(request, result)` live in lib/i18n/server.ts and read the `lang` cookie / Accept-Language from the Request. Lib validators return `{ ok: false, error: MessageKey, params? }` instead of English strings.
+- Added tests/api-error-locale.test.ts (join route returns the id text with `lang=id`); `api.eventNotFound` is the first real Indonesian value in id.ts.
+- Files: lib/i18n/{server,en,id}.ts, lib/*.ts validators, lib/auth/*, app/api/**/route.ts, docs/i18n.md
+- **Learnings for future iterations:**
+  - Module-level helpers like `tooMany`/`notFound` in routes now take `request`; pass it when adding new ones.
+  - New lib errors: add the key to en.ts and id.ts, return `error: "api.x" as const` where the object is not contextually typed.
+  - /api/ai/test and AiError messages, and AI-validator errors fed to the model, stay English on purpose.
+  - Typecheck is what finds a route still forwarding a raw `result.error`.
+---
+
+## 2026-10-20 - US-005
+- Added `workspaces` and `memberships` (owner|admin|editor|moderator|viewer, active|suspended, unique per user+workspace), `events.workspace_id` NOT NULL cascade, `users.must_change_password` and `users.last_login_at` (set on login). Migration 0019 backfills a personal workspace (email prefix) + owner membership per user and moves every event into its owner's workspace.
+- Sign-up now creates the workspace and membership in one transaction; event create uses the user's oldest workspace (`firstWorkspaceId`, replaced by the active workspace in US-006); duplicate keeps the source workspace.
+- Files: db/schema.ts, db/migrations/0019_*, lib/workspaces.ts, app/api/{auth/signup,auth/login,events,events/[id]/duplicate}, tests/workspaces.test.ts, tests/auth.test.ts, tests/helpers/db.ts, 13 tests that insert events, CLAUDE.md
+- **Learnings for future iterations:**
+  - The test DB role cannot CREATE DATABASE; the migration rehearsal in tests/workspaces.test.ts runs the SQL in a temporary schema (`mig_rehearsal`) by rewriting `"public".`. Reuse that for later data migrations (US-027).
+  - Tests that insert events directly need `workspaceId: await workspaceFor(db, user.id)` (tests/helpers/db.ts).
+  - `npx eslint db lib app tests components e2e` is clean; whole-repo `npm run lint` only fails on generated files and scripts/ralph/screens (pre-existing).
+  - No UI change, no browser check.
+---
+
+## 2026-10-20 - US-006
+- `AuthUser` now carries `memberships`. `requireMember(request, workspaceId?)` and `getSessionMember` (lib/auth/require-admin.ts) resolve the active workspace from cookie `workspace` (fallback: first active membership); no active membership gives 403 (`api.forbidden`). Pure helpers `resolveActiveMembership`, `readCookie`, `workspaceSetCookie` live in lib/auth/workspace.ts.
+- Event/interaction routes, dashboard, /dashboard/events/[id], /present, moderation auth, rating/responses/words/questions host reads and the socket host check now match on `events.workspace_id`. `findOwnedEvent(id, workspaceId)`; `firstWorkspaceId` removed. `POST /api/workspaces/active` sets the cookie for active memberships only. `/api/ai/*` still uses `requireAdmin`.
+- Files: lib/auth/{require-admin,workspace,require-moderation}.ts, lib/{polls,rating,open-text}.ts, lib/realtime/socket-server.ts, app/api/**, app/{dashboard,present}, app/api/workspaces/active/route.ts, tests/workspace-access.test.ts, 5 existing tests, CLAUDE.md
+- **Learnings for future iterations:**
+  - A `string` arg swap (user id to workspace id) is invisible to typecheck; grep `auth.user.id` and `user.id)` after changing a helper's meaning (it hid a bug in app/api/responses/[id]).
+  - Test "stranger" users need `workspaceFor(db, id)` or they get 403 instead of 404.
+  - `events.owner_id` is still written on create/duplicate (creator); `interaction-state` uses it for `firstInteractionLiveAt`.
+  - No UI change, no browser check. Workspace switcher UI is US-011.
+---
+
+## 2026-10-20 - US-007
+- Added `lib/auth/permissions.ts`: `ROLES`, `ACTIONS`, `can(role, action, {ownsContent?})`. Matrix is a `Record<Action, Partial<Record<Role, true|"own">>>`; only `event.delete` for editor is `"own"`. No route uses it yet (US-008/009).
+- Files: lib/auth/permissions.ts, tests/permissions.test.ts (every cell, plus the own rule)
+- **Learnings for future iterations:**
+  - "Members and roles, 2FA policy, retention" all map to `members.manage`; "Billing, plan, delete workspace" to `billing.manage`.
+  - Callers deleting content must pass `ownsContent` (e.g. `events.owner_id === user.id`); omitting it denies editors.
+  - No UI change, no browser check.
+---
+
+## 2026-10-20 - US-008
+- `requireMember(request, action?, workspaceId?)` now checks `can(role, action)` and returns 403 `{error}` when denied (401 when anonymous). Event create/duplicate/edit and interaction create/edit/duplicate/reorder use `event.create`/`event.edit`; start/pause/close use `live.run`. Deletes (event, interaction) call `denyUnlessCan(request, role, "event.delete", {ownsContent})` after loading, since ownership needs the row.
+- Migration 0020 adds nullable `created_by` (users, set null) to `events` and `interactions`, backfilled from the event owner; create/duplicate routes set it.
+- Files: lib/auth/require-admin.ts, db/schema.ts, db/migrations/0020_*, app/api/events/**, tests/route-permissions.test.ts, tests/workspace-access.test.ts
+- **Learnings for future iterations:**
+  - The second argument of `requireMember` is now the action; the explicit workspace id moved to the third.
+  - Read routes (GET) still take any active member; US-009 covers moderation, export, AI and results.
+  - Any new insert into `events`/`interactions` should set `createdBy`.
+  - Test users who create content need an edit-capable role (a `viewer` membership now gets 403 on create).
+  - No UI change, no browser check.
+---
+
+## 2026-10-20 - US-009
+- Moderation (queue read, question/note PATCH/DELETE via `authorizeModeration`, open-text `responses/[id]`) now needs `moderate`; CSV export `export`; analyze, analysis PATCH and `/api/ai/test` `insights.manage`; presenter state, presenter questions and analysis GET `results.view`. Host fallbacks on the shared audience GETs (rating, responses, words, questions) check `results.view` after the session lookup. `/api/ai/status` takes any active member.
+- Files: lib/auth/require-moderation.ts, app/api/{ai,events,interactions,responses}/**, tests/route-permissions-host.test.ts
+- **Learnings for future iterations:**
+  - `requireAdmin` has no callers left; use `requireMember(request, action)`.
+  - Moderator-token path of `authorizeModeration` is untouched; US-010 removes it.
+  - Every role holds `results.view`, so the audience-GET host fallback can only be denied by being anonymous (401).
+  - No UI change, no browser check.
+---
+
+## 2026-10-20 - US-010
+- Removed the moderator link: app/moderate, the moderator-link route, ModeratorLinkManager, lib/moderator-token.ts; migration 0021 drops `events.moderator_nonce`. `authorizeModeration` is now `requireMember(request, "moderate")` plus an event-in-workspace check. Socket `moderator` role authorises by session membership with `can(role, "moderate")` (no handshake token; `useEventSocket` lost its `token` arg).
+- New page `/dashboard/events/[id]/moderate` (ModerationPanel moved off the event page; `canChangeMode` hides the Open/Moderated switch for roles without `event.edit`). The event page shows an "Open moderation queue" link only when the role can moderate. Old `/moderate/<id>` hits the new app/not-found.tsx (404, points to log in).
+- Fixed: `npm run dev`/`tsx server.ts` crashed at startup ("AsyncLocalStorage accessed in runtime where it is not available") since lib/i18n/server.ts imported next/headers at top level; it is now imported lazily inside getLocale().
+- Files: lib/auth/require-moderation.ts, lib/realtime/{socket-server,use-event-socket}.ts, lib/i18n/{server,en,id}.ts, components/{moderation-panel,poll-manager}.tsx, app/dashboard/events/[id]/{page,moderate/page}.tsx, app/not-found.tsx, db/*, tests, e2e/{presenter-qa,notes-ai}.spec.ts
+- **Learnings for future iterations:**
+  - Never import `next/headers` at the top level of a module the custom server (server.ts) can reach (socket-server -> require-admin -> i18n/server); check `npm run test:e2e` still boots after touching those imports.
+  - Stale `.next/types` or `.next-e2e/dev/types` after deleting routes break typecheck/build; `rm -rf` the `types` dirs.
+  - Dev server in dev mode lets `.env.local` DATABASE_URL override the shell, so screenshots sign up users in the dev DB; clean them up (I did).
+  - Screenshots checked at 360/1280 (moderate page, 404): no overflow. The 404 Log in button sits tight under the paragraph.
+---
+
+## 2026-10-20 - US-011
+- Migration 0022 drops `users.role` and `users_role_admin`; `AuthUser` no longer has `role` (nothing read it; roles come from the active membership). App shell (root layout) shows the active workspace name and role; a `WorkspaceSwitcher` select appears only with 2+ active workspaces and posts to `/api/workspaces/active`, then goes to /dashboard and refreshes. New `listActiveWorkspaces` in lib/workspaces.ts; `role.*` and `workspace.*` i18n keys (en + id).
+- Files: db/schema.ts, db/migrations/0022_*, lib/{workspaces,auth/require-admin}.ts, components/{ui/app-shell,workspace-switcher}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{workspace-switcher.test.tsx,workspaces,users,no-inline-strings}
+- **Learnings for future iterations:**
+  - AppShell is an async server component in the root layout; it reads the session cookie itself, so tests that render the layout need `next/headers` mocked.
+  - Dev server stuck in a "Compiled in Xms" reload loop (Playwright goto never settles): kill it and `rm -rf .next-shot`, then restart.
+  - `.env.local` DATABASE_URL points screenshot users at the dev DB; the script deletes the user and workspace it creates (verified 0 left).
+  - Header wraps below 40rem so the switcher takes its own row; checked 360/1280 with one and two workspaces, no overflow.
+---
+
+## 2026-10-20 - US-012
+- Added `lib/email/` (`EmailSender`, in-memory `LogEmailSender` with `getOutbox()/clearOutbox()`, `SmtpEmailSender` via nodemailer; `getEmailSender()` picks by `EMAIL_PROVIDER`, `resetEmailSender()` for tests) and `auth_tokens` (migration 0023). `lib/auth/tokens.ts`: `issueToken(db, {userId, purpose, ttlMs})` returns the raw token, `consumeToken(db, token, purpose)` is one atomic UPDATE (unused + unexpired + purpose) returning `{userId}` or null.
+- Files: db/schema.ts, db/migrations/0023_*, lib/email/*, lib/auth/tokens.ts, tests/auth-tokens.test.ts, .env.example, package.json (nodemailer, @types/nodemailer)
+- **Learnings for future iterations:**
+  - `auth_tokens.user_id` is nullable so invites can target an email with no account yet.
+  - Import nodemailer's type as `type Transporter` from "nodemailer"; the namespace form fails typecheck.
+  - `npm run lint` still reports only generated-file errors; `npx eslint lib tests db app components` is the clean check.
+---
+## 2026-10-20 - US-013
+- Sign-up now rate limits per IP and email (5/h), emails a verification link (`lib/auth/verification.ts`: `sendVerificationEmail`, `verifyEmailToken`) and leaves `users.email_verified_at` null. `/verify?token=` page consumes the token; `POST /api/auth/verify/resend` (session, rate limited) re-sends; `VerifyBanner` in AppShell shows until verified. Migration 0024 adds the column.
+- `denyUnlessVerified(request, user)` (require-admin.ts) returns 403 `{reason: "email_unverified"}`; applied to the interaction start route. Invitation routes (US-015) must call it too.
+- Files: db/schema.ts, db/migrations/0024_*, lib/auth/{verification,require-admin}.ts, app/api/auth/{signup,verify/resend}, app/verify, components/{verify-banner,ui/app-shell}.tsx, lib/i18n/{en,id}.ts, tests/{email-verification,setup}.ts, e2e/verify-email.ts
+- **Learnings for future iterations:**
+  - The column defaults to now(), so users inserted directly (tests, backfill) count as verified; only the sign-up route inserts null. Tests that sign up through the route and then start interactions must set `emailVerifiedAt` (see interaction-state.test.ts); e2e specs call `verifyEmail(email)` from e2e/verify-email.ts.
+  - tests/setup.ts (vitest setupFiles) resets the rate-limit store before every test; sign-up tests share one fake IP.
+  - Never run two vitest runs at once: they share ow_slido_test and truncate each other's data. `pkill -f vitest` kills your own shell.
+  - The banner must not use role="status": e2e specs locate the created-event notice with `getByRole("status")`.
+  - Dev DB needed `npm run db:migrate` before the dev server could sign up users; screenshot users were deleted afterwards.
+  - Screenshots at 360/1280 (banner, failed verify page): no overflow.
+---
+## 2026-10-20 - US-014
+- Added `/forgot` and `/reset?token=` pages with `POST /api/auth/forgot` (same 200 for known/unknown emails, rate limited per IP and email, 60-minute single-use link) and `POST /api/auth/reset` (checks password length before spending the token, then signs the device in). `POST /api/auth/password` + `/account/password` page change the password with the current one.
+- Migration 0025 adds `users.sessions_valid_after`. Session tokens now carry issued-at in ms (`userId.iat.expires.sig`; old 3-part tokens still parse, issued-at derived from expiry). `setPassword` sets the column, clears `must_change_password`; the route then sets a fresh cookie for this device only.
+- Forced change: `requireAdmin`/`requireMember` return 403 `password_change_required`, `getSessionMember` returns null, the socket host auth refuses, `workspaces/active` and `verify/resend` call `denyIfPasswordChangeRequired`; dashboard, event, moderate and present pages redirect to `/account/password`.
+- Files: db/schema.ts, db/migrations/0025_*, lib/auth/{session,require-admin,password-reset}.ts, app/api/auth/{forgot,reset,password}, app/{forgot,reset,account/password}, components/{password-forms,auth-form}.tsx, lib/i18n/{en,id}.ts, tests/password-reset.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Nothing sets `must_change_password` yet; US-016 (admin-created members) should set it and rely on the enforcement above.
+  - Public pages (home, join, participant) are not gated by the forced change; only pages that read the host session are.
+  - The forgot route's in-memory limit (9/IP, 3/email per 15 min) trips when a dev server is hit repeatedly by screenshot scripts; restart the server to reset it.
+  - Screenshots at 360/1280 (login, forgot, sent, reset missing/bad link, change, forced, error): no overflow. Dev DB migrated to 0025; screenshot user deleted (0 left).
+---
+## 2026-10-20 - US-015
+- Added `invitations` (migration 0026; cascade from workspaces, partial unique index on pending workspace+email, token via `auth_tokens` `invite` purpose, 7-day expiry). `lib/invitations.ts`: `createInvitation`, `listInvitations`, `revokeInvitation`, `acceptInvitation`, `sendInvitationEmail`. Routes: `GET/POST /api/invitations`, `DELETE /api/invitations/[id]` (all `members.manage`; create also needs a verified email and is rate limited), `POST /api/invitations/accept` (`{token, password?}`).
+- Create returns `{invitation, link, emailSent}` once and emails the link (`/invite?token=`, the page itself is US-017). Owner role cannot be invited, duplicate pending invite and inviting an existing member give 409. Accept: signed-in user must match the invited email (403 `wrong_email`); signed out with an unknown email creates a verified user and signs them in (400 `password_required` if the password is short, link not spent); known email gives 401 `login_required`. The workspace cookie is set to the joined workspace.
+- `lib/seats.ts` has the no-op `assertSeatAvailable(workspaceId)` and `SeatLimitError` (reason `seat_limit`); the create route already maps it to 402. US-019 fills it in.
+- Files: db/schema.ts, db/migrations/0026_*, lib/{invitations,seats}.ts, lib/auth/tokens.ts (`hashToken`, `issueTokenRecord`), app/api/invitations/**, lib/i18n/{en,id}.ts, tests/invitations.test.ts
+- **Learnings for future iterations:**
+  - Drizzle wraps driver errors: the Postgres code (`23505`) is on `error.cause.code`, not `error.code`. Older code checking `error.code` directly may never match.
+  - Pending invitations past `expires_at` are only marked `expired` lazily (list and create call `expireStale`); anything reading invitations must treat pending + past expiry as expired. US-016/US-019 seat counts should only count pending rows with `expires_at > now()`.
+  - Anyone holding the link (the inviter sees it) can accept it as a new user and so create a verified account for an email they do not control, because the spec makes invite-created accounts verified. Worth a look in the security audit; an existing account is protected (it must log in).
+  - No UI change, no browser check. Dev DB migrated to 0026.
+---
+## 2026-10-20 - US-016
+- Added `lib/members.ts` and routes: `GET /api/members` (list + `selfId`), `PATCH /api/members/[userId]` (`{role}` or `{status: "active"|"suspended"}`, one per request), `DELETE /api/members/[userId]`, `POST /api/members/[userId]/password` (random 16-char temporary password returned once with `no-store`, sets `must_change_password` and `sessions_valid_after`, no email). All need `members.manage`.
+- Rules: admins cannot change, suspend, remove or reset an owner or grant owner (403 `api.memberOwnerOnly`); the last active owner cannot be demoted, suspended or removed (409, reason `last_owner`), enforced in a transaction that locks the workspace's owner rows `FOR UPDATE`; nobody suspends or resets themselves (400). Removal deletes the membership only; events and the account stay.
+- Suspend, remove and role change call `revokeMemberSockets` (new in lib/realtime/publisher.ts, wired in socket-server via a `member:<ws>:<user>` room) so live host/moderator sockets drop and must pass `authorize` again. HTTP access ends on the next request since memberships are read per request.
+- Files: lib/members.ts, lib/realtime/{publisher,socket-server}.ts, app/api/members/**, lib/i18n/{en,id}.ts, tests/members.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A suspended or removed member is not shown a 403 when their `workspace` cookie names the old workspace: `resolveActiveMembership` falls back to their first other active membership, so the request silently acts in another workspace. Assert on the data returned (or `getSessionMember(req, workspaceId)` returning null), not on a status, in tests.
+  - Sign-up is rate limited per IP (5/h), so tests that need many users must insert them directly and build the cookie with `createSessionToken` + `createPersonalWorkspace` (see makeUser in tests/members.test.ts).
+  - The password reset replaces the password of the whole account, not just the membership, so an admin of one workspace can take over a member who also belongs to other workspaces. The spec asks for it; worth a look in the security audit (e.g. limit to members with no other workspace).
+  - Reactivating a member does not check seat limits yet; US-019 should add that to `setMemberStatus`.
+  - No UI change (members page is US-017), so no browser check.
+---
+## 2026-10-20 - US-017
+- Added `/dashboard/members` (server page: redirects roles without `members.manage` to /dashboard; initial data from `listMembers`/`listInvitations`) with `MembersManager`: member rows (role select, suspend/reactivate, reset password, remove) and pending invitations (revoke). Invite dialog (email + role) then a second dialog with the link (shown once, copy button, says whether the email went out); reset password confirms, then shows the temporary password once with a copy button; remove confirms. Controls the role may not use are not rendered (admin sees no controls on owner rows; nobody sees controls on their own row; the owner option is offered to owners only). API errors show in the page (inline actions) or in the open dialog.
+- `/invite?token=` (`InviteAcceptForm`): new people set a password, signed-in people accept with one click; `login_required` shows a log-in link, `wrong_email` a log-out button. `/change-password` redirects to the existing `/account/password` (that page already handles the forced change). "Members" link in the app shell nav only for roles that can manage members.
+- Files: app/dashboard/members/page.tsx, app/invite/page.tsx, app/change-password/page.tsx, components/{members-manager,invite-accept-form,ui/app-shell}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{members-manager,invite-accept-form}.test.tsx, tests/no-inline-strings.test.ts
+- **Learnings for future iterations:**
+  - The shared `Dialog` returns focus to the element focused when it opened; if that element is removed (remove member, revoke) focus is lost, so the manager focuses the section heading (`tabIndex=-1`). Chaining two dialogs (form, then result) works because each is its own `Dialog` instance.
+  - In component tests, `getByLabelText` on a field inside a dialog can also match the dialog (aria-labelledby with the same text); use `getByRole("textbox", {name})`.
+  - Dates are printed as `YYYY-MM-DD` slices of the ISO string on purpose: locale formatting in a server-rendered client component risks hydration mismatches.
+  - Accepting an invitation does not set `users.last_login_at`, so a new member reads "Has not logged in yet" until their next login.
+  - Dev server went stale after a CSS edit while the full test suite ran (page.goto timed out); kill it by PID, `rm -rf .next-shot`, restart.
+  - Screenshots at 360/1280 (members empty/list/pending, invite dialogs, temp password, remove confirm, admin view, accept page, missing-token page): no overflow, no console errors; keyboard open/Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB (0 left).
+---
+## 2026-10-20 - US-018
+- Added `lib/plans.ts`: `PLANS` (free/pro/team limits), `PLAN_PRICES` (USD minor units, month and year), `PAST_DUE_GRACE_DAYS` (7), `utcMonthBounds(now)`, pure `resolveEntitlements(row, now)` and `getEntitlements(workspaceId, {db?, now?})`. Effective plan: valid override > active/trialing > past_due until period end + grace > canceled until period end > Free. The result also carries `status`, `interval`, `currentPeriodEnd`, `graceEndsAt`, `accessEndsAt` and `source` (override|subscription|free) for banners and the plan page.
+- Migration 0027 adds `subscriptions` (unique workspace_id, cascade) and backfills one Free row per workspace; workspaces with any `note_analyses` get `plan_override = 'pro'`, reason `grandfathered`, no end date.
+- Files: lib/plans.ts, db/schema.ts, db/migrations/0027_*, tests/plans.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Limits the PRD left open are my choices and editable in one file: Free 3 events/month and 3 templates, no image storage; Pro unlimited events, 50 templates, 1 GB, 20 AI calls/event, 300/month; Team 500 templates, 10 GB, 50/1500 AI calls; USD 12/month and 49/month (yearly = 10 months).
+  - `allowedTypes` already names qa, ranking, quiz and survey even though only the first five types exist in the DB enum; US-019 compares against these strings.
+  - No row is the same as Free, so `createPersonalWorkspace` and sign-up were left alone; the billing webhook (US-022) should upsert on `workspace_id`.
+  - `getEntitlements` takes an optional `db`/`now` so tests do not need fake timers. Rehearsal pattern from tests/workspaces.test.ts reused for the backfill (own schema name `mig_rehearsal_plans`).
+  - Full `npm test` took ~280s this time. No UI change, no browser check. Dev DB migrated to 0027.
+---
+## 2026-10-20 - US-019
+- Server-side limits now return 402 `{error, reason, requiredPlan}` (`requiredPlan` = cheapest plan that would allow it, null if none): `type_not_allowed` on interaction create and interaction duplicate, `event_limit` on event create and event duplicate, `seat_limit` on invitation create, invitation accept and member reactivation. `assertSeatAvailable` (lib/seats.ts) now reads entitlements; a seat is an active membership or an unexpired pending invitation (suspended members hold none). Accept leaves its own invitation out of the count, so it only fails after a downgrade.
+- Files: lib/{limits,seats,plans,invitations,members}.ts, app/api/{events,events/[id]/duplicate,events/[id]/interactions,events/[id]/interactions/[interactionId]/duplicate,invitations,invitations/accept,members/[userId]}, lib/i18n/{en,id}.ts, tests/{plan-limits.test.ts,helpers/db.ts,invitations.test.ts,members.test.ts}, CLAUDE.md
+- **Learnings for future iterations:**
+  - Free has 1 seat and 3 events a month, so tests that invite or add members need `setPlan(db, workspaceId, "team")` (tests/helpers/db.ts, a plan override).
+  - Every type that exists today is in Free's `allowedTypes`, so the denied-type test shrinks `PLANS.free.allowedTypes` for one test and restores it. When ranking/quiz/survey routes arrive (US-037+), call `assertTypeAllowed` there too.
+  - Events per month counts event rows created this UTC month, so deleting an event frees a slot. Closing that loophole needs a usage counter table; not done.
+  - Seat checks are not serialized: two simultaneous invites can both pass the last seat. Reactivation runs inside the member transaction.
+  - `getEntitlements`/seat helpers take `Pick<Db, "select">` so a transaction works as well as the pool.
+  - No UI change, no browser check (the plan page and locked hints are US-021). Full suite: 729 tests, ~290s.
+---
+## 2026-10-20 - US-020
+- Added to lib/limits.ts: `assertParticipantSlot` (join route; new participants only, so a token holder at the cap rejoins; runs in a transaction under `pg_advisory_xact_lock(hashtext(eventId))` so parallel joins cannot pass the cap), `assertAiCallsAvailable` (analyze route, before the AI notice is stored; per-event and per-month from entitlements, Free gets 402 `ai_event_limit` with its own "not part of your plan" text) and `assertReportFormat` (CSV export). New reasons: `participant_limit`, `ai_event_limit`, `ai_month_limit`, `report_format`. Join answers 403 `{error, reason}` with no `requiredPlan`: participants should not see billing hints.
+- Files: lib/limits.ts, app/api/{join,interactions/[id]/analyze,events/[id]/export.csv}/route.ts, lib/i18n/{en,id}.ts, tests/plan-limits-usage.test.ts, tests/note-analysis.test.ts, e2e/{verify-email,notes-ai.spec}.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests that start an analysis through the route now need a Pro workspace; e2e uses `setPlanFor(email, "pro")` from e2e/verify-email.ts (writes a plan override straight into the test DB).
+  - The monthly AI count joins `ai_calls` to `events`, and `ai_calls.event_id` is set null when an event is deleted, so deleting an event gives its calls back to the month. Same kind of loophole as events per month; a usage counter table would close both.
+  - One analysis can make several AI calls (batches over 200 notes), so the start check is "used < cap", not "used + needed <= cap"; a job may overshoot by a few calls.
+  - Do not write `open(path, "w").write(open(path).read()...)` in a one-off script: the write handle truncates the file first (wiped en.ts and id.ts; restored with git checkout since they were clean).
+  - No UI change, so no browser check. The locked hints and the participant message styling on the join form are US-021 / not needed: the join form already shows `error` text.
+---
+## 2026-10-20 - US-021
+- Added `/dashboard/plan` (all roles): current tier with period/grace/cancel note, usage meters (seats, events this month, busiest event's participants, AI calls this month, image storage) as `<progress>` bars that also print "used of limit"; limit 0 prints "Not included... Starts with Pro" instead of a bar, no limit prints the count. Tier list (stacked rows, not columns) with price and Upgrade/Switch buttons only for `billing.manage`; others get a read-only note. The buttons are disabled with a visible "not available yet" note until US-024 (TODO in code).
+- Locked hints: `PlanHint` replaces the add-content buttons for types the plan leaves out, the invite button when seats are full (counted from client state so invite/revoke updates it), the shared-notes analysis button when the plan has no AI (AI still hidden only when unconfigured) and the PDF/XLSX export on Free. "Plan" link added to the app shell nav.
+- Files: lib/usage.ts, lib/plan-hints.ts, lib/plans.ts (`cheapestPlan` exported, used by lib/limits.ts), components/{plan-hint,plan-overview,poll-manager,members-manager,ui/app-shell}.tsx, app/dashboard/{plan/page,members/page,events/[id]/page}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{usage,plan-overview,plan-hints}.test.*, CLAUDE.md
+- **Learnings for future iterations:**
+  - Ranking/quiz/survey add buttons do not exist yet; when US-037+ add them, pass them through `lockedTypes` the same way (poll-manager ADD_BUTTONS list) and widen `Kind`.
+  - PDF/XLSX are locked on Free, but nothing offers them to Pro workspaces yet (no export route for them), so Pro sees only CSV.
+  - Storage used is a constant 0 in `getUsage` until image uploads exist.
+  - Link text of `PlanHint` is "label tier" (a literal space between the spans keeps the accessible name readable); tests use e.g. `{name: "New rating Pro plan"}`.
+  - Header nav at 360px now wraps to its own row (Members + Plan + Events + Join no longer fit beside the brand); links are `nowrap`.
+  - The dev server's in-memory sign-up limiter (5/h per IP) blocks a second screenshot run; restart the dev server (kill by PID) between runs.
+  - Screenshots at 360/1280 (free owner, pro owner, viewer, dark, event page with hints, members with full seats): no overflow, no console errors; hint link goes to /dashboard/plan. Screenshot users/workspaces deleted from the dev DB. Full suite: 766 tests green.
+---
+## 2026-10-20 - US-022
+- Added `lib/billing/` (`BillingProvider`: createCheckout, createPortalSession, cancelSubscription, parseWebhook; `getBillingProvider()`; mock provider) and `billing_events` (provider + provider_event_id unique, cascades from `workspaces`; migration 0028). `receiveWebhook` = verify signature, then `applyBillingEvent`: one transaction that records the event id and upserts `subscriptions` (plan, status, interval, period end, provider ids; plan overrides untouched). Duplicate ids answer 200 `duplicate`, unknown workspaces 200 `ignored`, bad signature or body 400.
+- Routes: `POST /api/billing/{checkout,portal,cancel,webhook}`, `GET /api/billing/mock/complete`. Checkout/portal/cancel need `billing.manage`; checkout also a verified email. Cancel sets status `canceled` and keeps `current_period_end`, so `resolveEntitlements` gives access until then. Mock checkout is an HMAC-signed link; "paying" sends a signed webhook through the same path.
+- Files: lib/billing/*, app/api/billing/**, db/schema.ts, db/migrations/0028_*, lib/i18n/{en,id}.ts, tests/billing.test.ts, playwright.config.ts, .env.example, README.md, CLAUDE.md
+- **Learnings for future iterations:**
+  - `BILLING_PROVIDER` unset means mock outside production and no billing in production (routes 503). Playwright sets `BILLING_PROVIDER=mock` and a webhook secret because its server runs with NODE_ENV=production. The mock's dev-default secret never applies in production.
+  - A workspace without a `subscriptions` row has no row after a failed or ignored event; tests assert `undefined`, not `plan: "free"`.
+  - Stripe (US-023) maps its events onto `BillingEvent` inside `parseWebhook` and returns null for kinds we ignore. Stripe's `cancel_at_period_end` keeps status `active` until the end: map it to `canceled` in `parseWebhook` so entitlements show the end date.
+  - Not handled: out-of-order delivery (an older event arriving after a newer one overwrites it). Stripe sends `created`; US-023 may want to store the last applied time on `subscriptions` and skip older events.
+  - Mock checkout reuse: opening the same link twice repeats the same event id, so it is applied once.
+  - No UI change (the upgrade/cancel UI is US-024), so no browser check. Full suite: 783 tests, ~310s. Test and dev DBs migrated to 0028.
+---
+## 2026-10-20 - US-023
+- Added `StripeProvider` (lib/billing/stripe.ts): checkout session, billing portal session and cancel (`cancel_at_period_end`) through Stripe's REST API with `fetch` (form-encoded, 10s timeout, no SDK); `Stripe-Signature` check (HMAC-SHA256 over `t.body`, any one `v1` matches, 300s tolerance). `getBillingProvider()` returns it only for `BILLING_PROVIDER=stripe`. Webhook mapping: only `customer.subscription.*`; plan and interval from the price id (`STRIPE_PRICE_{PRO,TEAM}_{MONTH,YEAR}`), workspace from the subscription metadata that checkout sets, period end from the item or the subscription.
+- `BillingProviderError` (provider refused or failed) is answered as 502 by `billingErrorResponse` (renamed from `notConfiguredResponse`, same 503 for missing config).
+- Files: lib/billing/{stripe,index,types,http}.ts, app/api/billing/**/route.ts (rename only), lib/i18n/{en,id}.ts, tests/billing-stripe.test.ts, docs/billing.md, .env.example, README.md, CLAUDE.md
+- **Learnings for future iterations:**
+  - Stripe keeps status `active` while `cancel_at_period_end` is true; `parseWebhook` stores that as `canceled` with the period end. `unpaid`/`paused`/`canceled` are `canceled`; an `ended_at` earlier than the period end wins (immediate cancel). `incomplete*` and unknown prices or missing workspace metadata return null (acknowledged, not applied).
+  - Env is read when a method runs, so tests use `vi.stubEnv` and a fake fetch via `new StripeProvider({fetch, now})`; sign test payloads with the same HMAC recipe (see `signed()` in the test).
+  - For US-024: checkout always creates a new Stripe subscription (no `customer` is passed), so upgrading Pro to Team on an existing subscription should go through the portal, or checkout needs the existing customer id.
+  - Still not handled: out-of-order webhook delivery (see US-022 notes). Stripe event `created` could be stored to skip older events.
+  - No UI change, no browser check. Full suite: 799 tests, ~314s. No migration.
+---
+## 2026-10-20 - US-024
+- Plan page now works for owners: tier list with a Monthly/Yearly toggle (prices formatted server-side from `PLAN_PRICES`, tier data passed to the client as plain props), Upgrade/Switch buttons that POST `/api/billing/checkout` (or the portal) and follow the returned URL, Manage billing (portal), Cancel subscription behind a dialog that names the date access ends. `?checkout=success|canceled` shows a status note. A banner (heading, grace end date, Manage billing for owners, a plain note for others) shows only while `past_due` is inside the grace period; the old past-due line in the current-plan note was removed.
+- `getBillingControls(workspaceId)` (lib/billing/status.ts) decides what to offer: configured, portal, cancel, and `changeVia` (portal for a live Stripe subscription so a plan change does not create a second subscription; checkout for mock and for Free/canceled). With no provider the owner sees prices and a note, no buttons.
+- Files: components/{plan-billing,plan-overview}.tsx, app/dashboard/plan/page.tsx, lib/billing/status.ts, lib/go-to.ts, app/globals.css, lib/i18n/{en,id}.ts, tests/{plan-overview.test.tsx,billing-controls.test.ts,no-inline-strings.test.ts}, e2e/billing.spec.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A visually hidden radio under a label makes Playwright's `.check()` fail ("label intercepts pointer events"); click the label text and assert `toBeChecked()`.
+  - jsdom cannot replace `window.location`; navigation goes through `goTo` in lib/go-to.ts, which tests `vi.mock`.
+  - Client components that call `useRouter` need `vi.mock("next/navigation")` in tests that render them via `PlanOverview`.
+  - `plan.periodEnds` now reads "Renews {date}." (it is only shown for subscription-sourced plans); `plan.pastDue` and `plan.action.soon` keys were removed.
+  - Not handled: switching a Free-plan workspace that has a canceled subscription still opens a fresh checkout (intended); an owner on a hand-set override who pays gets a subscription that the override still masks.
+  - Screenshots at 360/1280 (free monthly/yearly, after checkout, cancel dialog, canceled, past due, dark): no overflow, no console errors, Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB. Full suite: 817 tests green; e2e billing spec passes.
+---
+## 2026-10-20 - US-025
+- Grace now counts from when the subscription first turned `past_due` (new `subscriptions.past_due_since`, migration 0029), not from `current_period_end`: on a failed renewal Stripe has already moved the period end a month ahead, so the old rule would have given ~37 days. `applyBillingEvent` sets it on the first `past_due`, keeps it while the status stays, clears it on any other status (recovery). Rows stored before the column fall back to `currentPeriodEnd`.
+- Added `expireSubscriptions(db, now)` (lib/billing/expire.ts): writes `plan: free` for past_due/canceled rows whose paid access ended (overrides ignored in the decision, left untouched), returns the workspace ids it changed. `startSubscriptionSweep()` runs it at boot and every 24h from server.ts (timer is unref'd). `getEntitlements` still answers Free from the dates alone, so nothing depends on the job.
+- Files: db/schema.ts, db/migrations/0029_*, lib/plans.ts, lib/billing/{webhook,expire}.ts, server.ts, tests/{billing-grace,plans,plan-overview}.test.*, CLAUDE.md
+- **Learnings for future iterations:**
+  - `applyBillingEvent` and `expireSubscriptions` take `now` so fixed-date tests need no fake timers.
+  - US-026 can use the list `expireSubscriptions` returns (workspaces that just lost paid access) to suspend extra members once; it can also run the same step from a downgrade webhook.
+  - A resubscribe after the write-back works: the next active event upserts `plan` back to the paid tier.
+  - No UI change, so no browser check. Full suite: 826 tests green; typecheck and lint clean for source files (lint noise is only in screens/*.mjs and nested .next dirs, as before). Test and dev DBs migrated to 0029.
+---
+## 2026-10-20 - US-026
+- Downgrade keeps data. `lib/over-limit.ts`: `overLimitEvents` (events created this UTC month past `eventsPerMonth`, oldest kept), `typeOverLimit`, `combineOverLimit`, `assertNotOverLimit`. Start, interaction PATCH/duplicate/create, reorder, event PATCH/duplicate answer 403 `{error, reason: "over_limit", requiredPlan}`; close/pause/delete, results and CSV export still work. Event duplicate skips types the plan no longer has. Interaction duplicate of a disallowed type is now 403 over_limit (was 402 type_not_allowed); creating a new one is still 402.
+- Seats: migration 0030 adds `memberships.suspended_reason` (`seat_limit` or null). `reconcileSeats` (lib/seats.ts) suspends the newest active members over the limit (never the last active owner) and lifts only `seat_limit` suspensions, oldest first, counting pending invitations. Triggered by `applyBillingEvent` (after commit, errors logged), the daily sweep for lapsed workspaces, member remove/suspend, invitation revoke, GET /api/members and the members page. The members list shows the reason.
+- UI: dashboard event rows and the event page show "Read-only" plus an Unlock `PlanHint`; locked interactions drop Start/Resume/Edit/Duplicate (Pause, Close, Delete stay); event page has a notice and hides the add bar and reorder when the event is locked.
+- Files: lib/{over-limit,seats,limits,members}.ts, lib/billing/{webhook,expire}.ts, db/schema.ts, db/migrations/0030_*, app/api/events/**, app/api/{members,invitations/[id]}, app/dashboard/**, components/{poll-manager,event-manager,members-manager}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{downgrade,plan-hints,event-manager,plan-limits}.test.*, CLAUDE.md
+- **Learnings for future iterations:**
+  - Free's allowed types equal every type that exists today, so tests narrow `PLANS.free.allowedTypes` to simulate Pro-only content (restore in `afterEach`). When ranking/quiz/survey routes arrive, call `assertNotOverLimit` on their start/edit/duplicate too.
+  - A membership's `createdAt` decides "newest first"; tests set it explicitly (`addMember` in tests/downgrade.test.ts) instead of relying on insert speed.
+  - Over-limit events are recomputed per month, so they unlock when a new month starts; same loophole family as events per month.
+  - Browser check at 360/1280 (dashboard with 5 events on Free, event page light and dark, members with plan-suspended members): no overflow, no console errors. Screenshot users and workspaces deleted from the dev DB; dev/test DBs migrated to 0030. Full suite: 842 tests green.
+---
+## 2026-10-20 - US-027
+- `qa` is an interaction type: schema enum and check, config `{prompt (max 200, default "Ask a question"), moderation}` in lib/interaction-config.ts (`NEW_INTERACTION_TYPES` now includes it, so create, PATCH and duplicate need no new branches; title defaults to "Q&A", optional `title` field; duplicate copies config only). Event duplicate now also copies Q&A interactions as drafts (never questions).
+- Migration 0031: adds `questions.interaction_id`, creates one `qa` interaction per event that has questions or no interaction (state `live` only when the event had no live interaction, else `paused`; position after the existing ones; moderation copied from the event), attaches every question, then NOT NULL + FK cascade + index. Reverse SQL is `db/migrations-down/0031_qa_interactions.down.sql` (Drizzle ignores it).
+- `ensureQaInteraction(db, eventId)` (lib/questions.ts): the event-level Q&A routes still address questions by event, so `submitQuestion` files each question under the event's first Q&A, creating a paused one under an advisory lock if none exists. US-028 replaces this with an interaction id in the route.
+- Host list: `pollMgr.type.qa` label; the Edit button is hidden for Q&A until the builder exists (US-030).
+- Files: db/schema.ts, db/migrations/0031_*, db/migrations-down/, lib/{interaction-config,questions}.ts, components/poll-manager.tsx, lib/i18n/{en,id}.ts, tests/{qa-interaction,poll-manager,events,export,present-questions-api,route-permissions-host}.test.*, tests/helpers/db.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests that insert `questions` directly need `interactionId: await qaFor(db, eventId)` (tests/helpers/db.ts).
+  - tests/qa-interaction.test.ts has a migration rehearsal in a scratch schema (`mig_rehearsal_qa`) with before/after counts per event and the down SQL; copy its shape for later data migrations.
+  - `live` and presenter state return null for a live `qa` interaction (they only handle other types), so a migrated live Q&A does not change what participants or the presenter see yet; the Q&A tab still works from the event-level routes.
+  - A live Q&A holds the one-live slot: starting a poll pauses it (and broadcasts that state change). US-029/030 decide how Q&A and the other types coexist.
+  - Dev and test DBs migrated to 0031. No browser check: the only UI change is the type label on the host list (unit-tested); the Q&A UI stories (US-029/030) should screenshot.
+---
+## 2026-10-20 - US-028
+- Question routes are written once in `lib/question-routes.ts` and mounted twice. New paths under `/api/interactions/[id]/questions`: POST ask, GET approved, `/queue` (host: pending + approved), `/[questionId]` PATCH/DELETE, `/[questionId]/upvote`. The old event paths (`/api/events/[id]/questions[/qid]`, `/moderation`, `/present/questions`, `/api/questions/[id]/upvote`) resolve the event's live Q&A, else its first (`resolveEventQa`), and moderate/upvote a question in whichever Q&A it sits. The event-level POST creates a paused Q&A only after the caller proves to be a participant; an event with no Q&A lists as `{interactionId: null, questions: []}`.
+- `lib/questions.ts` and `lib/moderation.ts` take `interactionId` (submit, list approved, host queue, moderate, delete; `toggleUpvote` has an optional `interactionId` guard). Moderation and the profanity filter come from the Q&A config; new `profanityFilter` boolean (default true, missing = true for older rows). Every `question:*` socket message carries `interactionId`; list responses carry it too.
+- `PATCH /api/events/[id]` with `moderationMode` also sets `config.moderation` on the event's Q&As (jsonb_set in the same transaction), so the existing moderation panel switch still works until US-030 gives each Q&A its own control.
+- Files: lib/{questions,moderation,question-routes,interaction-config}.ts, app/api/interactions/[id]/questions/**, app/api/events/[id]/{questions,moderation,present/questions,route.ts}, app/api/questions/[id]/upvote, app/{e,present}/[eventId]/page.tsx, app/dashboard/events/[id]/moderate/page.tsx, lib/i18n/{en,id}.ts, tests/{question-interaction-routes,questions,qa-interaction}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Clients (qa-tab, presenter-view, moderation-panel) still use the old event paths and do not filter socket messages by `interactionId`; with two Q&As in one event they would mix. US-029 (participant) and US-030 (host/presenter) must pass the Q&A id, call the new paths and drop messages for other interactions.
+  - No state check on submit yet (a paused or closed Q&A still accepts questions); US-029 decides what closed means for participants.
+  - Tests that flip moderation should PATCH the event (or set the Q&A `config.moderation`), not update `events.moderation_mode` after the Q&A exists.
+  - `events.join_code` must be 4-6 digits in direct inserts.
+  - No UI change, no browser check. Full suite: 873 tests green, e2e presenter-qa passes, typecheck and eslint (source dirs) clean.
+---
+## 2026-10-20 - US-029
+- Participant Q&A tab follows the event's Q&As: live one if any, else the latest paused/closed one read-only with a note (paused or closed text, no form, no upvote buttons); other closed Q&As sit under "Earlier questions" as collapsed `<details>` with read-only questions. Events with no Q&A still take a first question through the old event path, then the tab refetches and adopts the Q&A the server created.
+- `getParticipantQa` (lib/questions.ts) builds the view; `GET /api/events/[id]/qa` serves it to participants (401 without the cookie). `QaTab` now takes `initial: ParticipantQaView`, posts/upvotes via `/api/interactions/[id]/...`, drops `question:*` messages for other `interactionId`s and refetches on `state-changed` and on (re)connect. Old `/api/events/[id]/questions` GET/POST are unchanged and still work.
+- Server: a closed Q&A answers 409 `api.qaClosed` on submit. `ensureQaInteraction` now creates the Q&A live when nothing is live (event row locked like `startInteraction`), paused otherwise, so a first question never lands in a read-only Q&A.
+- Files: lib/{questions,question-routes,question-types}.ts, app/api/events/[id]/qa/route.ts, app/e/[eventId]/page.tsx, components/{qa-tab,participant-view}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{qa-tab,a11y}.test.tsx, tests/participant-qa.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks/refs lint forbids writing a ref during render; put the value in the effect's dependencies instead (the socket effect resubscribes when the shown Q&A changes).
+  - The no-inline-strings scan flags string literals in JSX call expressions (`sortQuestions(list, "popular")`); wrap in a module-level helper.
+  - `/join/<code>` joins and redirects by itself; browser scripts only need `goto` and `waitForURL("**/e/**")`.
+  - Paused Q&As are only read-only in the client; the API still accepts questions for them (many tests and the legacy event path rely on it). Only closed is enforced.
+  - Every `state-changed` message makes each participant's Q&A tab refetch `/api/events/[id]/qa` (the message does not say which type changed).
+  - US-030 (host/presenter) still uses the old event paths and does not filter by `interactionId`.
+  - Browser check at 360/1280 (live, paused, closed with earlier section open, light and dark): no overflow, no console errors; screenshot event and user deleted from the dev DB. Full suite 889 tests green, e2e smoke and presenter-qa pass.
+---
+## 2026-10-20 - US-030
+- Q&A is host content. `PollManager` has "New Q&A" (name, prompt, Open/Moderated, profanity filter; starts on the event's moderation default) and Edit for draft Q&As; start, pause, close, duplicate, reorder and delete already worked. A new event now gets one draft Q&A at position 0 (`POST /api/events`). `events.moderation_mode` is only the default for new Q&As: the event PATCH no longer copies it onto them.
+- A started Q&A can switch `moderation`/`profanityFilter` through the interaction PATCH (title and prompt answer 409); other types remain draft-only.
+- Moderation panel works on one Q&A: picker when there are several, its own mode switch (interaction PATCH), queue via `/api/events/[id]/moderation?interaction=`, questions moderated through `/api/interactions/[id]/questions/...`, socket messages filtered by `interactionId`. Presenter follows the live (else first) Q&A, filters messages by `interactionId`, refetches on state changes, uses the Q&A's name as the heading and shows a live Q&A by itself when no other interaction is live (the Show Q&A toggle is hidden then).
+- Participants: while every Q&A is a draft, `getParticipantQa` returns `notOpen: true` (tab says "Q&A has not started") and the event-level submit answers 409 `api.qaNotOpen`. `resolveEventQa` sorts drafts last.
+- Files: app/api/events/{route,[id]/route,[id]/moderation/route,[id]/interactions/[interactionId]/route}.ts, app/{dashboard/events/[id],present/[eventId]}/page.tsx, app/dashboard/events/[id]/moderate/page.tsx, components/{poll-manager,moderation-panel,presenter-view,qa-tab}.tsx, lib/{questions,question-routes,question-types}.ts, lib/i18n/{en,id}.ts, e2e/{presenter-qa,smoke}.spec.ts, 11 test files, CLAUDE.md
+- **Learnings for future iterations:**
+  - Every event created through `POST /api/events` now has a draft Q&A at position 0: tests that count interactions, check positions, reorder (needs all ids) or ask questions must account for it (set its state `live` before asking). Events inserted directly have no Q&A.
+  - Two "Start" buttons on the event page now: e2e specs scope to the interaction's row (`listitem` filter by title).
+  - Playwright's screenshot caret hiding adds `caret-color` to inputs and triggers a hydration warning in the console log; it is not an app error.
+  - Mid-sentence type names are lower-cased in the builder, except "Q&A" (`typeInSentence`).
+  - Browser check at 360/1280 (event page with default and new Q&A, builder, moderation with picker, presenter with live Q&A, participant "not started"): no overflow. Screenshot users and workspaces deleted from the dev DB. Full suite 904 tests green, e2e 4 specs pass, typecheck and eslint clean.
+---
+## 2026-10-20 - US-031
+- Checkpoint only, no source change. Results: `npm run typecheck` clean; eslint on source dirs (db lib app tests components e2e) clean; `npm test` 82 files / 904 tests green; `npm run test:e2e` 4 specs pass (billing, notes-ai, presenter-qa, smoke); `npm run build` succeeds. The e2e specs were already moved to the new Q&A flow in US-030 (new events carry a draft Q&A the host starts; moderation is per Q&A), so nothing needed changing.
+- Migration 0031 rehearsal on a copy of the dev data (the dev role cannot CREATE DATABASE, so a scratch schema `mig_rehearsal_devcopy` was used, as in tests/qa-interaction.test.ts: migrations 0000-0030 run in it, dev rows copied in with Q&A interactions left out to recreate the pre-0031 state, then 0031 applied; schema dropped afterwards, nothing in `public` was written). Counts before -> after: events 2 -> 2, questions 2 -> 2, question_votes 2 -> 2, interactions 5 -> 6 (one new `qa`), questions without `interaction_id` 0, events with two live interactions 0. Dev DB itself: 2 questions, 2 votes, 1 qa interaction, migrated at 0031.
+- Old Q&A routes that remain as aliases (they resolve the event's live Q&A, else its first, via `resolveEventQa`, and act on a question in whichever Q&A it sits): `GET/POST /api/events/[id]/questions`, `PATCH/DELETE /api/events/[id]/questions/[questionId]`, `GET /api/events/[id]/moderation` (takes optional `?interaction=`), `GET /api/events/[id]/present/questions`, `POST /api/questions/[id]/upvote`. Native paths are `/api/interactions/[id]/questions`, `/queue`, `/[questionId]`, `/[questionId]/upvote`; `GET /api/events/[id]/qa` is the participant view. Remaining callers of the aliases: the first question of an event with no Q&A (event-level POST), the moderation page's queue fetch, and the tests.
+- Files: scripts/ralph/{progress.txt,prd.json}
+- **Learnings for future iterations:**
+  - Never `pkill -f` a pattern that appears in your own command (hit it again with "until grep"); wait for a log with an until-loop on the log text only, not on `pgrep -f`, which matches the loop's own shell.
+  - Full `npm test` is now ~325s; e2e (build included) ~2 min; run them one after the other, since both use the test DB.
+  - `npm run build` rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
+  - No UI change, no browser check.
+---
+## 2026-10-20 - US-032
+- Event page list is now the content library: type icon plus type name, state, response count per row; drag handle and ↑/↓ buttons on every row (before: draft rows only); duplicate on every row; inline Rename for drafts (PATCH with `question` for polls, `title` for Q&A, `prompt` otherwise); "Add content" menu listing every type, with plan-locked types as `PlanHint` links. State words come from `pollMgr.state.*` keys; counts use `pollMgr.responses.one/other`.
+- `lib/content-library.ts`: `responseCounts(eventId)` (one SQL union over votes, words, open text, ratings, notes and questions, rejected excluded) and `publishContentChanged`. `GET /api/events/[id]/interactions` now also returns `counts`. Create, PATCH, duplicate, reorder and delete publish host-only `content:changed`; `PollManager` (prop `liveUpdates`, set by the page) refetches on it, `state-changed` and response messages through `useCoalesced`.
+- Files: lib/content-library.ts, components/{poll-manager,add-content-menu,type-icon}.tsx, app/dashboard/events/[id]/page.tsx, app/api/events/[id]/interactions/**, app/globals.css, lib/i18n/{en,id}.ts, tests/{content-library,content-list-live,poll-manager,plan-hints,rating-ui,open-text-ui,open-text-api,rating-api,wordclouds,no-inline-strings}, e2e/{smoke,notes-ai}.spec.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Delete stays draft-only and rename only works on drafts: the existing rule (started content keeps its question and results) was kept; the story's "works for every type" is read as every type, not every state.
+  - Anything that clicked "New poll" etc. now opens "Add content" first (unit tests and e2e updated).
+  - Tests that collect published messages in `beforeEach` after creating an interaction through the POST route see a `content:changed`; reset the array after setup.
+  - Dev server (`npm run dev`, own port) fell into a full-reload loop on a fresh start and made Playwright flaky; a production build (`NEXT_DIST_DIR=.next-shot npx next build`, then `NODE_ENV=production PORT=3200 npx tsx server.ts`) is stable for screenshots. Restarting the server also resets the in-memory sign-up rate limit (429 after many screenshot sign-ups).
+  - Playwright's HTML5 drag works with real mouse moves (down, move in steps, up) dropped on a row's text; dropping on a button did not fire `drop` in its emulation.
+  - Never `pkill -f` a path that is in your own command line (killed the shell again); kill by PID from `ss -ltnp`.
+  - Browser check at 360/1280 (light and dark, menu open): no overflow, no console errors; live add from another session appeared without reload; keyboard and drag reorder persisted. Screenshot users deleted from the dev DB. Full suite 919 tests, e2e 4 specs, typecheck and eslint clean.
+---
+## 2026-10-20 - US-033
+- Templates: `templates` (workspace, name, kind interaction|event, created_by set null) and `template_items` (position, type, title, config), both cascading (migration 0032). `lib/templates.ts` saves from an event (one interaction or the whole list), lists, inserts items as drafts after the event's content. `copyConfig` (lib/interaction-copy.ts) is the one place that decides what a copy carries; the interaction duplicate route now uses it too. No state, responses, participants, questions or notes are ever read.
+- Routes: `GET/POST /api/templates` (list for any member; save needs `templates.manage`), `PATCH/DELETE /api/templates/[id]`, `POST /api/events/[id]/interactions/from-template` (402 and nothing added if a type is not in the plan), `POST /api/events/from-template` (skips types the plan lacks, returns `skipped`; monthly event limit applies). Limit: `assertTemplateSlot` in lib/limits.ts (402 `template_limit`, workspace row locked during save).
+- Files: db/schema.ts, db/migrations/0032_*, lib/{templates,interaction-copy,limits}.ts, lib/i18n/{en,id}.ts, app/api/templates/**, app/api/events/from-template, app/api/events/[id]/interactions/{from-template,[interactionId]/duplicate}, tests/templates.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - There is no image storage yet, so "images are copied" is covered only by `copyConfig` passing the whole config through; when images ship, check that it copies the reference (or file) and update the storage count.
+  - Editors can list and use templates but not save, rename or delete (matrix: `templates.manage` is owner/admin). US-034's UI should hide Save/Rename/Delete for other roles.
+  - Template list response: `{templates: [{..., items: [{type, title}]}], usage: {used, limit}}` is what the Templates page and picker need.
+  - Adding ranking/quiz/survey later: extend the type enum and check in `template_items` (and `interactions`) in the same migration.
+  - Full suite 933 tests green (~350s); typecheck and eslint (source dirs) clean. The dev DB was not migrated (US-034 browser check needs `npm run db:migrate`).
+  - No UI change, no browser check.
+---
+## 2026-10-20 - US-034
+- Templates UI. Event page (`PollManager`): "Save as template" on every row and "Save event as template" (only with `canManageTemplates`, i.e. `templates.manage`), "Add from template" next to "Add content" (picker dialog listing each template's items, adds them as drafts and appends the returned interactions). New `/dashboard/templates` page (`TemplatesManager`): usage "n of limit templates used" with a plan hint when full, rename, delete with confirmation, read-only for members without `templates.manage`; "Templates" link in the app shell for every member. The dashboard's New event form has a Template select (only when templates exist) that posts to `/api/events/from-template` and reports skipped items.
+- Plan errors: `lib/api-error.ts` (`apiError(response)` gives message plus a `Lock` on a 402) and `components/plan-error.tsx` show the server message with the tier link. Used by the save dialog (template limit), the picker (type not in plan) and the new event form (monthly event limit, which the plain create form now shows the same way).
+- Files: components/{save-template-dialog,template-picker,template-items,template-types,templates-manager,plan-error,poll-manager,event-manager,ui/app-shell}, app/dashboard/{templates/page,page,events/[id]/page}.tsx, lib/{api-error,type-labels,template-limits,templates,plan-hints}.ts, app/api/templates/route.ts (list moved to `listTemplates`), app/globals.css, lib/i18n/{en,id}.ts (real Indonesian for the new keys), tests/{templates-ui.test.tsx,no-inline-strings.test.ts}, CLAUDE.md
+- **Learnings for future iterations:**
+  - A `Button` with `busy` is `disabled`; inside a dialog that drops focus to the body, so Escape and the Tab trap stop working. In dialogs guard the handler and set `aria-busy` instead (found when a Playwright Escape did nothing after a failed save).
+  - react-hooks/set-state-in-effect forbids resetting state at the top of an effect; mount the loading part only while the dialog is open (a child of `Dialog`) so each opening starts fresh.
+  - `TYPE_LABELS` moved to lib/type-labels.ts (shared by the library list and template lists).
+  - A label named "Start from" made `getByLabel("Start")` ambiguous with the date field; the select is labelled "Template".
+  - The saved notice (with the "View templates" link) is replaced by the next notice (e.g. after adding from a template); it is not persistent.
+  - Browser check at 360/1280 (light and dark): event page, save dialog, limit error with hint, picker, templates page with rename/delete dialogs, dashboard form and result. No horizontal overflow; the only console error was the expected 402 from the limit test. Screenshot users/workspaces deleted from the dev DB; dev DB migrated to 0032 (`npm run db:migrate`).
+  - Full suite 956 tests green, e2e 4 specs pass, typecheck and eslint (source dirs) clean.
+---
+## 2026-10-20 - US-035
+- `lib/interaction-modules.ts`: `InteractionModule` (type, validateConfig, results, csv, responseCount, plus `presenter(row)`, `live(row, participantId)` and `presentWhenClosed`) with poll, wordcloud, qa, sharedNotes, openText and rating registered; `interactionModule(type)` throws for an unregistered type. `lib/export.ts` (`buildEventCsv`, new `buildInteractionCsv`/`tablesToCsv`), `lib/presenter.ts`, `lib/live-view.ts` and `responseCounts` (lib/content-library.ts) now dispatch through it. Output unchanged: existing export, presenter, live and library tests pass untouched.
+- `csv` returns `CsvTable[]` (header, rows, optional `trailing`); the event file merges same-header tables, flat table first, `trailing` ones (the notes analysis) last. The sharedNotes module's csv includes its analysis table, so US-036's per-interaction files carry it too.
+- Files: lib/{interaction-modules,export,presenter,live-view,content-library}.ts, tests/interaction-modules.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - The combined event CSV now visits interactions in registry order (all poll rows, then wordcloud, then Q&A), not purely by position; with several Q&As, questions are sorted per Q&A, not across the event. Single-Q&A output is identical.
+  - Do not name a variable `module` (next lint rule `no-assign-module-variable`).
+  - Q&A `presenter` and `live` return null on purpose; those screens have their own routes.
+  - `responseCount` runs one query per interaction (Promise.all); fine for event-sized lists.
+  - No UI change, no browser check. Full suite 960 tests green, typecheck and eslint (source dirs) clean.
+---
+
+## 2026-10-20 - US-036
+- `GET /api/events/[id]/export.zip` (permission `export`, plan check `csv`, so Free is allowed) returns one CSV per interaction, named `NN-Title.csv` by list order (position, then created) with a slugged title, built by `buildEventZip` (lib/export.ts) from each type's module via `buildInteractionCsv`. `lib/zip.ts` is a small store-only writer (UTF-8 names, CRC from `node:zlib` `crc32`), so no new dependency. "Export all" link next to "Export CSV" on the event page (`dash.exportZip`, en and id).
+- Files: lib/zip.ts, lib/export.ts, app/api/events/[id]/export.zip/route.ts, app/dashboard/events/[id]/page.tsx, lib/i18n/{en,id}.ts, tests/export-zip.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests read the archive through its central directory and check every CRC; one more test runs the system `unzip -t` (skipped when the binary is missing).
+  - Slugs strip combining marks first (`\p{M}`), so "Ünïcode" becomes "Unicode", not "U-ni-code".
+  - The file number is the index in the sorted list, not `interactions.position`, which can repeat.
+  - Quiz leaderboard files (US-044+) will arrive through the module's `csv`; nothing to change here.
+  - Browser check at 360 and 1280: buttons wrap, no horizontal overflow, download is `Zip-shot-results.zip` and `unzip -l` lists the expected files. Killed my own dev server on :3200 and restored next-env.d.ts/tsconfig.json.
+---
+(US-036 addendum) tests/qa-tab.test.tsx "asks the server again..." was flaky (about 1 run in 3): the test emitted `question:added` before the socket effect re-bound to the new Q&A id. It now awaits `act(async () => {})` first. Full suite: 965 tests, the only failure was that flake.
+
+## 2026-10-20 - US-037
+- Added the `ranking` interaction type: config `{prompt, options: [{id, text}]}` (2-10 options, text ≤ 80) validated in `parseNewInteractionInput`; `ranking_responses` (order jsonb of option ids, unique per participant, cascades from interactions and participants); migration 0033 also widens the `interactions_type` and `template_items_type` checks. `lib/ranking.ts`: `scoreRanking` (1st = N … last = 1, ties share a rank and keep the host's option order, partial/unknown/repeated ids tolerated), `isPermutation`, `submitRanking` (share lock, live only, 400 not a permutation, 409 second submit via the unique constraint). `POST /api/interactions/[id]/ranking {order}`. Ranking module registered (results, CSV `rank,option,score,rankings`, responseCount); `copyConfig` gives duplicated/templated options new ids.
+- Files: db/schema.ts, db/migrations/0033_*, lib/{ranking,ranking-limits,interaction-config,interaction-copy,interaction-modules,type-labels}.ts, lib/i18n/{en,id}.ts, app/api/interactions/[id]/ranking/route.ts, components/{type-icon,add-content-menu,poll-manager}.tsx, tests/{ranking,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Ranking is not on Free: tests that create one through the route need `setPlan(db, workspaceId, "pro")` or POST answers 402.
+  - Widening `IconKind` forced `AddContentMenu` to be generic over the kind, so the host builder keeps its narrower `Kind` until US-039 adds ranking to it.
+  - The per-participant token limit is 10 requests/minute; a test that sends many bad submissions must `getRateLimitStore().reset()` before the valid one.
+  - The module's `presenter` and `live` return null for now; US-038 fills `live`, US-039 `presenter`. The `ranking:results` message is host-only (participants do not see aggregates).
+  - tests/interaction-modules.test.ts used "ranking" as its example of an unregistered type; it now uses a made-up one.
+  - No UI change, so no browser check. Full suite 980 tests green, typecheck and eslint (source dirs) clean.
+---
+
+## 2026-10-20 - US-038
+- Ranking participant screen: `RankingForm` (components/ranking-form.tsx) shows the host's options as an ordered list; reorder by a drag handle (pointer events, touch-safe) or by ↑/↓ buttons labelled "Move {text} up/down, currently position n of N"; position changes go to a polite live region. Submit posts `{order}`; afterwards "Answer sent" and the list locks. The ranking module's `live` now returns `LiveRanking` `{prompt, options, mine}` so reconnecting/reloading shows the same sent state; closed without an answer shows "Ranking closed". `LiveView` renders it for `type: "ranking"`.
+- Files: components/{ranking-form,live-view}.tsx, lib/{live-view,interaction-modules}.ts, lib/i18n/{en,id}.ts, app/globals.css, tests/{ranking-ui.test.tsx,ranking.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/ranking-ui.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - Pointer capture does not survive React reordering the captured element (the DOM move releases it); drag with window pointermove/pointerup listeners. The jsdom test caught nothing here; only the real-browser run did.
+  - The dev DB did not have migration 0033 yet (ranking inserts failed the `interactions_type` check); run `npm run db:migrate` before browser checks of a new type.
+  - Browser-check recipe for participant screens: sign up, `update users set email_verified_at`, insert a `subscriptions` plan override via SQL, create + `/start` through the API, `POST /api/join` in the participant context, open `/e/<id>` (scripts/ralph/screens/ranking-ui.mjs; it deletes its workspace and users afterwards).
+  - Options start in the host's order; a participant who submits without touching the list sends that order.
+  - Browser check done at 360 and 1280, light and dark: no horizontal overflow, drag, buttons, focus, send and reload verified.
+---
+
+## 2026-10-20 - US-039
+- Ranking host side. Builder: "New ranking" in Add content (prompt + 2-10 options, 80 chars each, same option rows as a poll; the poll-only toggles are hidden; server validation errors show inline; edit of a draft sends the option ids back so they stay stable). Presenter: ranking module `presenter` returns `PresenterRanking` (live, or closed when named), `PresenterView` renders `PresenterRanking` and updates from host-only `ranking:results`; each row prints `#rank`, the text and "n points", the bar only repeats them (ties share a rank). CSV: `scoreRanking` now returns `positions` (counts per position) and the CSV has `rank,option,score,rankings,position_1..position_10`.
+- Files: lib/{ranking,interaction-modules,presenter}.ts, components/{presenter-ranking,presenter-view,poll-manager}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{ranking,presenter,presenter-view,poll-manager,no-inline-strings}.*, scripts/ralph/screens/ranking-host.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - The CSV position columns are fixed at 10 on purpose: `tablesToCsv` merges tables with identical headers, so a header that depends on the option count would split one event into several files.
+  - Poll option inputs use `aria-label="Option n"` and the remove buttons `Remove option n`; `getByLabel("Option 1")` matches both, so use `getByRole("textbox", { name })` in Playwright.
+  - The CSV route is `/api/events/[id]/export.csv`.
+  - Browser check at 360 and 1280 (builder, list, presenter with 5 submitted rankings): no horizontal overflow, no console errors; the fixed presenter buttons overlap the last row at 360 (same as other presenter screens; the presenter is a projector screen). Killed my dev server on :3200, restored next-env.d.ts/tsconfig.json.
+  - Full suite 996 tests green, typecheck and eslint (source dirs) clean. Not run: e2e (no ranking e2e exists yet).
+---
+
+## 2026-10-20 - US-040
+- Added the `quiz` interaction type: config `{prompt (≤200), options [{id,text}] 2-6 (text ≤80), correctOptionIds (≥1, subset of options), timeLimitSeconds 5-120 (default 20), points (default 1000, 1-10000)}` validated in `parseNewInteractionInput`; create, PATCH (merged config re-checked by `quizConfigError`) and duplicate/template copy (`copyConfig` gives options new ids and remaps the correct ids) are wired. `quiz_answers` (option_ids, answered_at, elapsed_ms, correct, points; unique per participant; cascades from interactions and participants). `interactions.started_at`/`deadline_at` (nullable) are set by `startInteraction` from the DB clock each time a quiz question starts or resumes. Migration 0034 also widens the `interactions_type` and `template_items_type` checks.
+- A minimal quiz module is registered so the "every stored type has a module" test holds: validateConfig and responseCount are real; `results`, `csv` (empty), `presenter` and `live` are placeholders for US-041/42/43.
+- Files: db/schema.ts, db/migrations/0034_*, lib/{quiz,quiz-limits,interaction-config,interaction-copy,interaction-state,interaction-modules,type-labels}.ts, components/type-icon.tsx, lib/i18n/{en,id}.ts, app/api/events/[id]/interactions/[interactionId]/route.ts, tests/{quiz,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A quiz option needs its id in the request body (correctOptionIds points at it); a PATCH that replaces `options` must restate `correctOptionIds`, otherwise 400.
+  - Resuming a paused quiz question opens a fresh window (new started_at/deadline_at); answers already stored stay, one per participant. US-041 should score `elapsed_ms` against `started_at` and reject after `deadline_at` plus the grace.
+  - Route tests that start an interaction need `users.email_verified_at` set (`denyUnlessVerified`), and quiz creation needs `setPlan(..., "pro")`.
+  - `IconKind` now includes `quiz` (icon, label, i18n); the host builder's narrower kind list and the quiz UI come with US-043.
+  - No UI change, no browser check. Full suite 1022 tests green, typecheck and eslint (source dirs) clean. Dev DB migrated to 0034.
+---
+
+## 2026-10-20 - US-041
+- Quiz answer endpoint `POST /api/interactions/[id]/quiz-answer {optionIds}` (`submitQuizAnswer` in lib/quiz.ts, same shape as the ranking route: IP and token rate limits, participant token, share lock on the interaction). Live only; one answer per participant (409 `api.alreadyAnswered`); after `deadline_at` + grace (`QUIZ_GRACE_MS`, default 300) it answers 409 `api.quizTimeUp` ("Time is up"); bad/unknown/repeated option ids are 400 `api.quizAnswerInvalid`.
+- `scoreQuizAnswer({correct, elapsedMs, timeLimitMs, points})`: 0 if wrong, else points scaled linearly to 50% at the deadline (clamped, so a grace answer earns 50%). `isCorrectSelection` compares the selected set with `correctOptionIds`. Elapsed ms and the late check come from the database `clock_timestamp()` in the same transaction.
+- Quiz module now has real `results` (`QuizResults`: per-option count + `correct` flag, `correctPercent`), `csv` (`QUIZ_EXPORT_HEADER`: option, correct, count, answers, correct_percent) and `responseCount`. Host-only `quiz:results` is published on each answer and refreshes the content library.
+- Files: lib/{quiz,interaction-modules}.ts, app/api/interactions/[id]/quiz-answer/route.ts, components/poll-manager.tsx, lib/i18n/{en,id}.ts, tests/quiz-answer.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Use `clock_timestamp()` rather than `now()` for time inside a transaction that takes a lock: `now()` is the transaction start.
+  - `tx.execute` returns `{ rows }` with node-postgres.
+  - A quiz test can put a question mid-window by setting `started_at`/`deadline_at` with SQL (`now() - interval`); see `startedAgo` in tests/quiz-answer.test.ts.
+  - `presenter` and `live` for quiz are still null (US-042 participant screen, US-043 presenter and builder). Nicknames and the leaderboard come with US-044+; `quiz_answers.points` is what they sum.
+  - No UI change, no browser check.
+---
+
+## 2026-10-20 - US-042
+- Quiz participant screen: `QuizForm` (components/quiz-form.tsx), rendered by `LiveView` for `type: "quiz"`. Large answer buttons, each with its own colour (`--quiz-1..6` tokens) and shape (triangle, circle, square, diamond, star, hexagon) plus the option text. One correct option: tap locks and sends; several correct options: toggle and "Send answer". Countdown from the server `deadline_at` with the client clock corrected by the payload's database "now"; polite announcements at 10 s and 5 s and at zero; at zero the buttons lock. After close the screen fetches the participant's outcome: Correct / Not this time / No answer sent, points, and tags "Correct answer" / "Your answer" on the options.
+- Server: quiz module `live` returns `LiveQuiz` (never the correct options), new `GET /api/interactions/[id]/quiz-result` (own outcome + correct ids, 409 `api.quizResultNotReady` until closed), `getQuizOutcome` and `databaseNowMs` in lib/quiz.ts.
+- Files: components/{quiz-form,live-view}.tsx, lib/{quiz,live-view,interaction-modules}.ts, app/api/interactions/[id]/quiz-result/route.ts, app/globals.css, lib/i18n/{en,id}.ts, tests/{quiz-ui.test.tsx,quiz-answer.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-ui.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks lint (this Next version) rejects `Date.now()`/ref reads during render and `setState` inside an effect: take the clock offset in a lazy `useState`, and derive screen-reader text from state instead of setting it in an effect.
+  - An option's accessible name only gets a space before a trailing tag if there is a whitespace text node between the spans (`{" "}`); jsdom otherwise reads "JavaSelected".
+  - Component tests with fake timers: `vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })` keeps `waitFor` and fetch promises working.
+  - Never `pkill -f vitest` from the same command line (it kills the shell); the full suite runs in the background, do not start two at once (shared test DB).
+  - A quiz closed while a participant has not answered shows "No answer sent"; a participant who reloads after close lands on the waiting screen (the live endpoint only returns live interactions), same as other types.
+  - US-043 (presenter) still needs the module's `presenter`; US-045/046 will add nicknames and the leaderboard.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-ui.mjs): single and multi answer, reload keeps "Answer sent", close shows result, 5 s question counts to "Time is up"; no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---
+
+## 2026-10-20 - US-043
+- Quiz host side. Builder: "New quiz question" in Add content (prompt, 2-6 options with a "Correct" checkbox each, time limit 5-120, points; server validation errors such as "Mark at least one correct option" show inline; editing a draft restates option ids and correct ids). Presenter: quiz module `presenter` returns `PresenterQuiz` (live or closed); `PresenterQuiz` component shows the prompt, a countdown bar that prints "n seconds left" (client clock corrected by the payload's database time, announcements at 10 s, 5 s and zero), the options as coloured shapes, and the live answer count from host-only `quiz:results`. After close: each option with its count and a "Correct answer" tag, plus "n answers, x% correct". Host controls: start (arrow keys / content list, as before), "Close and show answer" button on the presenter (posts `/close`), Close in the content list.
+- Files: components/{presenter-quiz,presenter-view,poll-manager,quiz-form}.tsx, lib/{presenter,interaction-modules}.ts, lib/i18n/{en,id}.ts, app/globals.css, tests/{presenter,presenter-view,poll-manager,no-inline-strings}.*, scripts/ralph/screens/quiz-host.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - While live the presenter never gets per-option counts or correct ids (`results: null`), so the projector cannot give the answer away; they arrive with the closed state. `closeQuiz` is the reveal: there is no separate reveal state.
+  - `.present-bar-head span:last-child` (nowrap) matches nested spans too and made the 360px presenter 480px wide; a child needs a selector at least as specific (`.present-bar-head .present-quiz-name .present-quiz-text`).
+  - A fieldset's min-content width follows its widest row: `.option-row` now wraps (`flex-wrap`, input `flex: 1 1 8rem`) or the quiz row (input + Correct + Remove) overflowed at 360px.
+  - Add-menu button label for a type is "Save {type lower case}", so the quiz builder's submit is "Save quiz".
+  - Signup is rate limited per IP in the dev server (429 after a few runs of a browser script); restart your own dev server on :3200 (kill by PID from `ss -ltnp`) to reset it.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-host.mjs): builder with validation error, list, live presenter with seconds and answer count, time up, closed with correct option; no horizontal overflow, only the expected 400 console errors. The fixed presenter buttons overlap the last row at 360, as on other presenter screens.
+  - Full suite 1066 tests green (~540 s), typecheck and eslint (source dirs) clean.
+---
+
+## 2026-10-20 - US-044
+- `lib/leaderboard/`: `LeaderboardStore` interface (`add`, `top`, `rankOf`, `size`, `reset`, `replaceAll`) with `MemoryLeaderboardStore`, kept on `globalThis` (`getLeaderboardStore`/`setLeaderboardStore`). `quiz_scores` (PK event + participant; points, answered_count, total_elapsed_ms; cascades from events and participants), migration 0035. `closeInteraction` now runs in a transaction and, for a quiz question, adds its answers to `quiz_scores` (`persistClosedQuestion`); the store is updated after commit (`applyScoreDeltas`). `rebuildLeaderboard()` reloads the table into the store at server start (server.ts). `POST /api/events/[id]/leaderboard/reset` (`live.run`) deletes the event's rows and resets the store.
+- Ranking: points desc, then less total answer time; equal on both shares a rank (1,2,2,4); participants with no answers are not ranked, so a late joiner is ranked on the questions they answered. Scores are keyed by participant id, so a rejoin with the same token keeps score and nickname.
+- Files: db/schema.ts, db/migrations/0035_*, lib/leaderboard/{store,memory,index}.ts, lib/interaction-state.ts, app/api/events/[id]/leaderboard/reset/route.ts, server.ts, tests/leaderboard.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - `total_elapsed_ms` is an extra column beyond the story's list: the tie-break must survive a rebuild.
+  - Points count only when a question closes; a question left live or paused never reaches the leaderboard. US-046 should read `getLeaderboardStore()` (`top`, `rankOf`) and can call it after the `state-changed` closed message.
+  - Tests that insert quiz interactions directly need `position` (NOT NULL, no default) and at most one `live` per event, so close each before inserting the next.
+  - No nickname entry yet (US-045); `participants.nickname` already exists and is untouched by rejoin.
+  - No UI change, no browser check. Full suite 1080 tests green (~410 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0035.
+---
+
+## 2026-10-21 - US-045
+- Quiz nickname entry. `lib/nickname.ts` (`validateNickname`, `setNickname`, `getNicknameState`, `hasAnsweredQuiz`) and `PUT /api/events/[id]/nickname` (participant token, IP and token rate limits): 1-20 characters, whitespace collapsed, control characters and the profanity list rejected (400), a name taken in the event ignoring case rejected (409 `api.nicknameTaken`), no change after the first quiz answer of the event (409 `api.nicknameLocked`). Migration 0036 adds the unique index `participants_event_nickname_unique` (event, lower(nickname)); a simultaneous save of the same name gives 409 for one of them.
+- Participant screen: `LiveQuiz` now has `nickname` and `nicknameLocked`; `QuizForm` shows `NicknameForm` (explains the name appears on the leaderboard) in place of the options until a name is set, then "Playing as X" with "Change nickname" until the first answer is sent; the same participant token keeps the name across reloads. Keys in en and id.
+- Fixed a slip from US-042: the `qa` module's `live` had been overwritten with a copy of the quiz payload (a live Q&A would have sent participants a bogus quiz). It is `live: async () => null` again, with a test.
+- Files: db/schema.ts, db/migrations/0036_*, lib/{nickname,quiz-limits,live-view,interaction-modules}.ts, app/api/events/[id]/nickname/route.ts, components/{nickname-form,quiz-form,live-view,ui/button}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{nickname.test.ts,quiz-ui.test.tsx,interaction-modules.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-nickname.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - `Button` now takes a `ref` (React 19 passes it as a prop); used to return focus to "Change nickname".
+  - A `hidden` attribute does not hide an element whose class sets `display: grid`; render conditionally instead.
+  - In Playwright, `getByRole("alert")` also matches Next's route announcer; use `.ui-error`.
+  - The nickname is not required to answer (server side), so US-046 needs a fallback label for participants without one.
+  - A first-time nickname form does not autofocus (no keyboard pop-up on phones); the form opened by "Change nickname" does.
+  - The countdown keeps running while a participant picks a name (the form says so); the server deadline is not affected.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-nickname.mjs): empty, taken, profane and valid names, change, focus return, answer locks the name, reload keeps it; no horizontal overflow, only the expected 400/409 console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0036.
+---
+
+## 2026-10-21 - US-046
+- Quiz standings on screen. Presenter: a closed quiz question now shows the cumulative top 10 (rank, nickname, points) under the answer (`PresenterQuiz.leaderboard`, `LeaderboardList`). Participant: the closed-question result adds "Rank n of N" and the running total (`QuizOutcome.standing`; "not on the leaderboard yet" when unranked). Final podium: "End quiz and show podium" on the presenter opens `PresenterPodium` (top 3 from new `GET /api/events/[id]/leaderboard?limit=`), steps rise third to first, no animation under `prefers-reduced-motion`; `?view=podium` survives a reload. CSV: `section,rank,nickname,points,correct_answers`, once per event (carried by the first quiz question), nickname fallback "Player".
+- Migration 0037: `quiz_scores.correct_count` (backfilled from closed quiz answers), written by `persistClosedQuestion`.
+- Files: db/schema.ts, db/migrations/0037_*, lib/leaderboard/{index,standings}.ts, lib/{quiz,presenter,interaction-modules}.ts, app/api/events/[id]/leaderboard/route.ts, app/present/[eventId]/page.tsx, components/{leaderboard-list,presenter-podium,presenter-quiz,presenter-view,quiz-form}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{quiz-leaderboard.test.ts,presenter-view.test.tsx,quiz-ui.test.tsx,quiz-answer.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-leaderboard.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - "Host ends the quiz" has no stored state (no column): it is a presenter screen like the Q&A one. Participants are not sent a podium message; they keep their last result. A stored "ended" state would need a migration and a participant screen.
+  - The event CSV merges tables with equal headers, so an event-wide table must be emitted by one interaction only (here the first quiz), or it repeats once per question.
+  - The first request to a new API route in `next dev` takes ~3 s to compile; wait for the element, not a fixed delay.
+  - `correct_count` backfill counts closed answers that predate a host reset (the reset only deleted the score rows); new data is exact.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-leaderboard.mjs): four players, two questions, top 10 after each close, participant rank, podium with a 20-character name, reload on `?view=podium`, reduced-motion computed `animation-name: none`; no horizontal overflow, no console errors. The fixed presenter buttons overlap the last row at 360 (as on other presenter screens). Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0037.
+---
+
+## 2026-10-21 - US-047
+- `scripts/load/quiz.mjs`: against a running server on the test DB it signs up a host (marks it verified and Pro in the test DB, and stops if the host is not found there), creates an event with N quiz questions, joins 500 participants (nickname + Socket.IO each, own `x-real-ip` per phone), runs the questions with answers spread over a few seconds, closes right after the last ack and prints presenter time and phone p50/p95/max from the last answer to the leaderboard. `--out docs/load-test-quiz.md` writes the report with the machine description. Exit code 1 if p95 >= 1 s.
+- First run missed the target (presenter 1.4-1.9 s, phones p95 1.8 s). Cause: 500 simultaneous `quiz-result` GETs (about 2 ms of Next request overhead each, one Node process) plus a full sort per `rankOf`. Fixed: `publishQuizOutcomes` pushes each participant `quiz:outcome` to a personal room when a quiz question closes; `QuizForm` uses it and falls back to the GET after 3 s; `MemoryLeaderboardStore` caches the sorted ranking per event. Rerun: presenter 100-140 ms, phones p95 about 100 ms.
+- Files: scripts/load/quiz.mjs, docs/load-test-quiz.md, lib/{quiz,interaction-state}.ts, lib/leaderboard/memory.ts, lib/realtime/{publisher,socket-server}.ts, components/{quiz-form,live-view}.tsx, tests/{quiz-leaderboard,leaderboard}.test.ts, tests/quiz-ui.test.tsx, CLAUDE.md
+- **Learnings for future iterations:**
+  - Measure before optimising: 500 plain requests to `/api/health` take about 1 s on this 2-vCPU box, so any "everyone fetches at once" screen costs about a second of server time; push per-participant data over the socket instead (`publish(..., {participantId})`).
+  - Load test server: `NEXT_DIST_DIR=.next-load npx next build`, then `NEXT_DIST_DIR=.next-load PORT=3300 NODE_ENV=production DATABASE_URL=$TEST_DATABASE_URL npx tsx server.ts` (dev mode would measure compile time). The build rewrites next-env.d.ts/tsconfig.json: `git checkout` them. Kill the server by PID from `ss -ltnp`.
+  - Rate limits are per IP (join 300/min), so the script sends a different `x-real-ip` per simulated phone. A real room behind one venue address would hit the 300/min join limit when 500 people join within a minute; the story did not ask to change it.
+  - `QuizForm` registers its `quiz:outcome` listener for the life of the form (not only once closed), because the push follows `state-changed` closely; the fallback GET timer is a separate effect that stops once a result exists.
+  - No visible UI change (same result screen), so no screenshots.
+---
+
+## 2026-10-21 - US-048
+- Survey type, storage and submit API. `survey` joins `interactions.type` and `template_items.type`; migration 0038 adds `survey_submissions` (unique per participant) and `survey_answers` (submission, question id, jsonb value), both cascading. Config is `questions` only (1-20; choice with 2-10 options and `multiple`, rating with `scale`, openText; each with `required`); the survey name is `interactions.title` (`title` in the body, required on create). Create, PATCH (a `questions` key replaces the list) and duplicate (`copyConfig` gives new question and option ids) are wired.
+- `POST /api/interactions/[id]/survey {answers}` (`submitSurvey`, lib/survey.ts): live only, each answer checked against its question; 400 carries `questionId` (and `missing`, all unanswered required ids); second submission 409 "Already submitted"; profanity filter on open text; host-only `survey:results`. Module registered: `results` (total, completed, per-question counts/percent, rating average/distribution, latest open-text answers), `csv` (one row per submission, columns `N. Question text`, no identifiers), `responseCount`; `presenter`/`live` are null until US-049..051.
+- Files: db/schema.ts, db/migrations/0038_*, lib/{survey,survey-limits,interaction-config,interaction-copy,interaction-modules,type-labels}.ts, app/api/interactions/[id]/survey/route.ts, components/{type-icon,poll-manager}.tsx, lib/i18n/{en,id}.ts, tests/{survey,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - US-050 wants a live survey beside another live interaction, but `interactions_one_live_per_event` forbids two live rows per event: the index (and `startInteraction`, which pauses the current live one) must exempt surveys, with a migration.
+  - The CSV header holds the question texts, so surveys with different questions do not merge into one table of the event CSV; each gets its own block (the ZIP has one file each anyway).
+  - `poll-manager.tsx`'s `Kind` (builder kinds) was left without `survey`; `InteractionItem.type` and `IconKind` have it so the library lists surveys. US-049 adds the builder kind and an Add content entry (label key `pollMgr.type.survey` exists).
+  - The percent of a multi-choice question is of respondents who answered it, so the percents can add up to more than 100.
+  - No UI change, no browser check. Full suite 1137 tests green (~425 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0038.
+---
+
+## 2026-10-21 - US-049
+- Survey host builder. "New survey" in Add content (plan-locked like other types) and Edit on a draft open `SurveyBuilder`: survey name, 1-20 questions, each with a kind (choice, rating, open text), question text, required, and per kind its options (2-10, add/remove), "Allow several answers" or the scale. Questions move with ↑/↓ buttons (focus stays on the pressed button, polite status "Question moved to position n of N"), remove is disabled at one question, add at 20. "Show preview" renders `SurveyPreview`, a disabled picture of the participant form that updates as the host types. Unsaved changes warn: `beforeunload`, a confirm on in-app link clicks, and a discard dialog on Cancel. Saving posts/PATCHes `{type: "survey", title, questions}` with client-made ids; renaming sends `{title}`.
+- Files: components/{survey-builder,survey-preview,poll-manager}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{survey-builder.test.tsx,poll-manager.test.tsx,no-inline-strings.test.ts}, scripts/ralph/screens/survey-builder.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks lint forbids reading a ref during render: the "saved snapshot" for the dirty check is a lazy `useState`, not a ref.
+  - Playwright `getByLabel` matches substrings: "Option 1 of question 1" also hits "Remove option 1 of question 1"; use `getByRole("textbox", {name})` or `{exact: true}`. A new event has a default draft Q&A, so there are two Edit buttons; the survey is `.last()`.
+  - A test for a link guard cannot rely on `fireEvent.click` return value when the link has its own preventDefault; count the link's React handler calls instead (the capture-phase guard stops propagation before React sees the click).
+  - US-050 (participant form) can reuse the `rating-scale`/`rating-choice` classes; the preview renders them inside a disabled fieldset. US-050 must still exempt surveys from `interactions_one_live_per_event` (see US-048 notes).
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-builder.mjs): build three kinds, move, preview, save, edit, leave with changes (confirm dialog shown and honoured); no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---
+
+## 2026-10-21 - US-050
+- Survey participant link and form. `/survey/<interactionId>` (`app/survey/[id]/page.tsx`, `SurveyForm`) works while the survey is live, also beside another live interaction: migration 0039 changes `interactions_one_live_per_event` to `state = 'live' and type <> 'survey'`, `startInteraction` neither pauses the live interaction when a survey starts nor pauses a live survey when something else starts, and every "the live interaction" lookup (`getLiveInteraction`, `getPresenterState`, `ensureQaInteraction`) skips surveys. The presenter's next/previous steps over surveys; `PollManager`'s local state update matches the server.
+- Reaching the link calls `POST /api/interactions/[id]/survey/join`: cookie participant reused, else created through the new `ensureParticipant` (lib/participants.ts, now also used by `/api/join`) under the participant limit; 409 unless live. Page states: open form, "not open yet" (draft/paused), "closed"; questions are only sent while live. Form: progress bar and "n of N answered", Required/Optional per question, one message per unanswered required question plus a summary, focus on the first control of the first one, summary clears with the last message; 409 `reason: "alreadySubmitted"` or a returning participant shows "Already submitted". Host: "Copy link" on each survey row (`SurveyLinkButton`).
+- Files: db/schema.ts, db/migrations/0039_*, lib/{participants,survey-page,survey,interaction-state,live-view,presenter,questions}.ts, app/{survey/[id]/page.tsx,api/join/route.ts,api/interactions/[id]/survey/{route,join/route}.ts,globals.css}, components/{survey-form,survey-link,poll-manager,presenter-view}.tsx, lib/i18n/{en,id}.ts, tests/{survey,survey-form,no-inline-strings}, scripts/ralph/screens/survey-form.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - A Server Component page cannot set cookies, so a page that must create a participant needs a route handler the client calls on arrival.
+  - Detect "already submitted" by a `reason` code in the body, never by comparing the translated message.
+  - A new "find the live one" query must exclude surveys; US-051's presenter results for a survey cannot come from `getPresenterState`, which now ignores live surveys.
+  - An always-rendered empty `role="status"` per list row breaks tests that query a single status; use `aria-live="polite"` for per-row confirmations.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-form.mjs): not open, empty, errors with focus on the first question, filled, thanks, reload shows already submitted, closed, a live poll still shown on the event screen while the survey is live, link copied to the clipboard; no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0039.
+  - Full suite: 1165 tests; one failure came from the empty status span (fixed); the rest were green.
+---
+
+## 2026-10-21 - US-051
+- Survey results on the projector. `/present/<eventId>?view=survey&survey=<id>` opens `PresenterSurvey` (new `survey` presenter screen, `getSurveyPresenter`, `GET /api/events/[id]/present?survey=`): response and completed counts on top, then a card per question: choice bars with printed count and percent, rating average plus distribution (`RatingChart`), latest open-text answers. It follows host-only `survey:results` live and refetches on `state-changed`; a closed survey says "(closed)"; an unknown or draft id falls back to the plain screen. The survey module's `presenter` now returns the state (`presentWhenClosed: false`). The library row gets "Show results" once the survey is not a draft; its response count already came from the registry.
+- `e2e/interactions.spec.ts`: ranking submit and presenter result; quiz with two players, close, leaderboard, rank on the phones and podium; survey sent, second submit refused (page and API 409 `alreadySubmitted`), library count and results screen. All run on the test DB.
+- Files: lib/{presenter,interaction-modules}.ts, app/{present/[eventId]/page.tsx,api/events/[id]/present/route.ts,globals.css}, components/{presenter-survey,presenter-view,poll-manager}.tsx, lib/i18n/{en,id}.ts, tests/{survey.test.ts,presenter-survey.test.tsx,no-inline-strings.test.ts}, e2e/interactions.spec.ts, scripts/ralph/screens/survey-results.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - A quiz leaderboard lists everyone who answered, so a wrong answer still ranks (0 points, rank 2 of 2).
+  - E2E setup through `page.request.post` to the API shares the host's cookies and is much faster and steadier than building content in the UI; the participant side stays in the UI.
+  - "Completed" in survey results means every question answered, so a survey with optional questions shows few completed; the screen prints both numbers.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/survey-results.mjs): empty, six responses arriving live, closed, reload keeps the screen, back button, bad id fallback, library row; no horizontal overflow, no console errors. The fixed presenter buttons overlap content in full-page captures (as on other presenter screens). Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---
