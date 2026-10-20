@@ -33,6 +33,7 @@ function row(overrides: Partial<SubscriptionRow> = {}): SubscriptionRow {
     status: "active",
     interval: "month",
     currentPeriodEnd: daysFromNow(10),
+    pastDueSince: null,
     provider: null,
     providerCustomerId: null,
     providerSubscriptionId: null,
@@ -121,6 +122,17 @@ describe("resolveEntitlements", () => {
       NOW,
     );
     expect(over).toMatchObject({ plan: "free", source: "free", graceEndsAt: null });
+  });
+
+  it("counts the grace period from pastDueSince, whatever the period end says", () => {
+    const since = daysFromNow(-(PAST_DUE_GRACE_DAYS - 1));
+    const within = resolveEntitlements(row({ status: "past_due", pastDueSince: since, currentPeriodEnd: daysFromNow(25) }), NOW);
+    expect(within).toMatchObject({ plan: "pro", graceEndsAt: new Date(since.getTime() + PAST_DUE_GRACE_DAYS * DAY) });
+    const over = resolveEntitlements(
+      row({ status: "past_due", pastDueSince: daysFromNow(-(PAST_DUE_GRACE_DAYS + 1)), currentPeriodEnd: daysFromNow(25) }),
+      NOW,
+    );
+    expect(over.plan).toBe("free");
   });
 
   it("an override replaces the paid plan, with or without a stored subscription", () => {

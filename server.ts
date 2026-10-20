@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { config, parse } from "dotenv";
 import next from "next";
+import { startSubscriptionSweep } from "./lib/billing/expire";
 import { attachSocketServer } from "./lib/realtime/socket-server";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -25,6 +26,7 @@ app.prepare().then(() => {
     handle(req, res);
   });
   attachSocketServer(httpServer);
+  startSubscriptionSweep();
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });

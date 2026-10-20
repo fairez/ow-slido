@@ -204,6 +204,13 @@
       "when": 1792492728538,
       "tag": "0028_fantastic_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792494758049,
+      "tag": "0029_rainy_inhumans",
+      "breakpoints": true
     }
   ]
 }

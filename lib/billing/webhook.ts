@@ -12,7 +12,12 @@ export type WebhookResult = "applied" | "duplicate" | "ignored";
  * nothing behind and the provider's retry applies it. A redelivered id hits the unique key and does nothing.
  * Plan overrides are left alone: they win over the paid plan in `resolveEntitlements`.
  */
-export async function applyBillingEvent(provider: string, event: BillingEvent, db: Db = getDb()): Promise<WebhookResult> {
+export async function applyBillingEvent(
+  provider: string,
+  event: BillingEvent,
+  db: Db = getDb(),
+  now: Date = new Date(),
+): Promise<WebhookResult> {
   return db.transaction(async (tx) => {
     const [workspace] = await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, event.workspaceId));
     if (!workspace) return "ignored";
@@ -24,15 +29,24 @@ export async function applyBillingEvent(provider: string, event: BillingEvent, d
       .returning({ id: billingEvents.id });
     if (inserted.length === 0) return "duplicate";
 
+    // The grace clock starts when the subscription first turns past_due and stops with any other status.
+    const [existing] = await tx
+      .select({ pastDueSince: subscriptions.pastDueSince })
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, event.workspaceId))
+      .for("update");
+    const pastDueSince = event.status === "past_due" ? (existing?.pastDueSince ?? now) : null;
+
     const state = {
       plan: event.plan,
       status: event.status,
       interval: event.interval,
       currentPeriodEnd: event.currentPeriodEnd,
+      pastDueSince,
       provider,
       providerCustomerId: event.providerCustomerId,
       providerSubscriptionId: event.providerSubscriptionId,
-      updatedAt: new Date(),
+      updatedAt: now,
     };
     await tx
       .insert(subscriptions)

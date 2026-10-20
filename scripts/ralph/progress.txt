@@ -277,3 +277,13 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Not handled: switching a Free-plan workspace that has a canceled subscription still opens a fresh checkout (intended); an owner on a hand-set override who pays gets a subscription that the override still masks.
   - Screenshots at 360/1280 (free monthly/yearly, after checkout, cancel dialog, canceled, past due, dark): no overflow, no console errors, Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB. Full suite: 817 tests green; e2e billing spec passes.
 ---
+## 2026-10-20 - US-025
+- Grace now counts from when the subscription first turned `past_due` (new `subscriptions.past_due_since`, migration 0029), not from `current_period_end`: on a failed renewal Stripe has already moved the period end a month ahead, so the old rule would have given ~37 days. `applyBillingEvent` sets it on the first `past_due`, keeps it while the status stays, clears it on any other status (recovery). Rows stored before the column fall back to `currentPeriodEnd`.
+- Added `expireSubscriptions(db, now)` (lib/billing/expire.ts): writes `plan: free` for past_due/canceled rows whose paid access ended (overrides ignored in the decision, left untouched), returns the workspace ids it changed. `startSubscriptionSweep()` runs it at boot and every 24h from server.ts (timer is unref'd). `getEntitlements` still answers Free from the dates alone, so nothing depends on the job.
+- Files: db/schema.ts, db/migrations/0029_*, lib/plans.ts, lib/billing/{webhook,expire}.ts, server.ts, tests/{billing-grace,plans,plan-overview}.test.*, CLAUDE.md
+- **Learnings for future iterations:**
+  - `applyBillingEvent` and `expireSubscriptions` take `now` so fixed-date tests need no fake timers.
+  - US-026 can use the list `expireSubscriptions` returns (workspaces that just lost paid access) to suspend extra members once; it can also run the same step from a downgrade webhook.
+  - A resubscribe after the write-back works: the next active event upserts `plan` back to the paid tier.
+  - No UI change, so no browser check. Full suite: 826 tests green; typecheck and lint clean for source files (lint noise is only in screens/*.mjs and nested .next dirs, as before). Test and dev DBs migrated to 0029.
+---

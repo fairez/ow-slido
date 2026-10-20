@@ -97,7 +97,7 @@ export const PLAN_PRICES: Record<Exclude<PlanId, "free">, { currency: string; mo
   team: { currency: "USD", month: 4900, year: 49000 },
 };
 
-/** How long a `past_due` workspace keeps its paid plan after the period it failed to pay for ended. */
+/** How long a `past_due` workspace keeps its paid plan, counted from `pastDueSince`. */
 export const PAST_DUE_GRACE_DAYS = 7;
 const DAY_MS = 86_400_000;
 
@@ -130,7 +130,8 @@ export type Entitlements = {
  * Pure part of `getEntitlements`: which plan applies to this row at `now`.
  * - A valid override (not past `planOverrideUntil`) wins over everything.
  * - `active` and `trialing` give the stored plan.
- * - `past_due` keeps the stored plan until `currentPeriodEnd` + the grace days.
+ * - `past_due` keeps the stored plan until `pastDueSince` + the grace days (rows stored before that column
+ *   existed count from `currentPeriodEnd`).
  * - `canceled` keeps the stored plan until `currentPeriodEnd`.
  * - No row, or any case not covered above, is Free.
  */
@@ -164,7 +165,8 @@ export function resolveEntitlements(row: SubscriptionRow | null, now: Date = new
     case "trialing":
       return done(row.plan, "subscription");
     case "past_due": {
-      const graceEndsAt = end ? new Date(end.getTime() + PAST_DUE_GRACE_DAYS * DAY_MS) : null;
+      const start = row.pastDueSince ?? end;
+      const graceEndsAt = start ? new Date(start.getTime() + PAST_DUE_GRACE_DAYS * DAY_MS) : null;
       if (graceEndsAt && graceEndsAt.getTime() > now.getTime()) return done(row.plan, "subscription", { graceEndsAt });
       return done("free", "free");
     }

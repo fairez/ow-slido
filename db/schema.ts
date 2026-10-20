@@ -106,6 +106,8 @@ export const subscriptions = pgTable(
       .notNull()
       .default("month"),
     currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    /** When the subscription first turned `past_due`; the grace period counts from here. Null otherwise. */
+    pastDueSince: timestamp("past_due_since", { withTimezone: true }),
     provider: text("provider"),
     providerCustomerId: text("provider_customer_id"),
     providerSubscriptionId: text("provider_subscription_id"),

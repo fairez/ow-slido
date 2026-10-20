@@ -32,6 +32,7 @@ function row(patch: Partial<SubscriptionRow>): SubscriptionRow {
     status: "active",
     interval: "month",
     currentPeriodEnd: new Date("2026-11-01T00:00:00Z"),
+    pastDueSince: null,
     provider: null,
     providerCustomerId: null,
     providerSubscriptionId: null,
