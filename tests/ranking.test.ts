@@ -110,6 +110,11 @@ test("scoreRanking gives first place N points and last place 1", () => {
   ]);
 });
 
+test("scoreRanking counts how many submissions put each option at each position", () => {
+  const scores = scoreRanking(opts, [["a", "b", "c"], ["a", "c", "b"], ["b"]]);
+  expect(Object.fromEntries(scores.map((s) => [s.id, s.positions]))).toEqual({ a: [2, 0, 0], b: [1, 1, 1], c: [0, 1, 1] });
+});
+
 test("scoreRanking shares a rank between ties, skips the next one, and keeps the host's option order", () => {
   const scores = scoreRanking(opts, [["a", "b", "c"], ["b", "a", "c"]]);
   expect(scores.map((s) => [s.id, s.score, s.rank])).toEqual([
@@ -250,8 +255,10 @@ test("the module counts submissions, scores them and exports a CSV without parti
   });
   const csv = await buildInteractionCsv("ranking", rankingId);
   expect(csv).toBe(
-    "section,title,rank,option,score,rankings\r\n" +
-      "ranking,Rank these,1,Alpha,6,2\r\nranking,Rank these,2,Beta,3,2\r\nranking,Rank these,2,Gamma,3,2\r\n",
+    "section,title,rank,option,score,rankings,position_1,position_2,position_3,position_4,position_5,position_6,position_7,position_8,position_9,position_10\r\n" +
+      "ranking,Rank these,1,Alpha,6,2,2,0,0,,,,,,,\r\n" +
+      "ranking,Rank these,2,Beta,3,2,0,1,1,,,,,,,\r\n" +
+      "ranking,Rank these,2,Gamma,3,2,0,1,1,,,,,,,\r\n",
   );
   const ids = (await db.select({ id: participants.id }).from(participants)).map((p) => p.id);
   for (const id of ids) expect(csv).not.toContain(id);

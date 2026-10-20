@@ -3,6 +3,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { INTERACTION_MODULES, interactionModule } from "@/lib/interaction-modules";
 import type { PublicResponse } from "@/lib/open-text";
+import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
 import type { PublicNote } from "@/lib/shared-notes";
 import type { WordCount } from "@/lib/wordclouds";
@@ -44,7 +45,15 @@ export type PresenterRating = {
   results: RatingResults;
 };
 
-export type PresenterState = PresenterPoll | PresenterWordcloud | PresenterNotes | PresenterOpenText | PresenterRating;
+export type PresenterRanking = {
+  type: "ranking";
+  id: string;
+  title: string;
+  state: "live" | "paused" | "closed";
+  results: RankingResults;
+};
+
+export type PresenterState = PresenterPoll | PresenterWordcloud | PresenterNotes | PresenterOpenText | PresenterRating | PresenterRanking;
 
 /** The live interaction, or the shared-notes, open-text or rating interaction named by `closedNotesId` once it has closed. */
 export async function getPresenterState(eventId: string, closedNotesId?: string): Promise<PresenterState | null> {

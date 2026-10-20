@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { PresenterOpenText } from "@/components/presenter-open-text";
+import { PresenterRanking } from "@/components/presenter-ranking";
 import { PresenterRating } from "@/components/presenter-rating";
 import { PresenterNotes } from "@/components/presenter-notes";
 import { PresenterQa } from "@/components/presenter-qa";
@@ -13,6 +14,7 @@ import { WordCloud } from "@/components/word-cloud";
 import type { PresenterState } from "@/lib/presenter";
 import { applyQuestionEvent, type QaSort } from "@/lib/question-order";
 import type { PublicQuestion } from "@/lib/question-types";
+import type { RankingResults } from "@/lib/ranking";
 import type { RatingResults } from "@/lib/rating";
 import type { PublicResponse } from "@/lib/open-text";
 import type { PublicNote } from "@/lib/shared-notes";
@@ -208,6 +210,8 @@ export function PresenterView({
       forResponses(msg.interactionId, (list) => list.filter((r) => r.id !== msg.responseId));
     const onRating = (msg: { results: RatingResults }) =>
       setPoll((cur) => (cur && cur.type === "rating" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
+    const onRanking = (msg: { results: RankingResults }) =>
+      setPoll((cur) => (cur && cur.type === "ranking" && cur.id === msg.results.interactionId ? { ...cur, results: msg.results } : cur));
     // Only the shown Q&A's messages apply; another Q&A of the event stays off this screen.
     const onQuestion = (name: "question:added" | "question:votes" | "question:updated" | "question:removed") => (msg: { interactionId?: string }) => {
       if (msg.interactionId === qaId) setQuestions((cur) => applyQuestionEvent(cur, { name, ...msg } as never));
@@ -221,6 +225,7 @@ export function PresenterView({
     socket.on("question:updated", onQuestionUpdated);
     socket.on("question:removed", onQuestionRemoved);
     socket.on("rating:results", onRating);
+    socket.on("ranking:results", onRanking);
     socket.on("response:added", onResponse);
     socket.on("response:updated", onResponse);
     socket.on("response:removed", onResponseRemoved);
@@ -238,6 +243,7 @@ export function PresenterView({
       socket.off("question:updated", onQuestionUpdated);
       socket.off("question:removed", onQuestionRemoved);
       socket.off("rating:results", onRating);
+      socket.off("ranking:results", onRanking);
       socket.off("response:added", onResponse);
       socket.off("response:updated", onResponse);
       socket.off("response:removed", onResponseRemoved);
@@ -330,6 +336,16 @@ export function PresenterView({
       <section aria-labelledby="present-title">
         {head(poll.title)}
         <PresenterRating results={poll.results} closed={poll.state === "closed"} />
+        {extras}
+      </section>
+    );
+  }
+
+  if (poll.type === "ranking") {
+    return (
+      <section aria-labelledby="present-title">
+        {head(poll.title)}
+        <PresenterRanking results={poll.results} closed={poll.state === "closed"} />
         {extras}
       </section>
     );

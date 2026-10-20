@@ -225,8 +225,60 @@ describe("PollManager content list", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const items = screen.getAllByRole("listitem").map((li) => li.textContent?.trim());
-    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New Q&A"]);
+    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New ranking", "New Q&A"]);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
+  });
+  it("adds a ranking with its prompt and options, and keeps the option limits", async () => {
+    const created: InteractionItem = {
+      id: "r1",
+      type: "ranking",
+      title: "Top priority",
+      state: "draft",
+      position: 0,
+      config: { prompt: "Top priority", options: [{ id: "x", text: "Speed" }, { id: "y", text: "Cost" }] },
+    };
+    const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
+    fireEvent.click(screen.getByRole("button", { name: "New ranking" }));
+    expect(screen.queryByLabelText("Allow selecting several options")).toBeNull();
+    expect((screen.getByRole("button", { name: "Remove option 1" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Top priority" } });
+    fireEvent.change(screen.getByLabelText("Option 1"), { target: { value: "Speed" } });
+    fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Cost" } });
+    for (let i = 0; i < 8; i++) fireEvent.click(screen.getByRole("button", { name: "Add option" }));
+    expect(screen.getAllByLabelText(/^Option \d+$/)).toHaveLength(10);
+    expect((screen.getByRole("button", { name: "Add option" }) as HTMLButtonElement).disabled).toBe(true);
+    for (let i = 3; i <= 10; i++) fireEvent.change(screen.getByLabelText(`Option ${i}`), { target: { value: `Extra ${i}` } });
+    fireEvent.click(screen.getByRole("button", { name: "Save ranking" }));
+    await waitFor(() => expect(screen.getByText("Top priority")).toBeTruthy());
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ type: "ranking", prompt: "Top priority" });
+    expect(body.options).toHaveLength(10);
+    expect(body.options[0]).toEqual({ text: "Speed" });
+  });
+
+  it("edits a draft ranking with its option texts and ids, and shows the server's error", async () => {
+    const ranking: InteractionItem = {
+      id: "r1",
+      type: "ranking",
+      title: "Top priority",
+      state: "draft",
+      position: 0,
+      config: { prompt: "Top priority", options: [{ id: "x", text: "Speed" }, { id: "y", text: "Cost" }] },
+    };
+    const fetchMock = vi.fn(async () => Response.json({ error: "A ranking needs 2 to 10 options" }, { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[ranking]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect((screen.getByLabelText("Option 1") as HTMLInputElement).value).toBe("Speed");
+    fireEvent.click(screen.getByRole("button", { name: "Save ranking" }));
+    await waitFor(() => expect(screen.getByText("A ranking needs 2 to 10 options")).toBeTruthy());
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/events/e/interactions/r1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string).options).toEqual([{ id: "x", text: "Speed" }, { id: "y", text: "Cost" }]);
   });
 });

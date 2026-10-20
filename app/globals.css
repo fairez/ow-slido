@@ -1495,6 +1495,17 @@ a.ui-button:not([data-variant]) {
   background: var(--accent);
 }
 
+.present-ranking > li > .present-track {
+  height: clamp(20px, 2.2vw, 32px);
+}
+
+.present-rank {
+  display: inline-block;
+  min-width: 2.5ch;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
 .rating-chart {
   display: grid;
   gap: var(--space-2);

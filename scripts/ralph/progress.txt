@@ -445,3 +445,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Options start in the host's order; a participant who submits without touching the list sends that order.
   - Browser check done at 360 and 1280, light and dark: no horizontal overflow, drag, buttons, focus, send and reload verified.
 ---
+
+## 2026-10-20 - US-039
+- Ranking host side. Builder: "New ranking" in Add content (prompt + 2-10 options, 80 chars each, same option rows as a poll; the poll-only toggles are hidden; server validation errors show inline; edit of a draft sends the option ids back so they stay stable). Presenter: ranking module `presenter` returns `PresenterRanking` (live, or closed when named), `PresenterView` renders `PresenterRanking` and updates from host-only `ranking:results`; each row prints `#rank`, the text and "n points", the bar only repeats them (ties share a rank). CSV: `scoreRanking` now returns `positions` (counts per position) and the CSV has `rank,option,score,rankings,position_1..position_10`.
+- Files: lib/{ranking,interaction-modules,presenter}.ts, components/{presenter-ranking,presenter-view,poll-manager}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{ranking,presenter,presenter-view,poll-manager,no-inline-strings}.*, scripts/ralph/screens/ranking-host.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - The CSV position columns are fixed at 10 on purpose: `tablesToCsv` merges tables with identical headers, so a header that depends on the option count would split one event into several files.
+  - Poll option inputs use `aria-label="Option n"` and the remove buttons `Remove option n`; `getByLabel("Option 1")` matches both, so use `getByRole("textbox", { name })` in Playwright.
+  - The CSV route is `/api/events/[id]/export.csv`.
+  - Browser check at 360 and 1280 (builder, list, presenter with 5 submitted rankings): no horizontal overflow, no console errors; the fixed presenter buttons overlap the last row at 360 (same as other presenter screens; the presenter is a projector screen). Killed my dev server on :3200, restored next-env.d.ts/tsconfig.json.
+  - Full suite 996 tests green, typecheck and eslint (source dirs) clean. Not run: e2e (no ranking e2e exists yet).
+---

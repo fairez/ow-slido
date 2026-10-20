@@ -22,6 +22,7 @@ import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
+import { RANKING_MAX_OPTIONS } from "@/lib/ranking-limits";
 import { computeResults, getPresenterResults } from "@/lib/rating";
 import { listPresenterNotes } from "@/lib/shared-notes";
 import { getPollCounts } from "@/lib/votes";
@@ -34,7 +35,16 @@ export const EXPORT_HEADER = ["section", "title", "item", "count", "author"] as 
 export const NOTES_EXPORT_HEADER = ["section", "title", "note", "status", "pinned", "upvotes", "author"] as const;
 export const OPEN_TEXT_EXPORT_HEADER = ["section", "title", "response", "highlighted"] as const;
 export const RATING_EXPORT_HEADER = ["section", "title", "scale", "average", "total", "value", "count"] as const;
-export const RANKING_EXPORT_HEADER = ["section", "title", "rank", "option", "score", "rankings"] as const;
+/** `position_1`..`position_10`: submissions that put the option there; columns past the option count stay empty. */
+export const RANKING_EXPORT_HEADER = [
+  "section",
+  "title",
+  "rank",
+  "option",
+  "score",
+  "rankings",
+  ...Array.from({ length: RANKING_MAX_OPTIONS }, (_, i) => `position_${i + 1}`),
+] as const;
 export const ANALYSIS_EXPORT_HEADER = ["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"] as const;
 
 /**
@@ -350,7 +360,15 @@ const rankingModule: InteractionModule = {
     return [
       {
         header: RANKING_EXPORT_HEADER,
-        rows: results.options.map((o) => ["ranking", row.title, o.rank, o.text, o.score, results.total]),
+        rows: results.options.map((o) => [
+          "ranking",
+          row.title,
+          o.rank,
+          o.text,
+          o.score,
+          results.total,
+          ...Array.from({ length: RANKING_MAX_OPTIONS }, (_, i) => o.positions[i] ?? ""),
+        ]),
       },
     ];
   },
@@ -359,8 +377,16 @@ const rankingModule: InteractionModule = {
       db().select({ n: sql<number>`count(*)::int` }).from(rankingResponses).where(eq(rankingResponses.interactionId, interactionId)),
     );
   },
-  // The presenter screen arrives with the host-side ranking story.
-  presenter: async () => null,
+  async presenter(row) {
+    if (row.state !== "live" && row.state !== "closed") return null;
+    return {
+      type: "ranking",
+      id: row.id,
+      title: row.title,
+      state: row.state,
+      results: await computeRankingResults(db(), row.id, row.config),
+    };
+  },
   async live(row, participantId) {
     const c = row.config as Partial<RankingConfig>;
     let mine: string[] | null = null;

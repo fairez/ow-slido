@@ -98,3 +98,31 @@ test("returns rating results for a live rating and a named closed one", async ()
   expect(await getPresenterState(eventId)).toBeNull();
   expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "rating", state: "closed" });
 });
+
+test("returns ranking scores for a live ranking and a named closed one, without participant ids", async () => {
+  const { rankingResponses, participants } = await import("@/db/schema");
+  const options = [
+    { id: "a", text: "Alpha" },
+    { id: "b", text: "Beta" },
+  ];
+  const [row] = await db
+    .insert(interactions)
+    .values({ eventId, type: "ranking", title: "Rank", position: 0, state: "live", config: { prompt: "Rank", options } })
+    .returning();
+  const ps = await db.insert(participants).values([{ eventId }, { eventId }]).returning();
+  await db.insert(rankingResponses).values([
+    { interactionId: row.id, participantId: ps[0].id, order: ["b", "a"] },
+    { interactionId: row.id, participantId: ps[1].id, order: ["b", "a"] },
+  ]);
+  const live = await getPresenterState(eventId);
+  expect(live).toMatchObject({
+    type: "ranking",
+    state: "live",
+    results: { total: 2, options: [{ text: "Beta", score: 4, rank: 1 }, { text: "Alpha", score: 2, rank: 2 }] },
+  });
+  expect(JSON.stringify(live)).not.toContain(ps[0].id);
+  await db.update(interactions).set({ state: "paused" });
+  expect(await getPresenterState(eventId)).toBeNull();
+  await db.update(interactions).set({ state: "closed" });
+  expect(await getPresenterState(eventId, row.id)).toMatchObject({ type: "ranking", state: "closed" });
+});

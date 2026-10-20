@@ -12,6 +12,7 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
+import { RANKING_MAX_OPTIONS, RANKING_MIN_OPTIONS, RANKING_OPTION_MAX } from "@/lib/ranking-limits";
 import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
 import { SaveTemplateDialog, type SaveTarget } from "@/components/save-template-dialog";
@@ -31,7 +32,7 @@ export type InteractionItem = {
   state: "draft" | "live" | "paused" | "closed";
   position: number;
   config: {
-    options?: { id: string; label: string }[];
+    options?: { id: string; label?: string; text?: string }[];
     multiSelect?: boolean;
     showResultsToParticipants?: boolean;
     prompt?: string;
@@ -45,7 +46,7 @@ export type InteractionItem = {
   };
 };
 
-type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa";
+type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking";
 const STATE_LABELS: Record<InteractionItem["state"], MessageKey> = {
   draft: "pollMgr.state.draft",
   live: "pollMgr.state.live",
@@ -60,6 +61,7 @@ const REFRESH_EVENTS = [
   "poll:counts",
   "wordcloud:words",
   "rating:results",
+  "ranking:results",
   "response:added",
   "response:removed",
   "note:added",
@@ -80,6 +82,7 @@ const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
   { kind: "sharedNotes", label: "pollMgr.newSharedNotes" },
   { kind: "openText", label: "pollMgr.newOpenText" },
   { kind: "rating", label: "pollMgr.newRating" },
+  { kind: "ranking", label: "pollMgr.newRanking" },
   { kind: "qa", label: "pollMgr.newQa" },
 ];
 
@@ -192,6 +195,8 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
             moderation: draft.moderated ? "moderated" : "open",
             profanityFilter: draft.profanity,
           }
+        : draft.kind === "ranking"
+        ? { type: "ranking", prompt: draft.question, options: draft.options.map((o) => ({ id: o.id, text: o.label })) }
         : draft.kind === "rating"
         ? { type: "rating", prompt: draft.question, scale: draft.scale }
         : draft.kind === "openText"
@@ -284,7 +289,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
       maxEntries: item.config.maxEntriesPerParticipant ?? 3,
       id: item.id,
       question: item.title,
-      options: (item.config.options ?? []).map((o) => ({ id: o.id, label: o.label })),
+      options: (item.config.options ?? []).map((o) => ({ id: o.id, label: o.label ?? o.text ?? "" })),
       multiSelect: item.config.multiSelect ?? false,
       showResults: item.config.showResultsToParticipants ?? false,
     });
@@ -441,7 +446,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               required
               maxLength={maxLength}
             />
-            {draft.kind === "poll" && (
+            {(draft.kind === "poll" || draft.kind === "ranking") && (
               <fieldset className="form-group">
                 <legend>{t("pollMgr.options")}</legend>
                 {draft.options.map((option, index) => (
@@ -451,12 +456,12 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                       onChange={(e) => setOption(index, e.target.value)}
                       aria-label={t("pollMgr.optionN", { n: index + 1 })}
                       required
-                      maxLength={POLL_OPTION_MAX}
+                      maxLength={draft.kind === "ranking" ? RANKING_OPTION_MAX : POLL_OPTION_MAX}
                     />
                     <Button
                       variant="quiet"
                       aria-label={t("pollMgr.removeOptionN", { n: index + 1 })}
-                      disabled={draft.options.length <= POLL_MIN_OPTIONS}
+                      disabled={draft.options.length <= (draft.kind === "ranking" ? RANKING_MIN_OPTIONS : POLL_MIN_OPTIONS)}
                       onClick={() => setDraft({ ...draft, options: draft.options.filter((_, i) => i !== index) })}
                     >
                       {t("pollMgr.remove")}
@@ -465,14 +470,18 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
                 ))}
                 <div>
                   <Button
-                    disabled={draft.options.length >= POLL_MAX_OPTIONS}
+                    disabled={draft.options.length >= (draft.kind === "ranking" ? RANKING_MAX_OPTIONS : POLL_MAX_OPTIONS)}
                     onClick={() => setDraft({ ...draft, options: [...draft.options, { label: "" }] })}
                   >
                     {t("pollMgr.addOption")}
                   </Button>
                 </div>
-                <Toggle label={t("pollMgr.multiSelect")} checked={draft.multiSelect} onChange={(e) => setDraft({ ...draft, multiSelect: e.target.checked })} />
-                <Toggle label={t("pollMgr.showResults")} checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} />
+                {draft.kind === "poll" && (
+                  <>
+                    <Toggle label={t("pollMgr.multiSelect")} checked={draft.multiSelect} onChange={(e) => setDraft({ ...draft, multiSelect: e.target.checked })} />
+                    <Toggle label={t("pollMgr.showResults")} checked={draft.showResults} onChange={(e) => setDraft({ ...draft, showResults: e.target.checked })} />
+                  </>
+                )}
               </fieldset>
             )}
             {draft.kind === "qa" && (

@@ -12,6 +12,8 @@ export type RankingScore = {
   score: number;
   /** 1-based; options with the same score share a rank and the next rank is skipped. */
   rank: number;
+  /** How many submissions put this option at each position, first place first (length N). */
+  positions: number[];
 };
 
 export type RankingResults = {
@@ -34,21 +36,23 @@ const optionsOf = (config: unknown): RankingOption[] => {
 export function scoreRanking(options: readonly RankingOption[], responses: readonly (readonly string[])[]): RankingScore[] {
   const n = options.length;
   const points = new Map(options.map((o) => [o.id, 0]));
+  const placed = new Map(options.map((o) => [o.id, new Array<number>(n).fill(0)]));
   for (const order of responses) {
     const used = new Set<string>();
     order.forEach((id, index) => {
       if (!points.has(id) || used.has(id) || index >= n) return;
       used.add(id);
       points.set(id, points.get(id)! + (n - index));
+      placed.get(id)![index] += 1;
     });
   }
   const sorted = options
-    .map((o, position) => ({ id: o.id, text: o.text, score: points.get(o.id)!, position }))
+    .map((o, position) => ({ id: o.id, text: o.text, score: points.get(o.id)!, positions: placed.get(o.id)!, position }))
     .sort((a, b) => b.score - a.score || a.position - b.position);
   const scored: RankingScore[] = [];
   sorted.forEach((o, i) => {
     const tied = i > 0 && scored[i - 1].score === o.score;
-    scored.push({ id: o.id, text: o.text, score: o.score, rank: tied ? scored[i - 1].rank : i + 1 });
+    scored.push({ id: o.id, text: o.text, score: o.score, rank: tied ? scored[i - 1].rank : i + 1, positions: o.positions });
   });
   return scored;
 }

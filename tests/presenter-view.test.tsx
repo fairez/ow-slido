@@ -294,3 +294,41 @@ it("shows the live Q&A on the projector, under its own name, when no other inter
   expect(screen.getByRole("heading", { name: "Ask the board" })).toBeTruthy();
   expect(screen.getByText("Question 1")).toBeTruthy();
 });
+
+const rankingState = (scores: [string, number, number][], total: number) => ({
+  type: "ranking" as const,
+  id: "r1",
+  title: "Priorities",
+  state: "live" as const,
+  results: {
+    interactionId: "r1",
+    total,
+    options: scores.map(([text, score, rank]) => ({ id: text, text, score, rank, positions: [] })),
+  },
+});
+
+it("prints the rank and the score of each ranking option, best first", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={rankingState([["Speed", 9, 1], ["Cost", 9, 1], ["Look", 4, 3]], 3)} />);
+  const rows = screen.getAllByRole("listitem").filter((li) => li.closest(".present-ranking"));
+  expect(rows.map((li) => li.textContent)).toEqual(["#1 Speed9 points", "#1 Cost9 points", "#3 Look4 points"]);
+  expect(screen.getByText("3 rankings submitted")).toBeTruthy();
+});
+
+it("re-sorts the ranking from ranking:results and ignores another interaction", () => {
+  render(<PresenterView eventId="e1" joinCode="1234" items={[]} initial={rankingState([["Speed", 3, 1], ["Cost", 1, 2]], 1)} />);
+  const next = (id: string) => ({
+    results: { interactionId: id, total: 2, options: [
+      { id: "Cost", text: "Cost", score: 5, rank: 1, positions: [] },
+      { id: "Speed", text: "Speed", score: 4, rank: 2, positions: [] },
+    ] },
+  });
+  act(() => {
+    fake.emit("ranking:results", next("other"));
+  });
+  expect(screen.getByText("1 ranking submitted")).toBeTruthy();
+  act(() => {
+    fake.emit("ranking:results", next("r1"));
+  });
+  const rows = screen.getAllByRole("listitem").filter((li) => li.closest(".present-ranking"));
+  expect(rows.map((li) => li.textContent)).toEqual(["#1 Cost5 points", "#2 Speed4 points"]);
+});
