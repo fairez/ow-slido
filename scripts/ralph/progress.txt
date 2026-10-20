@@ -77,3 +77,12 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `events.owner_id` is still written on create/duplicate (creator); `interaction-state` uses it for `firstInteractionLiveAt`.
   - No UI change, no browser check. Workspace switcher UI is US-011.
 ---
+
+## 2026-10-20 - US-007
+- Added `lib/auth/permissions.ts`: `ROLES`, `ACTIONS`, `can(role, action, {ownsContent?})`. Matrix is a `Record<Action, Partial<Record<Role, true|"own">>>`; only `event.delete` for editor is `"own"`. No route uses it yet (US-008/009).
+- Files: lib/auth/permissions.ts, tests/permissions.test.ts (every cell, plus the own rule)
+- **Learnings for future iterations:**
+  - "Members and roles, 2FA policy, retention" all map to `members.manage`; "Billing, plan, delete workspace" to `billing.manage`.
+  - Callers deleting content must pass `ownsContent` (e.g. `events.owner_id === user.id`); omitting it denies editors.
+  - No UI change, no browser check.
+---
