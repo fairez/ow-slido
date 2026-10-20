@@ -197,3 +197,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Dev server went stale after a CSS edit while the full test suite ran (page.goto timed out); kill it by PID, `rm -rf .next-shot`, restart.
   - Screenshots at 360/1280 (members empty/list/pending, invite dialogs, temp password, remove confirm, admin view, accept page, missing-token page): no overflow, no console errors; keyboard open/Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB (0 left).
 ---
+## 2026-10-20 - US-018
+- Added `lib/plans.ts`: `PLANS` (free/pro/team limits), `PLAN_PRICES` (USD minor units, month and year), `PAST_DUE_GRACE_DAYS` (7), `utcMonthBounds(now)`, pure `resolveEntitlements(row, now)` and `getEntitlements(workspaceId, {db?, now?})`. Effective plan: valid override > active/trialing > past_due until period end + grace > canceled until period end > Free. The result also carries `status`, `interval`, `currentPeriodEnd`, `graceEndsAt`, `accessEndsAt` and `source` (override|subscription|free) for banners and the plan page.
+- Migration 0027 adds `subscriptions` (unique workspace_id, cascade) and backfills one Free row per workspace; workspaces with any `note_analyses` get `plan_override = 'pro'`, reason `grandfathered`, no end date.
+- Files: lib/plans.ts, db/schema.ts, db/migrations/0027_*, tests/plans.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Limits the PRD left open are my choices and editable in one file: Free 3 events/month and 3 templates, no image storage; Pro unlimited events, 50 templates, 1 GB, 20 AI calls/event, 300/month; Team 500 templates, 10 GB, 50/1500 AI calls; USD 12/month and 49/month (yearly = 10 months).
+  - `allowedTypes` already names qa, ranking, quiz and survey even though only the first five types exist in the DB enum; US-019 compares against these strings.
+  - No row is the same as Free, so `createPersonalWorkspace` and sign-up were left alone; the billing webhook (US-022) should upsert on `workspace_id`.
+  - `getEntitlements` takes an optional `db`/`now` so tests do not need fake timers. Rehearsal pattern from tests/workspaces.test.ts reused for the backfill (own schema name `mig_rehearsal_plans`).
+  - Full `npm test` took ~280s this time. No UI change, no browser check. Dev DB migrated to 0027.
+---

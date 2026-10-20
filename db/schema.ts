@@ -88,6 +88,43 @@ export const memberships = pgTable(
   ],
 );
 
+/** One row per workspace; a workspace with no row is on Free. Read limits through `getEntitlements` only. */
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    plan: text("plan", { enum: ["free", "pro", "team"] })
+      .notNull()
+      .default("free"),
+    status: text("status", { enum: ["active", "trialing", "past_due", "canceled"] })
+      .notNull()
+      .default("active"),
+    interval: text("interval", { enum: ["month", "year"] })
+      .notNull()
+      .default("month"),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    provider: text("provider"),
+    providerCustomerId: text("provider_customer_id"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    /** Manual plan that wins over the paid one until `planOverrideUntil` (null = no end). */
+    planOverride: text("plan_override", { enum: ["free", "pro", "team"] }),
+    planOverrideUntil: timestamp("plan_override_until", { withTimezone: true }),
+    planOverrideReason: text("plan_override_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("subscriptions_workspace").on(t.workspaceId),
+    check("subscriptions_plan", sql`${t.plan} in ('free', 'pro', 'team')`),
+    check("subscriptions_status", sql`${t.status} in ('active', 'trialing', 'past_due', 'canceled')`),
+    check("subscriptions_interval", sql`${t.interval} in ('month', 'year')`),
+    check("subscriptions_plan_override", sql`${t.planOverride} is null or ${t.planOverride} in ('free', 'pro', 'team')`),
+  ],
+);
+
 export const invitations = pgTable(
   "invitations",
   {

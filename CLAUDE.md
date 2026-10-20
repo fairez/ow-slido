@@ -59,3 +59,6 @@ No inline UI strings in new code. Add the key to `lib/i18n/en.ts` and `id.ts`, t
 ## Sessions and passwords
 - Session tokens are `userId.issuedAtMs.expires.sig`; `getUserFromToken` rejects tokens issued before `users.sessions_valid_after`. Changing or resetting a password goes through `setPassword` (lib/auth/password-reset.ts), which sets that column, clears `must_change_password` and must be followed by a fresh `sessionSetCookie` for the current device.
 - While `must_change_password` is true, `requireAdmin`/`requireMember` return 403 `{reason: "password_change_required"}`, `getSessionMember` returns null, and server pages redirect to `/account/password`. A route that calls `getSessionUser` directly must call `denyIfPasswordChangeRequired` unless it is `/api/auth/me`, logout or the change-password route.
+
+## Plans
+- `lib/plans.ts` is the only place that defines tiers (`PLANS`, `PLAN_PRICES`, `PAST_DUE_GRACE_DAYS`) and the only way to read limits is `getEntitlements(workspaceId)`; never read `subscriptions` directly for a limit. A workspace with no `subscriptions` row is Free, so new workspaces need no row. Month boundaries come from `utcMonthBounds()`.
