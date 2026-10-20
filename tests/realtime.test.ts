@@ -4,8 +4,9 @@ import type { AddressInfo } from "node:net";
 import { io as connect, type Socket } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { events, participants, users } from "@/db/schema";
+import { events, memberships, participants, users } from "@/db/schema";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
+import { WORKSPACE_COOKIE } from "@/lib/auth/workspace";
 import { createParticipantToken, participantCookieName } from "@/lib/participant-token";
 import { publish, setPublisher } from "@/lib/realtime/publisher";
 import { attachSocketServer } from "@/lib/realtime/socket-server";
@@ -138,18 +139,26 @@ test("unauthorized sockets are rejected", async () => {
   await expect(open({ eventId: eventA, role: "host" }, hostCookie)).resolves.toBeDefined();
 });
 
-test("moderator token joins the host room for its event only, and not once revoked", async () => {
-  const { regenerateModeratorToken, revokeModeratorToken } = await import("@/lib/moderator-token");
-  const token = await regenerateModeratorToken(eventA);
-  const mod = await open({ eventId: eventA, role: "moderator", token });
+test("moderator sockets authorise by workspace membership and the moderate permission", async () => {
+  const [{ workspaceId }] = await db.select({ workspaceId: events.workspaceId }).from(events).where(eq(events.id, eventA));
+  const cookieFor = async (email: string, role: "moderator" | "viewer") => {
+    const [u] = await db.insert(users).values({ email, passwordHash: "x" }).returning();
+    await db.insert(memberships).values({ userId: u.id, workspaceId, role });
+    return `${SESSION_COOKIE}=${createSessionToken(u.id)}; ${WORKSPACE_COOKIE}=${workspaceId}`;
+  };
+  const mod = await open({ eventId: eventA, role: "moderator" }, await cookieFor("m@example.com", "moderator"));
   const got = nextMessage(mod, "secret");
   publish(eventA, "secret", { q: 2 }, { hostOnly: true });
   expect(await got).toEqual({ q: 2 });
 
-  await expect(open({ eventId: eventB, role: "moderator", token })).rejects.toThrow("unauthorized");
   await expect(open({ eventId: eventA, role: "moderator" })).rejects.toThrow("unauthorized");
-  await revokeModeratorToken(eventA);
-  await expect(open({ eventId: eventA, role: "moderator", token })).rejects.toThrow("unauthorized");
+  await expect(open({ eventId: eventA, role: "moderator", token: "legacy" })).rejects.toThrow("unauthorized");
+  await expect(open({ eventId: eventA, role: "moderator" }, await cookieFor("v@example.com", "viewer"))).rejects.toThrow("unauthorized");
+  const [other] = await db.insert(users).values({ email: "o@example.com", passwordHash: "x" }).returning();
+  await workspaceFor(db, other.id);
+  await expect(
+    open({ eventId: eventA, role: "moderator" }, `${SESSION_COOKIE}=${createSessionToken(other.id)}`),
+  ).rejects.toThrow("unauthorized");
 });
 
 const presenceOf = (host: Socket) => nextMessage(host, "presence") as Promise<{ count: number }>;

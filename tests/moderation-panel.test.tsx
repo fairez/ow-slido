@@ -86,7 +86,7 @@ it("pin, answered and delete actions on approved questions", async () => {
   await waitFor(() => expect(screen.queryByText("Hello")).toBeNull());
 });
 
-it("moderator mode sends the token, hides the mode switch and still moderates", async () => {
+it("without canChangeMode the mode switch is hidden and moderation still works", async () => {
   const fetchMock = vi.fn(
     async () => new Response(JSON.stringify({ ok: true, question: q("1", "Why?") }), { status: 200 }),
   );
@@ -96,16 +96,13 @@ it("moderator mode sends the token, hides the mode switch and still moderates", 
       eventId="e1"
       initialMode="moderated"
       initialQuestions={[q("1", "Why?", { status: "pending" })]}
-      moderatorToken="tok"
+      canChangeMode={false}
     />,
   );
   expect(screen.queryByRole("checkbox")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Approve" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-  expect(fetchMock).toHaveBeenCalledWith(
-    "/api/events/e1/questions/1",
-    expect.objectContaining({ headers: expect.objectContaining({ "x-moderator-token": "tok" }) }),
-  );
+  expect(fetchMock).toHaveBeenCalledWith("/api/events/e1/questions/1", expect.objectContaining({ method: "PATCH" }));
 });
 
 const note = (id: string, text: string, extra = {}) => ({

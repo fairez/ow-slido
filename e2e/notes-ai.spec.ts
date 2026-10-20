@@ -59,9 +59,11 @@ test("shared notes with moderation and AI analysis, then open text and rating", 
   await two.page.getByRole("button", { name: "Send note" }).click();
   await expect(two.page.getByText(/waiting for approval/i).first()).toBeVisible();
 
-  // The host approves both notes from the event page.
-  await page.reload();
-  const pending = page.getByRole("list", { name: "Pending notes" });
+  // The host approves both notes from the moderation page.
+  const modHref = (await page.getByRole("link", { name: "Open moderation queue" }).getAttribute("href"))!;
+  const modPage = await page.context().newPage();
+  await modPage.goto(modHref);
+  const pending = modPage.getByRole("list", { name: "Pending notes" });
   await expect(pending.getByRole("listitem")).toHaveCount(2);
   // After a reload the server-rendered button can be clicked before React hydrates; retry until it works.
   await expect(async () => {
@@ -69,7 +71,7 @@ test("shared notes with moderation and AI analysis, then open text and rating", 
     await expect(pending.getByRole("listitem")).toHaveCount(1, { timeout: 3000 });
   }).toPass({ timeout: 20_000 });
   await pending.getByRole("listitem").first().getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByRole("list", { name: "Approved notes" }).getByRole("listitem")).toHaveCount(2);
+  await expect(modPage.getByRole("list", { name: "Approved notes" }).getByRole("listitem")).toHaveCount(2);
 
   // Each participant upvotes the other's note.
   await expect(one.page.getByRole("button", { name: "Upvote: Better coffee" })).toBeVisible();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { InlineError, Toggle } from "@/components/ui/field";
@@ -25,21 +25,17 @@ export function ModerationPanel({
   initialMode,
   initialQuestions,
   initialNotes = [],
-  moderatorToken,
+  canChangeMode = true,
 }: {
   eventId: string;
   initialMode: Mode;
   initialQuestions: HostQuestion[];
   initialNotes?: HostNote[];
-  /** Set when a moderator (not the host) uses the panel: authenticates calls and hides the mode switch. */
-  moderatorToken?: string;
+  /** False for roles that may moderate but not edit the event: hides the mode switch. */
+  canChangeMode?: boolean;
 }) {
   const t = useT();
-  const { socket } = useEventSocket(eventId, moderatorToken ? "moderator" : "host", moderatorToken);
-  const authHeaders = useMemo<Record<string, string>>(
-    () => (moderatorToken ? { "x-moderator-token": moderatorToken } : ({} as Record<string, string>)),
-    [moderatorToken],
-  );
+  const { socket } = useEventSocket(eventId, canChangeMode ? "host" : "moderator");
   const [mode, setMode] = useState<Mode>(initialMode);
   const [questions, setQuestions] = useState<HostQuestion[]>(initialQuestions);
   const [notes, setNotes] = useState<HostNote[]>(initialNotes);
@@ -47,7 +43,7 @@ export function ModerationPanel({
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/moderation`, { headers: authHeaders });
+      const res = await fetch(`/api/events/${eventId}/moderation`);
       if (!res.ok) return;
       const data = (await res.json()) as { questions: HostQuestion[]; notes?: HostNote[] };
       setQuestions(data.questions);
@@ -55,7 +51,7 @@ export function ModerationPanel({
     } catch {
       // Offline: the next reconnect refetches.
     }
-  }, [eventId, authHeaders]);
+  }, [eventId]);
 
   // Many note events can arrive together; refetch the list once after they settle.
   const refetchSoon = useCoalesced(() => void refetch());
@@ -119,7 +115,7 @@ export function ModerationPanel({
   const change = async (id: string, body: Record<string, unknown>) => {
     const res = await request(
       `/api/events/${eventId}/questions/${id}`,
-      { method: "PATCH", headers: { "content-type": "application/json", ...authHeaders }, body: JSON.stringify(body) },
+      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       t("moderation.questionUpdateError"),
     );
     if (!res) return;
@@ -132,14 +128,14 @@ export function ModerationPanel({
   };
 
   const remove = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE", headers: authHeaders }, t("moderation.questionDeleteError"));
+    const res = await request(`/api/events/${eventId}/questions/${id}`, { method: "DELETE" }, t("moderation.questionDeleteError"));
     if (res) setQuestions((cur) => cur.filter((q) => q.id !== id));
   };
 
   const changeNote = async (id: string, body: Record<string, unknown>) => {
     const res = await request(
       `/api/events/${eventId}/notes/${id}`,
-      { method: "PATCH", headers: { "content-type": "application/json", ...authHeaders }, body: JSON.stringify(body) },
+      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       t("moderation.noteUpdateError"),
     );
     if (!res) return;
@@ -150,7 +146,7 @@ export function ModerationPanel({
   };
 
   const removeNote = async (id: string) => {
-    const res = await request(`/api/events/${eventId}/notes/${id}`, { method: "DELETE", headers: authHeaders }, t("moderation.noteDeleteError"));
+    const res = await request(`/api/events/${eventId}/notes/${id}`, { method: "DELETE" }, t("moderation.noteDeleteError"));
     if (res) setNotes((cur) => cur.filter((n) => n.id !== id));
   };
 
@@ -162,7 +158,7 @@ export function ModerationPanel({
   return (
     <section aria-labelledby="moderation-title" className="moderation">
       <h2 id="moderation-title">{t("moderation.title")}</h2>
-      {!moderatorToken && <Toggle label={t("moderation.moderatedToggle")} checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
+      {canChangeMode && <Toggle label={t("moderation.moderatedToggle")} checked={mode === "moderated"} onChange={(e) => void changeMode(e.target.checked ? "moderated" : "open")} />}
       <p className="row-meta">
         {t("moderation.modeLabel")} <strong>{mode === "moderated" ? t("moderation.modeModerated") : t("moderation.modeOpen")}</strong>
       </p>

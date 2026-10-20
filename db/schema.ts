@@ -88,7 +88,6 @@ export const events = pgTable(
     moderationMode: text("moderation_mode", { enum: ["open", "moderated"] })
       .notNull()
       .default("open"),
-    moderatorNonce: text("moderator_nonce"),
     peakParticipants: integer("peak_participants").notNull().default(0),
     /** When the host accepted that approved note text is sent to a third-party AI service. */
     aiNoticeAcceptedAt: timestamp("ai_notice_accepted_at", { withTimezone: true }),

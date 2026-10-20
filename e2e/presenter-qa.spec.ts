@@ -46,14 +46,17 @@ test("the presenter can show the Q&A screen; waiting questions stay hidden until
   await expect(presenter.getByRole("list", { name: "Questions" }).getByText("When does the next session start?")).toBeVisible();
 
   // Moderated mode: a waiting question never reaches the screen until the host approves it.
-  const moderated = page.getByLabel("Moderated Q&A (questions need approval)");
+  const modHref = (await page.getByRole("link", { name: "Open moderation queue" }).getAttribute("href"))!;
+  const modPage = await page.context().newPage();
+  await modPage.goto(modHref);
+  const moderated = modPage.getByLabel("Moderated Q&A (questions need approval)");
   await moderated.click(); // the box changes once the server has confirmed
   await expect(moderated).toBeChecked();
-  await expect(page.getByText("Mode: Moderated")).toBeVisible();
+  await expect(modPage.getByText("Mode: Moderated")).toBeVisible();
   const second = await ask(browser, code, "Is the recording shared?");
-  await expect(page.getByRole("heading", { name: "Pending (1)" })).toBeVisible();
+  await expect(modPage.getByRole("heading", { name: "Pending (1)" })).toBeVisible();
   await expect(presenter.getByText("Is the recording shared?")).toHaveCount(0);
-  await page.getByRole("button", { name: "Approve" }).first().click();
+  await modPage.getByRole("button", { name: "Approve" }).first().click();
   await expect(presenter.getByText("Is the recording shared?")).toBeVisible();
 
   // The screen survives a reload, and the Q key goes back to the interaction view.

@@ -4,16 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { Badge } from "@/components/ui/card";
-import { ModeratorLinkManager } from "@/components/moderator-link-manager";
-import { ModerationPanel } from "@/components/moderation-panel";
 import { PollManager, type InteractionItem } from "@/components/poll-manager";
+import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
-import { listHostNotes, listHostQuestions } from "@/lib/moderation";
-import { createModeratorToken } from "@/lib/moderator-token";
 import { findOwnedEvent } from "@/lib/polls";
 import { getT } from "@/lib/i18n/server";
 
@@ -30,18 +27,13 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const event = await findOwnedEvent((await params).id, membership.workspaceId);
   if (!event) notFound();
 
+  const canModerate = can(membership.role, "moderate");
+
   const list = await getDb()
     .select()
     .from(interactions)
     .where(eq(interactions.eventId, event.id))
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
-
-  const hostQuestions = await listHostQuestions(event.id);
-  const hostNotes = await listHostNotes(event.id);
-
-  const moderatorLink = event.moderatorNonce
-    ? `/moderate/${event.id}?t=${encodeURIComponent(createModeratorToken(event.id, event.moderatorNonce))}`
-    : null;
 
   return (
     <main id="main" className="page">
@@ -57,14 +49,17 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <Link href={`/present/${event.id}`} className="ui-button" data-variant="primary">
             {t("dash.openPresenter")}
           </Link>
+          {canModerate && (
+            <Link href={`/dashboard/events/${event.id}/moderate`} className="ui-button">
+              {t("moderatePage.open")}
+            </Link>
+          )}
           <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
             {t("dash.exportCsv")}
           </a>
         </div>
       </header>
       <PollManager eventId={event.id} initialInteractions={list as InteractionItem[]} aiEnabled={isAiConfigured()} />
-      <ModerationPanel eventId={event.id} initialMode={event.moderationMode} initialQuestions={hostQuestions} initialNotes={hostNotes} />
-      <ModeratorLinkManager eventId={event.id} initialLink={moderatorLink} />
     </main>
   );
 }

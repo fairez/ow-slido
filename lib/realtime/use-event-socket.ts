@@ -12,7 +12,6 @@ export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "un
 export function useEventSocket(
   eventId: string,
   role: "participant" | "host" | "moderator" = "participant",
-  token?: string,
   enabled = true,
 ) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -22,7 +21,7 @@ export function useEventSocket(
     if (!enabled) return;
     const s = io({
       path: "/socket.io",
-      auth: { eventId, role, token },
+      auth: { eventId, role },
       transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionDelayMax: 5000,
@@ -37,7 +36,7 @@ export function useEventSocket(
       s.disconnect();
       setSocket((cur) => (cur === s ? null : cur));
     };
-  }, [eventId, role, token, enabled]);
+  }, [eventId, role, enabled]);
 
   return { socket, status };
 }

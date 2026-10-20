@@ -2,12 +2,12 @@ import type { Server as HttpServer } from "node:http";
 import { and, eq } from "drizzle-orm";
 import { Server, type Socket } from "socket.io";
 import { events, participants } from "@/db/schema";
+import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
-import { verifyModeratorToken } from "@/lib/moderator-token";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 import { participantConnected, participantDisconnected, presenceCount } from "./presence";
 import { eventRoom, hostRoom, setPublisher, type Publisher } from "./publisher";
@@ -25,25 +25,22 @@ function parseCookies(header: string | undefined) {
 
 /** Returns the role granted to the socket for the event, or null if it is not allowed in. */
 async function authorize(socket: Socket): Promise<{ role: SocketRole; participantId?: string } | null> {
-  const { eventId, role, token: moderatorToken } = socket.handshake.auth as { eventId?: unknown; role?: unknown; token?: unknown };
+  const { eventId, role } = socket.handshake.auth as { eventId?: unknown; role?: unknown };
   if (typeof eventId !== "string" || !isUuid(eventId)) return null;
   const cookies = parseCookies(socket.handshake.headers.cookie);
   const db = getDb();
 
-  if (role === "moderator") {
-    return typeof moderatorToken === "string" && (await verifyModeratorToken(eventId, moderatorToken)) ? { role: "moderator" } : null;
-  }
-
-  if (role === "host") {
+  if (role === "host" || role === "moderator") {
     const user = await getUserFromToken(cookies.get(SESSION_COOKIE));
     if (!user) return null;
     const membership = resolveActiveMembership(user.memberships, cookies.get(WORKSPACE_COOKIE));
     if (!membership) return null;
+    if (role === "moderator" && !can(membership.role, "moderate")) return null;
     const [event] = await db
       .select({ id: events.id })
       .from(events)
       .where(and(eq(events.id, eventId), eq(events.workspaceId, membership.workspaceId)));
-    return event ? { role: "host" } : null;
+    return event ? { role } : null;
   }
 
   const token = cookies.get(participantCookieName(eventId));
@@ -67,7 +64,7 @@ export function createSocketPublisher(io: Server): Publisher {
 
 /**
  * Attaches Socket.IO to the HTTP server. Clients connect with
- * `auth: { eventId, role: "participant" | "host" | "moderator", token? }` and are placed in the event's room
+ * `auth: { eventId, role: "participant" | "host" | "moderator" }` and are placed in the event's room
  * (hosts also in the host-only room) only if their cookie proves access.
  */
 export function attachSocketServer(httpServer: HttpServer) {

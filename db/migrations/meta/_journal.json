@@ -148,6 +148,13 @@
       "when": 1792483598487,
       "tag": "0020_brief_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792484293413,
+      "tag": "0021_nifty_sabra",
+      "breakpoints": true
     }
   ]
 }

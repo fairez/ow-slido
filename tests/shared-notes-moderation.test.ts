@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { events, interactions, participants, sharedNotes, users } from "@/db/schema";
+import { events, interactions, memberships, participants, sharedNotes, users } from "@/db/schema";
 import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -10,9 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 type NCtx = { params: Promise<{ id: string; noteId: string }> };
 let queueRoute: typeof import("@/app/api/events/[id]/moderation/route");
 let noteRoute: typeof import("@/app/api/events/[id]/notes/[noteId]/route");
-let linkRoute: typeof import("@/app/api/events/[id]/moderator-link/route");
 let eventRoute: typeof import("@/app/api/events/[id]/route");
-let interactionsRoute: typeof import("@/app/api/events/[id]/interactions/route");
 let listRoute: typeof import("@/app/api/interactions/[id]/notes/route");
 let session: typeof import("@/lib/auth/session");
 let tokens: typeof import("@/lib/participant-token");
@@ -32,9 +30,7 @@ beforeAll(async () => {
   process.env.PARTICIPANT_TOKEN_SECRET ||= "test-participant-secret";
   queueRoute = await import("@/app/api/events/[id]/moderation/route");
   noteRoute = await import("@/app/api/events/[id]/notes/[noteId]/route");
-  linkRoute = await import("@/app/api/events/[id]/moderator-link/route");
   eventRoute = await import("@/app/api/events/[id]/route");
-  interactionsRoute = await import("@/app/api/events/[id]/interactions/route");
   listRoute = await import("@/app/api/interactions/[id]/notes/route");
   session = await import("@/lib/auth/session");
   tokens = await import("@/lib/participant-token");
@@ -50,7 +46,6 @@ const req = (method: string, headers: Record<string, string> = {}, body?: unknow
 const ctx = (id = eventId): Ctx => ({ params: Promise.resolve({ id }) });
 const nctx = (noteId: string, id = eventId): NCtx => ({ params: Promise.resolve({ id, noteId }) });
 const host = () => ({ cookie: hostCookie });
-const asMod = (token: string) => ({ "x-moderator-token": token });
 
 const addNote = async (text: string, status: "pending" | "approved" | "rejected" = "pending") =>
   (await db.insert(sharedNotes).values({ interactionId: notesId, participantId: authorId, text, status }).returning())[0].id;
@@ -175,24 +170,22 @@ test("notes of another event are out of reach", async () => {
   expect(await statusOf(otherNoteId)).toBe("pending");
 });
 
-test("a moderator token moderates notes but nothing else", async () => {
-  const link = (await (await linkRoute.POST(req("POST", host()), ctx())).json()) as { link: string };
-  const token = new URL(link.link, "http://localhost").searchParams.get("t")!;
+test("a moderator member moderates notes but cannot edit the event", async () => {
+  const [m] = await db.insert(users).values({ email: "m@example.com", passwordHash: "x" }).returning();
+  const [ws] = await db.select().from(events).where(eq(events.id, eventId));
+  await db.insert(memberships).values({ userId: m.id, workspaceId: ws.workspaceId, role: "moderator" });
+  const mod = { cookie: `${session.SESSION_COOKIE}=${session.createSessionToken(m.id)}` };
   const id = await addNote("via mod");
-  expect((await noteRoute.PATCH(req("PATCH", asMod(token), { status: "approved" }), nctx(id))).status).toBe(200);
-  expect((await noteRoute.PATCH(req("PATCH", asMod(token), { pinned: true }), nctx(id))).status).toBe(200);
-  expect((await noteRoute.DELETE(req("DELETE", asMod(token)), nctx(id))).status).toBe(204);
-  // Another event's notes and every non-moderation endpoint stay closed.
-  expect((await noteRoute.PATCH(req("PATCH", asMod(token), { status: "approved" }), nctx(otherNoteId, otherEventId))).status).toBe(401);
-  expect((await eventRoute.GET(req("GET", asMod(token)), ctx())).status).toBe(401);
-  expect((await interactionsRoute.GET(req("GET", asMod(token)), ctx())).status).toBe(401);
-  expect((await linkRoute.GET(req("GET", asMod(token)), ctx())).status).toBe(401);
+  expect((await noteRoute.PATCH(req("PATCH", mod, { status: "approved" }), nctx(id))).status).toBe(200);
+  expect((await noteRoute.PATCH(req("PATCH", mod, { pinned: true }), nctx(id))).status).toBe(200);
+  expect((await noteRoute.DELETE(req("DELETE", mod), nctx(id))).status).toBe(204);
+  expect((await eventRoute.PATCH(req("PATCH", mod, { name: "x" }), ctx())).status).toBe(403);
 });
 
 test("without credentials, or as another host, note moderation is refused", async () => {
   const id = await addNote("x");
   expect((await noteRoute.PATCH(req("PATCH", {}, { status: "approved" }), nctx(id))).status).toBe(401);
-  expect((await noteRoute.DELETE(req("DELETE", asMod("garbage")), nctx(id))).status).toBe(401);
+  expect((await noteRoute.DELETE(req("DELETE", { "x-moderator-token": "legacy" }), nctx(id))).status).toBe(401);
   const [stranger] = await db.insert(users).values({ email: "s@example.com", passwordHash: "x" }).returning();
   await workspaceFor(db, stranger.id);
   const cookie = `${session.SESSION_COOKIE}=${session.createSessionToken(stranger.id)}`;

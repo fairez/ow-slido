@@ -1,7 +1,9 @@
-import { cookies, headers } from "next/headers";
 import { LOCALE_COOKIE, resolveLocale, t, type Locale, type MessageKey, type TParams } from "./index";
 
 export async function getLocale(): Promise<Locale> {
+  // Loaded lazily: the custom server imports this module (through the socket auth) before Next has set up
+  // its AsyncLocalStorage, and a top-level import of next/headers throws there.
+  const { cookies, headers } = await import("next/headers");
   const [jar, list] = await Promise.all([cookies(), headers()]);
   return resolveLocale(jar.get(LOCALE_COOKIE)?.value, list.get("accept-language"));
 }

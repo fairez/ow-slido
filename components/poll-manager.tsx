@@ -58,7 +58,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false }:
   const typeLabel = (kind: Kind) => t(TYPE_LABELS[kind]);
   const base = `/api/events/${eventId}/interactions`;
   // Only needed for live analysis status; stays disconnected when AI is off.
-  const { socket } = useEventSocket(eventId, "host", undefined, aiEnabled);
+  const { socket } = useEventSocket(eventId, "host", aiEnabled);
   const [items, setItems] = useState(initialInteractions);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);

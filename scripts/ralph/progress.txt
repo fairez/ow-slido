@@ -108,3 +108,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Every role holds `results.view`, so the audience-GET host fallback can only be denied by being anonymous (401).
   - No UI change, no browser check.
 ---
+
+## 2026-10-20 - US-010
+- Removed the moderator link: app/moderate, the moderator-link route, ModeratorLinkManager, lib/moderator-token.ts; migration 0021 drops `events.moderator_nonce`. `authorizeModeration` is now `requireMember(request, "moderate")` plus an event-in-workspace check. Socket `moderator` role authorises by session membership with `can(role, "moderate")` (no handshake token; `useEventSocket` lost its `token` arg).
+- New page `/dashboard/events/[id]/moderate` (ModerationPanel moved off the event page; `canChangeMode` hides the Open/Moderated switch for roles without `event.edit`). The event page shows an "Open moderation queue" link only when the role can moderate. Old `/moderate/<id>` hits the new app/not-found.tsx (404, points to log in).
+- Fixed: `npm run dev`/`tsx server.ts` crashed at startup ("AsyncLocalStorage accessed in runtime where it is not available") since lib/i18n/server.ts imported next/headers at top level; it is now imported lazily inside getLocale().
+- Files: lib/auth/require-moderation.ts, lib/realtime/{socket-server,use-event-socket}.ts, lib/i18n/{server,en,id}.ts, components/{moderation-panel,poll-manager}.tsx, app/dashboard/events/[id]/{page,moderate/page}.tsx, app/not-found.tsx, db/*, tests, e2e/{presenter-qa,notes-ai}.spec.ts
+- **Learnings for future iterations:**
+  - Never import `next/headers` at the top level of a module the custom server (server.ts) can reach (socket-server -> require-admin -> i18n/server); check `npm run test:e2e` still boots after touching those imports.
+  - Stale `.next/types` or `.next-e2e/dev/types` after deleting routes break typecheck/build; `rm -rf` the `types` dirs.
+  - Dev server in dev mode lets `.env.local` DATABASE_URL override the shell, so screenshots sign up users in the dev DB; clean them up (I did).
+  - Screenshots checked at 360/1280 (moderate page, 404): no overflow. The 404 Log in button sits tight under the paragraph.
+---

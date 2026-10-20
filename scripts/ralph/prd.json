@@ -163,7 +163,7 @@
       ],
       "id": "US-010",
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M1"
     },
     {
