@@ -32,7 +32,7 @@ async function authorize(socket: Socket): Promise<{ role: SocketRole; participan
 
   if (role === "host" || role === "moderator") {
     const user = await getUserFromToken(cookies.get(SESSION_COOKIE));
-    if (!user) return null;
+    if (!user || user.mustChangePassword) return null;
     const membership = resolveActiveMembership(user.memberships, cookies.get(WORKSPACE_COOKIE));
     if (!membership) return null;
     if (role === "moderator" && !can(membership.role, "moderate")) return null;

@@ -14,20 +14,34 @@ function sign(payload: string) {
 }
 
 export function createSessionToken(userId: string, now = Date.now()) {
-  const payload = `${userId}.${Math.floor(now / 1000) + SESSION_MAX_AGE_SECONDS}`;
+  const payload = `${userId}.${now}.${Math.floor(now / 1000) + SESSION_MAX_AGE_SECONDS}`;
   return `${payload}.${sign(payload)}`;
+}
+
+export type SessionClaims = { userId: string; issuedAt: number };
+
+/**
+ * Returns who the token belongs to and when it was issued (ms) if it is authentic and unexpired.
+ * Older tokens without an issued-at time derive it from the expiry.
+ */
+export function parseSessionToken(token: string, now = Date.now()): SessionClaims | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 && parts.length !== 4) return null;
+  const signature = parts[parts.length - 1];
+  const payload = parts.slice(0, -1).join(".");
+  const expected = Buffer.from(sign(payload));
+  const actual = Buffer.from(signature);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+  const expires = Number(parts[parts.length - 2]);
+  if (expires * 1000 < now) return null;
+  const issuedAt = parts.length === 4 ? Number(parts[1]) : (expires - SESSION_MAX_AGE_SECONDS) * 1000;
+  if (!Number.isFinite(issuedAt)) return null;
+  return { userId: parts[0], issuedAt };
 }
 
 /** Returns the user id if the token is authentic and unexpired. */
 export function verifySessionToken(token: string, now = Date.now()): string | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [userId, expires, signature] = parts;
-  const expected = Buffer.from(sign(`${userId}.${expires}`));
-  const actual = Buffer.from(signature);
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
-  if (Number(expires) * 1000 < now) return null;
-  return userId;
+  return parseSessionToken(token, now)?.userId ?? null;
 }
 
 /** True when the client reached us over HTTPS, directly or through a TLS-terminating proxy. */

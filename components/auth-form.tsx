@@ -62,6 +62,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
           {pending ? t("auth.pending") : t(`auth.${mode}.submit`)}
         </Button>
       </form>
+      {mode === "login" && (
+        <p className="entry-alt entry-forgot">
+          <Link href="/forgot">{t("auth.forgotLink")}</Link>
+        </p>
+      )}
       <p className="entry-alt">
         {t(`auth.${mode}.alt`)} <Link href={ALT_HREF[mode]}>{t(`auth.${mode}.altLink`)}</Link>
       </p>

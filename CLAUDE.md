@@ -53,3 +53,7 @@ Resolve the mode from the project note above (`during`, or `after` for the final
 
 ## i18n
 No inline UI strings in new code. Add the key to `lib/i18n/en.ts` and `id.ts`, then use `t()`, `getT()` (server) or `useT()` (client). Details in `docs/i18n.md`.
+
+## Sessions and passwords
+- Session tokens are `userId.issuedAtMs.expires.sig`; `getUserFromToken` rejects tokens issued before `users.sessions_valid_after`. Changing or resetting a password goes through `setPassword` (lib/auth/password-reset.ts), which sets that column, clears `must_change_password` and must be followed by a fresh `sessionSetCookie` for the current device.
+- While `must_change_password` is true, `requireAdmin`/`requireMember` return 403 `{reason: "password_change_required"}`, `getSessionMember` returns null, and server pages redirect to `/account/password`. A route that calls `getSessionUser` directly must call `denyIfPasswordChangeRequired` unless it is `/api/auth/me`, logout or the change-password route.

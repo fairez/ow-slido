@@ -18,6 +18,7 @@ export default async function ModeratePage({ params }: { params: Promise<{ id: s
   const jar = await cookies();
   const user = await getUserFromToken(jar.get(SESSION_COOKIE)?.value);
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   const { id } = await params;
   if (!membership || !can(membership.role, "moderate") || !isUuid(id)) notFound();

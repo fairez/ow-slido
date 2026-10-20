@@ -151,3 +151,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Dev DB needed `npm run db:migrate` before the dev server could sign up users; screenshot users were deleted afterwards.
   - Screenshots at 360/1280 (banner, failed verify page): no overflow.
 ---
+## 2026-10-20 - US-014
+- Added `/forgot` and `/reset?token=` pages with `POST /api/auth/forgot` (same 200 for known/unknown emails, rate limited per IP and email, 60-minute single-use link) and `POST /api/auth/reset` (checks password length before spending the token, then signs the device in). `POST /api/auth/password` + `/account/password` page change the password with the current one.
+- Migration 0025 adds `users.sessions_valid_after`. Session tokens now carry issued-at in ms (`userId.iat.expires.sig`; old 3-part tokens still parse, issued-at derived from expiry). `setPassword` sets the column, clears `must_change_password`; the route then sets a fresh cookie for this device only.
+- Forced change: `requireAdmin`/`requireMember` return 403 `password_change_required`, `getSessionMember` returns null, the socket host auth refuses, `workspaces/active` and `verify/resend` call `denyIfPasswordChangeRequired`; dashboard, event, moderate and present pages redirect to `/account/password`.
+- Files: db/schema.ts, db/migrations/0025_*, lib/auth/{session,require-admin,password-reset}.ts, app/api/auth/{forgot,reset,password}, app/{forgot,reset,account/password}, components/{password-forms,auth-form}.tsx, lib/i18n/{en,id}.ts, tests/password-reset.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Nothing sets `must_change_password` yet; US-016 (admin-created members) should set it and rely on the enforcement above.
+  - Public pages (home, join, participant) are not gated by the forced change; only pages that read the host session are.
+  - The forgot route's in-memory limit (9/IP, 3/email per 15 min) trips when a dev server is hit repeatedly by screenshot scripts; restart the server to reset it.
+  - Screenshots at 360/1280 (login, forgot, sent, reset missing/bad link, change, forced, error): no overflow. Dev DB migrated to 0025; screenshot user deleted (0 left).
+---

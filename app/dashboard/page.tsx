@@ -17,6 +17,7 @@ export default async function DashboardPage() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const user = await getUserFromToken(token);
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
   if (!membership) redirect("/login");
 

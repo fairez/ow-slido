@@ -1,5 +1,5 @@
 import { serverT } from "@/lib/i18n/server";
-import { getSessionUser } from "@/lib/auth/require-admin";
+import { denyIfPasswordChangeRequired, getSessionUser } from "@/lib/auth/require-admin";
 import { isSecureRequest } from "@/lib/auth/session";
 import { workspaceSetCookie } from "@/lib/auth/workspace";
 import { isUuid } from "@/lib/events";
@@ -7,6 +7,8 @@ import { isUuid } from "@/lib/events";
 export async function POST(request: Request) {
   const user = await getSessionUser(request);
   if (!user) return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
+  const blocked = denyIfPasswordChangeRequired(request, user);
+  if (blocked) return blocked;
 
   const body = (await request.json().catch(() => null)) as { workspaceId?: unknown } | null;
   const workspaceId = body?.workspaceId;

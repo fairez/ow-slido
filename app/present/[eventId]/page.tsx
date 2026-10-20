@@ -22,6 +22,7 @@ export default async function PresentPage({
 }) {
   const user = await getUserFromToken((await cookies()).get(SESSION_COOKIE)?.value);
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/account/password");
   const membership = resolveActiveMembership(user.memberships, (await cookies()).get(WORKSPACE_COOKIE)?.value);
   if (!membership) notFound();
 
