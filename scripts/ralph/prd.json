@@ -675,7 +675,7 @@
       ],
       "id": "US-042",
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M4"
     },
     {

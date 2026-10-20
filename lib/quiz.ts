@@ -1,5 +1,5 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { interactions, participants, quizAnswers } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { QuizConfig } from "@/lib/interaction-config";
@@ -86,6 +86,38 @@ export async function countQuizAnswers(interactionId: string): Promise<number> {
     .from(quizAnswers)
     .where(eq(quizAnswers.interactionId, interactionId));
   return r?.n ?? 0;
+}
+
+export type QuizOutcome = {
+  answered: boolean;
+  optionIds: string[];
+  correct: boolean;
+  points: number;
+  correctOptionIds: string[];
+};
+
+/** What one participant got for a closed question. The correct options are only revealed after close. */
+export async function getQuizOutcome(interactionId: string, participantId: string): Promise<QuizOutcome | null> {
+  const db = getDb();
+  const [interaction] = await db.select().from(interactions).where(eq(interactions.id, interactionId));
+  if (!interaction || interaction.type !== "quiz" || interaction.state !== "closed") return null;
+  const [answer] = await db
+    .select({ optionIds: quizAnswers.optionIds, correct: quizAnswers.correct, points: quizAnswers.points })
+    .from(quizAnswers)
+    .where(and(eq(quizAnswers.interactionId, interactionId), eq(quizAnswers.participantId, participantId)));
+  return {
+    answered: Boolean(answer),
+    optionIds: answer?.optionIds ?? [],
+    correct: answer?.correct ?? false,
+    points: answer?.points ?? 0,
+    correctOptionIds: (interaction.config as Partial<QuizConfig>).correctOptionIds ?? [],
+  };
+}
+
+/** The database clock as epoch ms; the countdown compares it with `deadline_at`, which the database wrote. */
+export async function databaseNowMs(): Promise<number> {
+  const { rows } = await getDb().execute<{ ms: string }>(sql`select (extract(epoch from clock_timestamp()) * 1000)::bigint as ms`);
+  return Number(rows[0].ms);
 }
 
 export type SubmitQuizResult =

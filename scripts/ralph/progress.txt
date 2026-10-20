@@ -481,3 +481,17 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `presenter` and `live` for quiz are still null (US-042 participant screen, US-043 presenter and builder). Nicknames and the leaderboard come with US-044+; `quiz_answers.points` is what they sum.
   - No UI change, no browser check.
 ---
+
+## 2026-10-20 - US-042
+- Quiz participant screen: `QuizForm` (components/quiz-form.tsx), rendered by `LiveView` for `type: "quiz"`. Large answer buttons, each with its own colour (`--quiz-1..6` tokens) and shape (triangle, circle, square, diamond, star, hexagon) plus the option text. One correct option: tap locks and sends; several correct options: toggle and "Send answer". Countdown from the server `deadline_at` with the client clock corrected by the payload's database "now"; polite announcements at 10 s and 5 s and at zero; at zero the buttons lock. After close the screen fetches the participant's outcome: Correct / Not this time / No answer sent, points, and tags "Correct answer" / "Your answer" on the options.
+- Server: quiz module `live` returns `LiveQuiz` (never the correct options), new `GET /api/interactions/[id]/quiz-result` (own outcome + correct ids, 409 `api.quizResultNotReady` until closed), `getQuizOutcome` and `databaseNowMs` in lib/quiz.ts.
+- Files: components/{quiz-form,live-view}.tsx, lib/{quiz,live-view,interaction-modules}.ts, app/api/interactions/[id]/quiz-result/route.ts, app/globals.css, lib/i18n/{en,id}.ts, tests/{quiz-ui.test.tsx,quiz-answer.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-ui.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks lint (this Next version) rejects `Date.now()`/ref reads during render and `setState` inside an effect: take the clock offset in a lazy `useState`, and derive screen-reader text from state instead of setting it in an effect.
+  - An option's accessible name only gets a space before a trailing tag if there is a whitespace text node between the spans (`{" "}`); jsdom otherwise reads "JavaSelected".
+  - Component tests with fake timers: `vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })` keeps `waitFor` and fetch promises working.
+  - Never `pkill -f vitest` from the same command line (it kills the shell); the full suite runs in the background, do not start two at once (shared test DB).
+  - A quiz closed while a participant has not answered shows "No answer sent"; a participant who reloads after close lands on the waiting screen (the live endpoint only returns live interactions), same as other types.
+  - US-043 (presenter) still needs the module's `presenter`; US-045/046 will add nicknames and the leaderboard.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-ui.mjs): single and multi answer, reload keeps "Answer sent", close shows result, 5 s question counts to "Time is up"; no horizontal overflow, no console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored.
+---

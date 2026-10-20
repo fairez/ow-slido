@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/card";
 import { InlineError, TextField } from "@/components/ui/field";
 import { OpenTextForm } from "@/components/open-text-form";
+import { QuizForm } from "@/components/quiz-form";
 import { RankingForm } from "@/components/ranking-form";
 import { RatingForm } from "@/components/rating-form";
 import { SharedNotesPanel } from "@/components/shared-notes-panel";
@@ -90,6 +91,9 @@ export function LiveView({ eventId, initial }: { eventId: string; initial: LiveI
         <RatingForm key={current.id} rating={current} />
       ) : current.type === "ranking" ? (
         <RankingForm key={current.id} ranking={current} />
+      ) : current.type === "quiz" ? (
+        // A resumed question has a new deadline: a fresh key restarts the countdown.
+        <QuizForm key={`${current.id}:${current.deadlineAt}`} quiz={current} />
       ) : current.state === "closed" ? (
         <EmptyState
           title={current.type === "wordcloud" ? t("live.submissionsClosed") : t("live.votingClosed")}

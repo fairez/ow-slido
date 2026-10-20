@@ -6,6 +6,7 @@ import {
   pollVotes,
   questions,
   questionVotes,
+  quizAnswers,
   rankingResponses,
   ratingResponses,
   sharedNotes,
@@ -15,13 +16,13 @@ import {
 import { isAiConfigured } from "@/lib/ai/config";
 import { getDb } from "@/lib/db";
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { parseNewInteractionInput, type OpenTextConfig, type RankingConfig, type RatingConfig, type SharedNotesConfig } from "@/lib/interaction-config";
+import { parseNewInteractionInput, type OpenTextConfig, type QuizConfig, type RankingConfig, type RatingConfig, type SharedNotesConfig } from "@/lib/interaction-config";
 import type { LiveInteraction } from "@/lib/live-view";
 import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
-import { computeQuizResults, countQuizAnswers } from "@/lib/quiz";
+import { computeQuizResults, countQuizAnswers, databaseNowMs, quizTimeLimitSeconds } from "@/lib/quiz";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
 import { RANKING_MAX_OPTIONS } from "@/lib/ranking-limits";
 import { computeResults, getPresenterResults } from "@/lib/rating";
@@ -187,7 +188,30 @@ const qaModule: InteractionModule = {
   },
   // The Q&A tab and the presenter's question list have their own routes and messages.
   presenter: async () => null,
-  live: async () => null,
+  async live(row, participantId) {
+    const c = row.config as Partial<QuizConfig>;
+    let mine: string[] | null = null;
+    if (participantId) {
+      const [r] = await db()
+        .select({ optionIds: quizAnswers.optionIds })
+        .from(quizAnswers)
+        .where(and(eq(quizAnswers.interactionId, row.id), eq(quizAnswers.participantId, participantId)));
+      mine = r?.optionIds ?? null;
+    }
+    return {
+      id: row.id,
+      type: "quiz",
+      title: row.title,
+      state: "live",
+      prompt: c.prompt ?? "",
+      options: Array.isArray(c.options) ? c.options : [],
+      multiple: (c.correctOptionIds?.length ?? 0) > 1,
+      timeLimitSeconds: quizTimeLimitSeconds(c),
+      deadlineAt: row.deadlineAt ? row.deadlineAt.getTime() : null,
+      serverNow: await databaseNowMs(),
+      mine,
+    };
+  },
 };
 
 const sharedNotesModule: InteractionModule = {
@@ -411,7 +435,7 @@ const rankingModule: InteractionModule = {
   },
 };
 
-// The participant and presenter screens arrive with US-042/043.
+// The presenter screen arrives with US-043.
 const quizModule: InteractionModule = {
   type: "quiz",
   presentWhenClosed: false,
@@ -439,7 +463,30 @@ const quizModule: InteractionModule = {
   },
   responseCount: countQuizAnswers,
   presenter: async () => null,
-  live: async () => null,
+  async live(row, participantId) {
+    const c = row.config as Partial<QuizConfig>;
+    let mine: string[] | null = null;
+    if (participantId) {
+      const [r] = await db()
+        .select({ optionIds: quizAnswers.optionIds })
+        .from(quizAnswers)
+        .where(and(eq(quizAnswers.interactionId, row.id), eq(quizAnswers.participantId, participantId)));
+      mine = r?.optionIds ?? null;
+    }
+    return {
+      id: row.id,
+      type: "quiz",
+      title: row.title,
+      state: "live",
+      prompt: c.prompt ?? "",
+      options: Array.isArray(c.options) ? c.options : [],
+      multiple: (c.correctOptionIds?.length ?? 0) > 1,
+      timeLimitSeconds: quizTimeLimitSeconds(c),
+      deadlineAt: row.deadlineAt ? row.deadlineAt.getTime() : null,
+      serverNow: await databaseNowMs(),
+      mine,
+    };
+  },
 };
 
 /** Registration order is the order of tables in the combined event CSV. */

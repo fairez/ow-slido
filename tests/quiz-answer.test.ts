@@ -261,3 +261,58 @@ test("the CSV lists options with counts and correct share, without participants"
   expect(csv).toContain("quiz,Which are Indonesian islands?,Honshu,no,1,2,50");
   expect(csv).not.toContain(p2.id);
 });
+
+test("the participant live view carries the window and the participant's answer, never the correct options", async () => {
+  const { getLiveInteraction } = await import("@/lib/live-view");
+  const { rows: before } = await db.execute<{ ms: string }>(sql`select (extract(epoch from clock_timestamp()) * 1000)::bigint as ms`);
+  const [row] = await db.select().from(interactions).where(eq(interactions.id, quizId));
+  const view = await getLiveInteraction(eventId);
+  if (!view || view.type !== "quiz") throw new Error("expected a live quiz");
+  expect(view.options.map((o) => o.text)).toEqual(["Java", "Bali", "Honshu"]);
+  expect(view.multiple).toBe(true);
+  expect(view.timeLimitSeconds).toBe(20);
+  expect(view.deadlineAt).toBe(row.deadlineAt!.getTime());
+  expect(view.serverNow).toBeGreaterThanOrEqual(Number(before[0].ms));
+  expect(view.mine).toBeNull();
+  expect(JSON.stringify(view)).not.toContain("correctOptionIds");
+
+  const { id: participantId, cookie: c } = await join();
+  expect((await post(["a"], c)).status).toBe(201);
+  const again = await getLiveInteraction(eventId, participantId);
+  expect(again && again.type === "quiz" && again.mine).toEqual(["a"]);
+});
+
+test("a single correct option is not a multiple-choice question", async () => {
+  await db
+    .update(interactions)
+    .set({ config: sql`jsonb_set(config, '{correctOptionIds}', '["c"]'::jsonb)` })
+    .where(eq(interactions.id, quizId));
+  const { getLiveInteraction } = await import("@/lib/live-view");
+  const view = await getLiveInteraction(eventId);
+  expect(view && view.type === "quiz" && view.multiple).toBe(false);
+});
+
+test("quiz-result: refused while live, then the participant's own outcome with the correct options after close", async () => {
+  const result = await import("@/app/api/interactions/[id]/quiz-result/route");
+  const get = (c: string | null, id = quizId) => result.GET(req("GET", undefined, c), ctx(id));
+
+  expect((await get(cookie)).status).toBe(409);
+  expect((await post(["a", "b"])).status).toBe(201);
+  const other = await join();
+  expect((await get(cookie)).status).toBe(409);
+
+  await db.update(interactions).set({ state: "closed" }).where(eq(interactions.id, quizId));
+  const mine = await (await get(cookie)).json();
+  expect(mine).toMatchObject({ answered: true, optionIds: ["a", "b"], correct: true, correctOptionIds: ["a", "b"] });
+  expect(mine.points).toBeGreaterThan(500);
+  expect(await (await get(other.cookie)).json()).toEqual({
+    answered: false,
+    optionIds: [],
+    correct: false,
+    points: 0,
+    correctOptionIds: ["a", "b"],
+  });
+
+  expect((await get(null)).status).toBe(401);
+  expect((await get(cookie, "not-a-uuid")).status).toBe(404);
+});

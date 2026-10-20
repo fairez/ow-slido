@@ -12,6 +12,14 @@
   --error: #9b2c1c;
   --success: #2f5d3a;
   --focus: #b5472b;
+  /* Quiz answer colours; each takes --quiz-ink text at 4.5:1 or better. */
+  --quiz-1: #a63d24;
+  --quiz-2: #8a5a00;
+  --quiz-3: #2f6b3c;
+  --quiz-4: #1d6a73;
+  --quiz-5: #6b4a8f;
+  --quiz-6: #3d5a99;
+  --quiz-ink: #fffdf8;
 
   --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
   --font-body: "Public Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -53,6 +61,13 @@
     --error: #f08a74;
     --success: #8fc49a;
     --focus: #e07a5a;
+    --quiz-1: #e8896b;
+    --quiz-2: #d9a441;
+    --quiz-3: #7fc08b;
+    --quiz-4: #5fbfc9;
+    --quiz-5: #b99ae0;
+    --quiz-6: #8fa9e8;
+    --quiz-ink: #1c1815;
   }
 }
 
@@ -69,6 +84,13 @@
   --error: #f08a74;
   --success: #8fc49a;
   --focus: #e07a5a;
+  --quiz-1: #e8896b;
+  --quiz-2: #d9a441;
+  --quiz-3: #7fc08b;
+  --quiz-4: #5fbfc9;
+  --quiz-5: #b99ae0;
+  --quiz-6: #8fa9e8;
+  --quiz-ink: #1c1815;
 }
 
 *,
@@ -2255,4 +2277,152 @@ a.ui-button:not([data-variant]) {
 
 .ranking-step[aria-disabled="true"]:hover {
   border-color: var(--control-border);
+}
+
+.quiz-prompt {
+  margin: 0;
+  font-weight: 600;
+}
+
+.quiz-timer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.quiz-timer-label {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.quiz-timer-seconds {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.quiz-timer-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* The global reduced-motion rule shortens this transition to nothing. */
+.quiz-timer-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width 250ms linear;
+}
+
+.quiz-timer[data-urgent="true"] .quiz-timer-fill {
+  background: var(--accent);
+}
+
+.quiz-timeup {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.quiz-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-option {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  min-height: 4.5rem;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--quiz-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+
+button.quiz-option {
+  cursor: pointer;
+}
+
+button.quiz-option[aria-disabled="true"] {
+  cursor: default;
+}
+
+.quiz-option[data-n="1"] { background: var(--quiz-1); }
+.quiz-option[data-n="2"] { background: var(--quiz-2); }
+.quiz-option[data-n="3"] { background: var(--quiz-3); }
+.quiz-option[data-n="4"] { background: var(--quiz-4); }
+.quiz-option[data-n="5"] { background: var(--quiz-5); }
+.quiz-option[data-n="6"] { background: var(--quiz-6); }
+
+.quiz-option[data-selected="true"] {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.quiz-option:focus-visible {
+  outline: var(--focus-ring);
+  outline-color: var(--ink);
+  outline-offset: 3px;
+}
+
+.quiz-shape {
+  flex: none;
+  fill: currentColor;
+}
+
+.quiz-option-text {
+  flex: 1;
+  min-width: 8rem;
+  overflow-wrap: anywhere;
+}
+
+.quiz-tag {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.quiz-result {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.quiz-result strong {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+}
+
+.quiz-result[data-correct="true"] strong {
+  color: var(--success);
+}
+
+.quiz-result-points {
+  font-variant-numeric: tabular-nums;
 }

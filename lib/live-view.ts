@@ -73,7 +73,25 @@ export type LiveRanking = {
   mine: string[] | null;
 };
 
-export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating | LiveRanking;
+export type LiveQuiz = {
+  id: string;
+  type: "quiz";
+  title: string;
+  state: "live" | "paused" | "closed";
+  prompt: string;
+  /** In the host's order. The correct ones are never sent while the question is live. */
+  options: RankingOption[];
+  /** More than one option is correct, so the participant picks a set and sends it. */
+  multiple: boolean;
+  timeLimitSeconds: number;
+  /** `deadline_at` and the database clock "now", both epoch ms, so the client can correct its own clock. */
+  deadlineAt: number | null;
+  serverNow: number;
+  /** This participant's selected option ids, or null; an answer cannot be changed. */
+  mine: string[] | null;
+};
+
+export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating | LiveRanking | LiveQuiz;
 
 export async function getLiveInteraction(
   eventId: string,
