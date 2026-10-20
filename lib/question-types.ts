@@ -18,3 +18,18 @@ export type PublicQuestion = {
 
 /** Host-side view: adds the moderation status; rejected questions are not listed. */
 export type HostQuestion = PublicQuestion & { status: "pending" | "approved" };
+
+/** One Q&A as a participant sees it: its prompt, state and approved questions. */
+export type ParticipantQa = {
+  id: string;
+  title: string;
+  prompt: string;
+  state: "live" | "paused" | "closed";
+  questions: PublicQuestion[];
+};
+
+/**
+ * What the participant Q&A tab shows. `current` is the live Q&A, else the latest paused or closed one (read-only);
+ * `earlier` holds the other closed ones, newest first.
+ */
+export type ParticipantQaView = { current: ParticipantQa | null; earlier: ParticipantQa[] };

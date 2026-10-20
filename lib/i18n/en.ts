@@ -81,6 +81,13 @@ export const en = {
   "qa.listLabel": "Approved questions",
   "qa.slowDown": "Slow down a little, then try again.",
   "qa.upvoteFailed": "Could not record your upvote.",
+  "qa.readOnlyPaused": "This Q&A is paused. You can read the questions, but asking and voting are off until the host resumes it.",
+  "qa.readOnlyClosed": "This Q&A is closed. You can still read the questions.",
+  "qa.earlierTitle": "Earlier questions",
+  "qa.earlierCount.one": "{n} question",
+  "qa.earlierCount.other": "{n} questions",
+  "qa.earlierEmpty": "Nobody asked anything here.",
+  "qa.votes": "upvotes",
   "notes.tooManyPosts":
     "Too many posts in a row. Wait a moment, then try again.",
   "notes.aiDisclosure":
@@ -429,6 +436,7 @@ export const en = {
   "api.writeFirst": "Write something first",
   "api.statusInvalid": "Status must be 'approved' or 'rejected'",
   "api.questionRequired": "Question is required",
+  "api.qaClosed": "This Q&A is closed",
   "api.promptRequired": "Prompt is required",
   "api.titleRequired": "Title is required",
   "api.notesNotOpen": "Notes are not open",

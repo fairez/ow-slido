@@ -12,6 +12,7 @@ import { findOwnedEvent } from "@/lib/polls";
 import {
   ensureQaInteraction,
   findQaInteraction,
+  getParticipantQa,
   listApprovedQuestions,
   resolveEventQa,
   submitQuestion,
@@ -94,6 +95,13 @@ export async function getQuestions(request: Request, eventId: string, interactio
   }
   const list = interactionId ? await listApprovedQuestions(interactionId, participantId ?? undefined) : [];
   return Response.json({ interactionId, questions: list });
+}
+
+/** What the participant Q&A tab shows right now: the live (else latest) Q&A and the earlier closed ones. */
+export async function getParticipantQaView(request: Request, eventId: string): Promise<Response> {
+  const participantId = participantFor(request, eventId);
+  if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
+  return Response.json(await getParticipantQa(eventId, participantId));
 }
 
 /** Host or moderator: pending and approved questions of one Q&A. */

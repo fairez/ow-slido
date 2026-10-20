@@ -42,6 +42,12 @@ const question = (id: string, text: string) => ({
   upvotes: 2,
   upvoted: false,
 });
+const qaView = (questions: ReturnType<typeof question>[]) => ({
+  current: { id: "qa1", title: "Q&A", prompt: "Ask a question", state: "live" as const, questions },
+  earlier: [
+    { id: "qa0", title: "Morning session", prompt: "Ask", state: "closed" as const, questions: [question("q0", "Old?")] },
+  ],
+});
 const poll = {
   id: "i1",
   type: "poll" as const,
@@ -58,16 +64,16 @@ const poll = {
 it("participant page: live poll and Q&A", async () => {
   expect(
     await violations(
-      <ParticipantView eventId="e1" initial={poll} initialQuestions={[question("q1", "Why?"), question("q2", "When?")]} />,
+      <ParticipantView eventId="e1" initial={poll} initialQa={qaView([question("q1", "Why?"), question("q2", "When?")])} />,
     ),
   ).toEqual([]);
 });
 
 it("participant page: word cloud and waiting states", async () => {
   const cloud = { id: "w1", type: "wordcloud" as const, title: "One word", state: "live" as const, maxEntries: 3, remaining: 3 };
-  expect(await violations(<ParticipantView eventId="e1" initial={cloud} initialQuestions={[]} />)).toEqual([]);
+  expect(await violations(<ParticipantView eventId="e1" initial={cloud} initialQa={{ current: null, earlier: [] }} />)).toEqual([]);
   cleanup();
-  expect(await violations(<ParticipantView eventId="e1" initial={null} initialQuestions={[]} />)).toEqual([]);
+  expect(await violations(<ParticipantView eventId="e1" initial={null} initialQa={{ current: null, earlier: [] }} />)).toEqual([]);
 });
 
 it("presenter page: poll results, word cloud and idle", async () => {

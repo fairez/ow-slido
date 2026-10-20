@@ -470,7 +470,7 @@
       ],
       "id": "US-029",
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M3"
     },
     {

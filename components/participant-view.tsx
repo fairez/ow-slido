@@ -5,17 +5,17 @@ import { LiveView } from "@/components/live-view";
 import { QaTab } from "@/components/qa-tab";
 import { useT } from "@/lib/i18n/client";
 import type { LiveInteraction } from "@/lib/live-view";
-import type { PublicQuestion } from "@/lib/question-types";
+import type { ParticipantQaView } from "@/lib/question-types";
 
 /** Participant page body: a "Live" tab for polls and word clouds, and a "Q&A" tab. Both stay mounted so they keep listening. */
 export function ParticipantView({
   eventId,
   initial,
-  initialQuestions,
+  initialQa,
 }: {
   eventId: string;
   initial: LiveInteraction | null;
-  initialQuestions: PublicQuestion[];
+  initialQa: ParticipantQaView;
 }) {
   const t = useT();
   const [tab, setTab] = useState<"live" | "qa">("live");
@@ -47,7 +47,7 @@ export function ParticipantView({
         <LiveView eventId={eventId} initial={initial} />
       </div>
       <div role="tabpanel" id="panel-qa" aria-labelledby="tab-qa" hidden={tab !== "qa"}>
-        <QaTab eventId={eventId} initial={initialQuestions} />
+        <QaTab eventId={eventId} initial={initialQa} />
       </div>
     </>
   );

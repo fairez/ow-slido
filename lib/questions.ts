@@ -1,16 +1,23 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { events, interactions, participants, questionVotes, questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { newInteractionConfig, QA_DEFAULT_PROMPT, QA_DEFAULT_TITLE, type QaConfig } from "@/lib/interaction-config";
 import { isProfane } from "@/lib/profanity";
 import { publish } from "@/lib/realtime/publisher";
-import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
+import {
+  AUTHOR_NAME_MAX_LENGTH,
+  QUESTION_MAX_LENGTH,
+  type ParticipantQa,
+  type ParticipantQaView,
+  type PublicQuestion,
+} from "@/lib/question-types";
 
 export { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion };
 
 type Row = typeof questions.$inferSelect;
+type Interaction = typeof interactions.$inferSelect;
 export const toPublicQuestion = (row: Row, upvotes = 0, upvoted = false): PublicQuestion => ({
   id: row.id,
   text: row.text,
@@ -31,13 +38,21 @@ export const readQaConfig = (raw: unknown): QaConfig =>
 /** A Q&A interaction by id with its event; null for any other type or an unknown id. */
 export async function findQaInteraction(
   interactionId: string,
-): Promise<{ id: string; eventId: string; config: QaConfig } | null> {
+): Promise<{ id: string; eventId: string; state: Interaction["state"]; config: QaConfig } | null> {
   if (!isUuid(interactionId)) return null;
   const [row] = await getDb()
-    .select({ id: interactions.id, eventId: interactions.eventId, type: interactions.type, config: interactions.config })
+    .select({
+      id: interactions.id,
+      eventId: interactions.eventId,
+      state: interactions.state,
+      type: interactions.type,
+      config: interactions.config,
+    })
     .from(interactions)
     .where(eq(interactions.id, interactionId));
-  return row && row.type === "qa" ? { id: row.id, eventId: row.eventId, config: readQaConfig(row.config) } : null;
+  return row && row.type === "qa"
+    ? { id: row.id, eventId: row.eventId, state: row.state, config: readQaConfig(row.config) }
+    : null;
 }
 
 /**
@@ -54,7 +69,7 @@ export async function resolveEventQa(conn: Conn, eventId: string): Promise<strin
   return row?.id ?? null;
 }
 
-/** `resolveEventQa`, creating a paused Q&A (moderation copied from the event) when the event has none. */
+/** `resolveEventQa`, creating a Q&A (moderation copied from the event) when the event has none: live if nothing else is, else paused. */
 export async function ensureQaInteraction(db: ReturnType<typeof getDb>, eventId: string): Promise<string> {
   const existing = await resolveEventQa(db, eventId);
   if (existing) return existing;
@@ -63,14 +78,23 @@ export async function ensureQaInteraction(db: ReturnType<typeof getDb>, eventId:
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"qa:" + eventId}))`);
     const again = await resolveEventQa(tx, eventId);
     if (again) return again;
-    const [event] = await tx.select({ moderationMode: events.moderationMode }).from(events).where(eq(events.id, eventId));
+    // Starts lock the event row too, so a live check here cannot race one into the one-live-per-event index.
+    const [event] = await tx
+      .select({ moderationMode: events.moderationMode })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .for("update");
+    const [liveNow] = await tx
+      .select({ id: interactions.id })
+      .from(interactions)
+      .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")));
     const [created] = await tx
       .insert(interactions)
       .values({
         eventId,
         type: "qa",
         title: QA_DEFAULT_TITLE,
-        state: "paused",
+        state: liveNow ? "paused" : "live",
         position: sql`(select coalesce(max(position) + 1, 0) from interactions where event_id = ${eventId})`,
         config: newInteractionConfig("qa", { prompt: QA_DEFAULT_PROMPT, moderation: event?.moderationMode ?? "open" }),
       })
@@ -81,7 +105,7 @@ export async function ensureQaInteraction(db: ReturnType<typeof getDb>, eventId:
 
 type SubmitResult =
   | { ok: true; status: "pending" | "approved"; question: PublicQuestion }
-  | { ok: false; status: 400 | 404; error: MessageKey; params?: TParams };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
 /** Anonymous unless a non-empty name is given; pending when the Q&A is moderated, approved when it is open. */
 export async function submitQuestion(
@@ -107,6 +131,7 @@ export async function submitQuestion(
   const qa = await findQaInteraction(interactionId);
   if (!qa) return { ok: false, status: 404, error: "api.interactionNotFound" };
   const { eventId, config } = qa;
+  if (qa.state === "closed") return { ok: false, status: 409, error: "api.qaClosed" };
   if (config.profanityFilter && (isProfane(text) || (authorName && isProfane(authorName)))) {
     return { ok: false, status: 400, error: "api.profaneQuestion" };
   }
@@ -212,4 +237,27 @@ export async function toggleUpvote(
   if (!result) return notFound;
   publish(result.eventId, "question:votes", { interactionId: result.interactionId, questionId, upvotes: result.upvotes });
   return { ok: true, upvoted: result.upvoted, upvotes: result.upvotes };
+}
+
+/**
+ * The participant Q&A tab: the live Q&A, else the latest paused or closed one (shown read-only), plus every other
+ * closed Q&A as "earlier". Drafts are never shown. Questions are the approved ones only.
+ */
+export async function getParticipantQa(eventId: string, participantId?: string): Promise<ParticipantQaView> {
+  const rows = await getDb()
+    .select()
+    .from(interactions)
+    .where(and(eq(interactions.eventId, eventId), eq(interactions.type, "qa"), inArray(interactions.state, ["live", "paused", "closed"])))
+    .orderBy(desc(interactions.position), desc(interactions.createdAt));
+  const current = rows.find((r) => r.state === "live") ?? rows[0];
+  if (!current) return { current: null, earlier: [] };
+  const toQa = async (row: Interaction): Promise<ParticipantQa> => ({
+    id: row.id,
+    title: row.title,
+    prompt: readQaConfig(row.config).prompt,
+    state: row.state as ParticipantQa["state"],
+    questions: await listApprovedQuestions(row.id, participantId),
+  });
+  const earlierRows = rows.filter((r) => r.id !== current.id && r.state === "closed");
+  return { current: await toQa(current), earlier: await Promise.all(earlierRows.map(toQa)) };
 }

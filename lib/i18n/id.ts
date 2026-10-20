@@ -84,6 +84,13 @@ export const id: Record<MessageKey, string> = {
   "qa.listLabel": "Approved questions",
   "qa.slowDown": "Slow down a little, then try again.",
   "qa.upvoteFailed": "Could not record your upvote.",
+  "qa.readOnlyPaused": "Sesi tanya jawab ini dijeda. Anda masih bisa membaca pertanyaan, tetapi bertanya dan memberi suara ditutup sampai host melanjutkannya.",
+  "qa.readOnlyClosed": "Sesi tanya jawab ini sudah ditutup. Anda masih bisa membaca pertanyaannya.",
+  "qa.earlierTitle": "Pertanyaan sebelumnya",
+  "qa.earlierCount.one": "{n} pertanyaan",
+  "qa.earlierCount.other": "{n} pertanyaan",
+  "qa.earlierEmpty": "Tidak ada yang bertanya di sini.",
+  "qa.votes": "suara",
   "notes.tooManyPosts":
     "Too many posts in a row. Wait a moment, then try again.",
   "notes.aiDisclosure":
@@ -432,6 +439,7 @@ export const id: Record<MessageKey, string> = {
   "api.writeFirst": "Write something first",
   "api.statusInvalid": "Status must be 'approved' or 'rejected'",
   "api.questionRequired": "Question is required",
+  "api.qaClosed": "This Q&A is closed",
   "api.promptRequired": "Prompt is required",
   "api.titleRequired": "Title is required",
   "api.notesNotOpen": "Notes are not open",

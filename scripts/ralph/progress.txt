@@ -323,3 +323,17 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `events.join_code` must be 4-6 digits in direct inserts.
   - No UI change, no browser check. Full suite: 873 tests green, e2e presenter-qa passes, typecheck and eslint (source dirs) clean.
 ---
+## 2026-10-20 - US-029
+- Participant Q&A tab follows the event's Q&As: live one if any, else the latest paused/closed one read-only with a note (paused or closed text, no form, no upvote buttons); other closed Q&As sit under "Earlier questions" as collapsed `<details>` with read-only questions. Events with no Q&A still take a first question through the old event path, then the tab refetches and adopts the Q&A the server created.
+- `getParticipantQa` (lib/questions.ts) builds the view; `GET /api/events/[id]/qa` serves it to participants (401 without the cookie). `QaTab` now takes `initial: ParticipantQaView`, posts/upvotes via `/api/interactions/[id]/...`, drops `question:*` messages for other `interactionId`s and refetches on `state-changed` and on (re)connect. Old `/api/events/[id]/questions` GET/POST are unchanged and still work.
+- Server: a closed Q&A answers 409 `api.qaClosed` on submit. `ensureQaInteraction` now creates the Q&A live when nothing is live (event row locked like `startInteraction`), paused otherwise, so a first question never lands in a read-only Q&A.
+- Files: lib/{questions,question-routes,question-types}.ts, app/api/events/[id]/qa/route.ts, app/e/[eventId]/page.tsx, components/{qa-tab,participant-view}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{qa-tab,a11y}.test.tsx, tests/participant-qa.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - react-hooks/refs lint forbids writing a ref during render; put the value in the effect's dependencies instead (the socket effect resubscribes when the shown Q&A changes).
+  - The no-inline-strings scan flags string literals in JSX call expressions (`sortQuestions(list, "popular")`); wrap in a module-level helper.
+  - `/join/<code>` joins and redirects by itself; browser scripts only need `goto` and `waitForURL("**/e/**")`.
+  - Paused Q&As are only read-only in the client; the API still accepts questions for them (many tests and the legacy event path rely on it). Only closed is enforced.
+  - Every `state-changed` message makes each participant's Q&A tab refetch `/api/events/[id]/qa` (the message does not say which type changed).
+  - US-030 (host/presenter) still uses the old event paths and does not filter by `interactionId`.
+  - Browser check at 360/1280 (live, paused, closed with earlier section open, light and dark): no overflow, no console errors; screenshot event and user deleted from the dev DB. Full suite 889 tests green, e2e smoke and presenter-qa pass.
+---
