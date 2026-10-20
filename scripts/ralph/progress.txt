@@ -350,3 +350,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Mid-sentence type names are lower-cased in the builder, except "Q&A" (`typeInSentence`).
   - Browser check at 360/1280 (event page with default and new Q&A, builder, moderation with picker, presenter with live Q&A, participant "not started"): no overflow. Screenshot users and workspaces deleted from the dev DB. Full suite 904 tests green, e2e 4 specs pass, typecheck and eslint clean.
 ---
+## 2026-10-20 - US-031
+- Checkpoint only, no source change. Results: `npm run typecheck` clean; eslint on source dirs (db lib app tests components e2e) clean; `npm test` 82 files / 904 tests green; `npm run test:e2e` 4 specs pass (billing, notes-ai, presenter-qa, smoke); `npm run build` succeeds. The e2e specs were already moved to the new Q&A flow in US-030 (new events carry a draft Q&A the host starts; moderation is per Q&A), so nothing needed changing.
+- Migration 0031 rehearsal on a copy of the dev data (the dev role cannot CREATE DATABASE, so a scratch schema `mig_rehearsal_devcopy` was used, as in tests/qa-interaction.test.ts: migrations 0000-0030 run in it, dev rows copied in with Q&A interactions left out to recreate the pre-0031 state, then 0031 applied; schema dropped afterwards, nothing in `public` was written). Counts before -> after: events 2 -> 2, questions 2 -> 2, question_votes 2 -> 2, interactions 5 -> 6 (one new `qa`), questions without `interaction_id` 0, events with two live interactions 0. Dev DB itself: 2 questions, 2 votes, 1 qa interaction, migrated at 0031.
+- Old Q&A routes that remain as aliases (they resolve the event's live Q&A, else its first, via `resolveEventQa`, and act on a question in whichever Q&A it sits): `GET/POST /api/events/[id]/questions`, `PATCH/DELETE /api/events/[id]/questions/[questionId]`, `GET /api/events/[id]/moderation` (takes optional `?interaction=`), `GET /api/events/[id]/present/questions`, `POST /api/questions/[id]/upvote`. Native paths are `/api/interactions/[id]/questions`, `/queue`, `/[questionId]`, `/[questionId]/upvote`; `GET /api/events/[id]/qa` is the participant view. Remaining callers of the aliases: the first question of an event with no Q&A (event-level POST), the moderation page's queue fetch, and the tests.
+- Files: scripts/ralph/{progress.txt,prd.json}
+- **Learnings for future iterations:**
+  - Never `pkill -f` a pattern that appears in your own command (hit it again with "until grep"); wait for a log with an until-loop on the log text only, not on `pgrep -f`, which matches the loop's own shell.
+  - Full `npm test` is now ~325s; e2e (build included) ~2 min; run them one after the other, since both use the test DB.
+  - `npm run build` rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
+  - No UI change, no browser check.
+---
