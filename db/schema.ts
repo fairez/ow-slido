@@ -36,6 +36,25 @@ export const users = pgTable(
   ],
 );
 
+/** Single-use links (verify email, reset password, invitations). Only the hash of the token is stored. */
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null for an invitation to someone without an account yet. */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose", { enum: ["verify_email", "reset_password", "invite"] }).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("auth_tokens_user_idx").on(t.userId),
+    check("auth_tokens_purpose", sql`${t.purpose} in ('verify_email', 'reset_password', 'invite')`),
+  ],
+);
+
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),

@@ -130,3 +130,12 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `.env.local` DATABASE_URL points screenshot users at the dev DB; the script deletes the user and workspace it creates (verified 0 left).
   - Header wraps below 40rem so the switcher takes its own row; checked 360/1280 with one and two workspaces, no overflow.
 ---
+
+## 2026-10-20 - US-012
+- Added `lib/email/` (`EmailSender`, in-memory `LogEmailSender` with `getOutbox()/clearOutbox()`, `SmtpEmailSender` via nodemailer; `getEmailSender()` picks by `EMAIL_PROVIDER`, `resetEmailSender()` for tests) and `auth_tokens` (migration 0023). `lib/auth/tokens.ts`: `issueToken(db, {userId, purpose, ttlMs})` returns the raw token, `consumeToken(db, token, purpose)` is one atomic UPDATE (unused + unexpired + purpose) returning `{userId}` or null.
+- Files: db/schema.ts, db/migrations/0023_*, lib/email/*, lib/auth/tokens.ts, tests/auth-tokens.test.ts, .env.example, package.json (nodemailer, @types/nodemailer)
+- **Learnings for future iterations:**
+  - `auth_tokens.user_id` is nullable so invites can target an email with no account yet.
+  - Import nodemailer's type as `type Transporter` from "nodemailer"; the namespace form fails typecheck.
+  - `npm run lint` still reports only generated-file errors; `npx eslint lib tests db app components` is the clean check.
+---

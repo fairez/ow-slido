@@ -194,7 +194,7 @@
       ],
       "id": "US-012",
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M1"
     },
     {
@@ -414,7 +414,7 @@
       "acceptanceCriteria": [
         "Content using a type not allowed by the current plan (and events beyond limits) stays visible with results and CSV export but cannot be started, edited or duplicated (403 `over_limit`); the UI shows a lock and the plan needed",
         "Members beyond the seat limit become `suspended` automatically, newest first, never the last owner; they are listed with a reason and are reactivated when seats free up",
-        "Tests: downgrade Pro → Free with Pro-only content and extra members; upgrade back restores everything",
+        "Tests: downgrade Pro \u2192 Free with Pro-only content and extra members; upgrade back restores everything",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes",
         "Verify in browser: Playwright screenshots at 360px and 1280px reviewed (see CLAUDE.md); follows DESIGN.md and antislop during-mode; every new string goes through the i18n helper with en and id keys"
@@ -592,7 +592,7 @@
         "`interactions.type` accepts `ranking`; config: prompt (max 200), options 2-10 (id, text max 80) validated in `lib/interaction-config.ts`; migration, create/PATCH/duplicate wired",
         "`ranking_responses` (interaction_id, participant_id, order jsonb of option ids, unique per participant) with cascade and a cascade test",
         "Submit endpoint: only while the interaction is live, order must be a permutation of the option ids, one submission per participant enforced by the database (a second submit returns 409)",
-        "`scoreRanking(options, responses)`: 1st place = N points … last = 1; unit tests include ties and partial data; register the module in the registry (results + csv)",
+        "`scoreRanking(options, responses)`: 1st place = N points \u2026 last = 1; unit tests include ties and partial data; register the module in the registry (results + csv)",
         "Tests pass (npm run lint, typecheck and test are green)",
         "Typecheck passes"
       ],
