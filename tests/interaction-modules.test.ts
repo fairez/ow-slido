@@ -49,6 +49,7 @@ test("validateConfig accepts a good body and rejects a bad one for every type", 
     openText: { prompt: "Thoughts" },
     rating: { prompt: "How was it?" },
     ranking: { prompt: "Rank", options: ["A", "B"] },
+    quiz: { prompt: "Capital?", options: [{ id: "a", text: "A" }, { id: "b", text: "B" }], correctOptionIds: ["a"] },
   };
   for (const m of INTERACTION_MODULES) {
     expect(m.validateConfig(good[m.type], false), m.type).toMatchObject({ ok: true });

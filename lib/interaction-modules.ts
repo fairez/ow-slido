@@ -21,6 +21,7 @@ import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
+import { countQuizAnswers } from "@/lib/quiz";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
 import { RANKING_MAX_OPTIONS } from "@/lib/ranking-limits";
 import { computeResults, getPresenterResults } from "@/lib/rating";
@@ -409,6 +410,18 @@ const rankingModule: InteractionModule = {
   },
 };
 
+// Counts, results and the CSV arrive with the answer endpoint (US-041); the screens with US-042/043.
+const quizModule: InteractionModule = {
+  type: "quiz",
+  presentWhenClosed: false,
+  validateConfig: (body, partial) => parseNewInteractionInput("quiz", body, partial),
+  results: async (interactionId) => ({ interactionId, total: await countQuizAnswers(interactionId) }),
+  csv: async () => [],
+  responseCount: countQuizAnswers,
+  presenter: async () => null,
+  live: async () => null,
+};
+
 /** Registration order is the order of tables in the combined event CSV. */
 export const INTERACTION_MODULES: readonly InteractionModule[] = [
   pollModule,
@@ -418,6 +431,7 @@ export const INTERACTION_MODULES: readonly InteractionModule[] = [
   openTextModule,
   ratingModule,
   rankingModule,
+  quizModule,
 ];
 
 const byType = new Map<string, InteractionModule>(INTERACTION_MODULES.map((m) => [m.type, m]));

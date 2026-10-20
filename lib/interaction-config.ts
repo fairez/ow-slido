@@ -1,7 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { MessageKey, TParams } from "@/lib/i18n";
+import {
+  QUIZ_MAX_OPTIONS,
+  QUIZ_MIN_OPTIONS,
+  QUIZ_OPTION_MAX,
+  QUIZ_POINTS_DEFAULT,
+  QUIZ_POINTS_MAX,
+  QUIZ_POINTS_MIN,
+  QUIZ_TIME_DEFAULT,
+  QUIZ_TIME_MAX,
+  QUIZ_TIME_MIN,
+} from "@/lib/quiz-limits";
 import { RANKING_MAX_OPTIONS, RANKING_MIN_OPTIONS, RANKING_OPTION_MAX } from "@/lib/ranking-limits";
-export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa", "ranking"] as const;
+export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa", "ranking", "quiz"] as const;
 export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
 export const INTERACTION_PROMPT_MAX = 200;
@@ -20,6 +31,14 @@ export type OpenTextConfig = { prompt: string; maxResponsesPerParticipant: numbe
 export type RatingConfig = { prompt: string; scale: "stars5" | "numeric10" };
 export type RankingOption = { id: string; text: string };
 export type RankingConfig = { prompt: string; options: RankingOption[] };
+export type QuizConfig = {
+  prompt: string;
+  options: RankingOption[];
+  /** Ids from `options`; the answer counts only when the selected set equals this set. */
+  correctOptionIds: string[];
+  timeLimitSeconds: number;
+  points: number;
+};
 export type QaConfig = { prompt: string; moderation: "open" | "moderated"; profanityFilter: boolean };
 
 export const QA_DEFAULT_TITLE = "Q&A";
@@ -31,6 +50,7 @@ type ConfigByType = {
   rating: RatingConfig;
   qa: QaConfig;
   ranking: RankingConfig;
+  quiz: QuizConfig;
 };
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 type FieldError = { error: MessageKey; params?: TParams };
@@ -45,13 +65,23 @@ const DEFAULTS: ConfigByType = {
   rating: { prompt: "", scale: "stars5" },
   qa: { prompt: QA_DEFAULT_PROMPT, moderation: "open", profanityFilter: true },
   ranking: { prompt: "", options: [] },
+  quiz: {
+    prompt: "",
+    options: [],
+    correctOptionIds: [],
+    timeLimitSeconds: QUIZ_TIME_DEFAULT,
+    points: QUIZ_POINTS_DEFAULT,
+  },
 };
 
 /** Accepts plain texts or `{id?, text}`; ids already seen are replaced so every option id is unique. */
-function parseRankingOptions(raw: unknown): Parsed<RankingOption[]> {
+function parseOptionList(
+  raw: unknown,
+  range: { min: number; max: number; textMax: number; error: MessageKey },
+): Parsed<RankingOption[]> {
   if (!Array.isArray(raw)) return { ok: false, error: "api.optionsList" };
-  if (raw.length < RANKING_MIN_OPTIONS || raw.length > RANKING_MAX_OPTIONS) {
-    return { ok: false, error: "api.rankingOptionsRange", params: { min: RANKING_MIN_OPTIONS, max: RANKING_MAX_OPTIONS } };
+  if (raw.length < range.min || raw.length > range.max) {
+    return { ok: false, error: range.error, params: { min: range.min, max: range.max } };
   }
   const options: RankingOption[] = [];
   const seen = new Set<string>();
@@ -60,13 +90,42 @@ function parseRankingOptions(raw: unknown): Parsed<RankingOption[]> {
     const textRaw = typeof entry === "string" ? entry : obj?.text;
     const text = typeof textRaw === "string" ? textRaw.trim() : "";
     if (!text) return { ok: false, error: "api.optionLabelEmpty" };
-    if (text.length > RANKING_OPTION_MAX) return { ok: false, error: "api.optionLabelMax", params: { max: RANKING_OPTION_MAX } };
+    if (text.length > range.textMax) return { ok: false, error: "api.optionLabelMax", params: { max: range.textMax } };
     let id = typeof obj?.id === "string" && obj.id ? obj.id : randomUUID();
     if (seen.has(id)) id = randomUUID();
     seen.add(id);
     options.push({ id, text });
   }
   return { ok: true, value: options };
+}
+
+const parseRankingOptions = (raw: unknown) =>
+  parseOptionList(raw, {
+    min: RANKING_MIN_OPTIONS,
+    max: RANKING_MAX_OPTIONS,
+    textMax: RANKING_OPTION_MAX,
+    error: "api.rankingOptionsRange",
+  });
+
+const parseQuizOptions = (raw: unknown) =>
+  parseOptionList(raw, { min: QUIZ_MIN_OPTIONS, max: QUIZ_MAX_OPTIONS, textMax: QUIZ_OPTION_MAX, error: "api.quizOptionsRange" });
+
+/** At least one correct id, no repeats, every id one of `options` (when they are known). */
+function parseCorrectIds(raw: unknown, options: readonly RankingOption[] | undefined): Parsed<string[]> {
+  if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: "api.quizCorrectRequired" };
+  const ids = new Set(options?.map((o) => o.id));
+  const seen = new Set<string>();
+  for (const id of raw) {
+    if (typeof id !== "string" || seen.has(id) || (options && !ids.has(id))) return { ok: false, error: "api.quizCorrectInvalid" };
+    seen.add(id);
+  }
+  return { ok: true, value: [...seen] };
+}
+
+/** Checks a whole stored quiz config (after a PATCH merged into it); null when it holds together. */
+export function quizConfigError(config: Partial<QuizConfig>): FieldError | null {
+  const correct = parseCorrectIds(config.correctOptionIds, config.options ?? []);
+  return correct.ok ? null : { error: correct.error };
 }
 
 function intField(
@@ -155,6 +214,23 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
       if (options.ok) config.options = options.value;
       else error = options;
     }
+  } else if (type === "quiz") {
+    let options: RankingOption[] | undefined;
+    if (!partial || b.options !== undefined) {
+      const parsedOptions = parseQuizOptions(b.options);
+      if (parsedOptions.ok) {
+        options = parsedOptions.value;
+        config.options = options;
+      } else error = parsedOptions;
+    }
+    // Replacing the options without restating the correct ones would leave stale ids; PATCH checks the merge.
+    if (!error && (!partial || b.correctOptionIds !== undefined)) {
+      const correct = parseCorrectIds(b.correctOptionIds, options);
+      if (correct.ok) config.correctOptionIds = correct.value;
+      else error = correct;
+    }
+    if (!error) error = intField(b, "timeLimitSeconds", "api.quizTimeLimitRange", QUIZ_TIME_MIN, QUIZ_TIME_MAX, config);
+    if (!error) error = intField(b, "points", "api.quizPointsRange", QUIZ_POINTS_MIN, QUIZ_POINTS_MAX, config);
   } else if (b.scale !== undefined) {
     if (b.scale !== "stars5" && b.scale !== "numeric10") error = { error: "api.scaleInvalid" };
     else config.scale = b.scale;

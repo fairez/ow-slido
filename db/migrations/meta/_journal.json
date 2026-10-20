@@ -239,6 +239,13 @@
       "when": 1792505801301,
       "tag": "0033_acoustic_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792507799967,
+      "tag": "0034_broad_tag",
+      "breakpoints": true
     }
   ]
 }

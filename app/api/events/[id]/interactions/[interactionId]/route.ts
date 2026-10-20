@@ -7,7 +7,7 @@ import type { Action } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
 import { assertNotOverLimit } from "@/lib/over-limit";
-import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput } from "@/lib/interaction-config";
+import { isNewInteractionType, newInteractionConfig, parseNewInteractionInput, quizConfigError } from "@/lib/interaction-config";
 import {
   eventNotFound,
   findInteraction,
@@ -63,6 +63,10 @@ export async function PATCH(request: Request, context: Context) {
     if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
     title = parsed.value.title;
     config = newInteractionConfig(current.type, { ...current.config, ...parsed.value.config });
+    if (current.type === "quiz") {
+      const broken = quizConfigError(config);
+      if (broken) return Response.json({ error: apiMessage(request, broken) }, { status: 400 });
+    }
   } else if (current.type === "wordcloud") {
     const parsed = parseWordcloudInput(await request.json().catch(() => null), true);
     if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });

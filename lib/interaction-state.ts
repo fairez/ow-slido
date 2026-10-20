@@ -2,6 +2,7 @@ import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { quizTimeLimitSeconds } from "@/lib/quiz";
 import { publish } from "@/lib/realtime/publisher";
 
 export type InteractionRow = typeof interactions.$inferSelect;
@@ -21,7 +22,7 @@ export async function startInteraction(eventId: string, id: string): Promise<Res
     // Serialize starts per event; locking only the target row lets two different starts race.
     await tx.select({ id: events.id }).from(events).where(eq(events.id, eventId)).for("update");
     const [current] = await tx
-      .select({ state: interactions.state })
+      .select({ state: interactions.state, type: interactions.type, config: interactions.config })
       .from(interactions)
       .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId)))
       .for("update");
@@ -32,9 +33,14 @@ export async function startInteraction(eventId: string, id: string): Promise<Res
       .set({ state: "paused" })
       .where(and(eq(interactions.eventId, eventId), eq(interactions.state, "live")))
       .returning({ id: interactions.id });
+    // A quiz question gets its answer window from the server clock each time it starts (or resumes).
+    const timed =
+      current.type === "quiz"
+        ? { startedAt: sql`now()`, deadlineAt: sql`now() + make_interval(secs => ${quizTimeLimitSeconds(current.config)})` }
+        : {};
     const [started] = await tx
       .update(interactions)
-      .set({ state: "live" })
+      .set({ state: "live", ...timed })
       .where(eq(interactions.id, id))
       .returning();
     await tx

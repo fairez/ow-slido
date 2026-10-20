@@ -10,4 +10,5 @@ export const TYPE_LABELS: Record<IconKind, MessageKey> = {
   openText: "pollMgr.type.openText",
   rating: "pollMgr.type.rating",
   ranking: "pollMgr.type.ranking",
+  quiz: "pollMgr.type.quiz",
 };

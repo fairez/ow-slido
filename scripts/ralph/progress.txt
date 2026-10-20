@@ -456,3 +456,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Browser check at 360 and 1280 (builder, list, presenter with 5 submitted rankings): no horizontal overflow, no console errors; the fixed presenter buttons overlap the last row at 360 (same as other presenter screens; the presenter is a projector screen). Killed my dev server on :3200, restored next-env.d.ts/tsconfig.json.
   - Full suite 996 tests green, typecheck and eslint (source dirs) clean. Not run: e2e (no ranking e2e exists yet).
 ---
+
+## 2026-10-20 - US-040
+- Added the `quiz` interaction type: config `{prompt (≤200), options [{id,text}] 2-6 (text ≤80), correctOptionIds (≥1, subset of options), timeLimitSeconds 5-120 (default 20), points (default 1000, 1-10000)}` validated in `parseNewInteractionInput`; create, PATCH (merged config re-checked by `quizConfigError`) and duplicate/template copy (`copyConfig` gives options new ids and remaps the correct ids) are wired. `quiz_answers` (option_ids, answered_at, elapsed_ms, correct, points; unique per participant; cascades from interactions and participants). `interactions.started_at`/`deadline_at` (nullable) are set by `startInteraction` from the DB clock each time a quiz question starts or resumes. Migration 0034 also widens the `interactions_type` and `template_items_type` checks.
+- A minimal quiz module is registered so the "every stored type has a module" test holds: validateConfig and responseCount are real; `results`, `csv` (empty), `presenter` and `live` are placeholders for US-041/42/43.
+- Files: db/schema.ts, db/migrations/0034_*, lib/{quiz,quiz-limits,interaction-config,interaction-copy,interaction-state,interaction-modules,type-labels}.ts, components/type-icon.tsx, lib/i18n/{en,id}.ts, app/api/events/[id]/interactions/[interactionId]/route.ts, tests/{quiz,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A quiz option needs its id in the request body (correctOptionIds points at it); a PATCH that replaces `options` must restate `correctOptionIds`, otherwise 400.
+  - Resuming a paused quiz question opens a fresh window (new started_at/deadline_at); answers already stored stay, one per participant. US-041 should score `elapsed_ms` against `started_at` and reject after `deadline_at` plus the grace.
+  - Route tests that start an interaction need `users.email_verified_at` set (`denyUnlessVerified`), and quiz creation needs `setPlan(..., "pro")`.
+  - `IconKind` now includes `quiz` (icon, label, i18n); the host builder's narrower kind list and the quiz UI come with US-043.
+  - No UI change, no browser check. Full suite 1022 tests green, typecheck and eslint (source dirs) clean. Dev DB migrated to 0034.
+---
