@@ -185,3 +185,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Reactivating a member does not check seat limits yet; US-019 should add that to `setMemberStatus`.
   - No UI change (members page is US-017), so no browser check.
 ---
+## 2026-10-20 - US-017
+- Added `/dashboard/members` (server page: redirects roles without `members.manage` to /dashboard; initial data from `listMembers`/`listInvitations`) with `MembersManager`: member rows (role select, suspend/reactivate, reset password, remove) and pending invitations (revoke). Invite dialog (email + role) then a second dialog with the link (shown once, copy button, says whether the email went out); reset password confirms, then shows the temporary password once with a copy button; remove confirms. Controls the role may not use are not rendered (admin sees no controls on owner rows; nobody sees controls on their own row; the owner option is offered to owners only). API errors show in the page (inline actions) or in the open dialog.
+- `/invite?token=` (`InviteAcceptForm`): new people set a password, signed-in people accept with one click; `login_required` shows a log-in link, `wrong_email` a log-out button. `/change-password` redirects to the existing `/account/password` (that page already handles the forced change). "Members" link in the app shell nav only for roles that can manage members.
+- Files: app/dashboard/members/page.tsx, app/invite/page.tsx, app/change-password/page.tsx, components/{members-manager,invite-accept-form,ui/app-shell}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{members-manager,invite-accept-form}.test.tsx, tests/no-inline-strings.test.ts
+- **Learnings for future iterations:**
+  - The shared `Dialog` returns focus to the element focused when it opened; if that element is removed (remove member, revoke) focus is lost, so the manager focuses the section heading (`tabIndex=-1`). Chaining two dialogs (form, then result) works because each is its own `Dialog` instance.
+  - In component tests, `getByLabelText` on a field inside a dialog can also match the dialog (aria-labelledby with the same text); use `getByRole("textbox", {name})`.
+  - Dates are printed as `YYYY-MM-DD` slices of the ISO string on purpose: locale formatting in a server-rendered client component risks hydration mismatches.
+  - Accepting an invitation does not set `users.last_login_at`, so a new member reads "Has not logged in yet" until their next login.
+  - Dev server went stale after a CSS edit while the full test suite ran (page.goto timed out); kill it by PID, `rm -rf .next-shot`, restart.
+  - Screenshots at 360/1280 (members empty/list/pending, invite dialogs, temp password, remove confirm, admin view, accept page, missing-token page): no overflow, no console errors; keyboard open/Escape returns focus to the opener. Screenshot users and workspaces deleted from the dev DB (0 left).
+---

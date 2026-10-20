@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { VerifyBanner } from "@/components/verify-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
@@ -18,7 +19,7 @@ async function loadWorkspaces() {
   const active = resolveActiveMembership(user.memberships, jar.get(WORKSPACE_COOKIE)?.value);
   if (!active) return null;
   const list = await listActiveWorkspaces(getDb(), user.memberships);
-  return { list, activeId: active.workspaceId, unverifiedEmail: user.emailVerifiedAt ? null : user.email };
+  return { list, activeId: active.workspaceId, canManageMembers: can(active.role, "members.manage"), unverifiedEmail: user.emailVerifiedAt ? null : user.email };
 }
 
 export async function AppShell({ children }: { children: ReactNode }) {
@@ -35,6 +36,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav aria-label={t("shell.navLabel")} className="site-nav">
           <Link href="/dashboard">{t("shell.events")}</Link>
+          {workspaces?.canManageMembers ? <Link href="/dashboard/members">{t("members.nav")}</Link> : null}
           <Link href="/">{t("shell.join")}</Link>
         </nav>
         {workspaces ? <WorkspaceSwitcher workspaces={workspaces.list} activeId={workspaces.activeId} /> : null}

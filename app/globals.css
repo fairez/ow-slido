@@ -1681,3 +1681,112 @@ a.ui-button:not([data-variant]) {
   margin: 0;
   flex: 1 1 18rem;
 }
+
+/* Members page: one row per person, actions wrap under the email on narrow screens. */
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.section-head h2,
+.stack > section > h2 {
+  margin: 0;
+}
+
+.section-head h2:focus {
+  outline: none;
+}
+
+.member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.member-row[data-status="suspended"] {
+  background: transparent;
+}
+
+.member-main > * {
+  margin: 0;
+}
+
+.member-email {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.member-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.member-tags:empty {
+  display: none;
+}
+
+.member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+@media (min-width: 40rem) {
+  .member-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .member-tags {
+    justify-content: flex-end;
+  }
+
+  .member-actions {
+    grid-column: 1 / -1;
+  }
+
+  .member-main + .member-actions:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+.member-role {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.member-actions .ui-button,
+.copy-row .ui-button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+}
+
+.copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.copy-row .ui-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.copy-row input {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.stack > section > .row-list {
+  margin-top: var(--space-4);
+}
