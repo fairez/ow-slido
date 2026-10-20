@@ -281,6 +281,13 @@
       "when": 1792517084745,
       "tag": "0039_worthless_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792518937585,
+      "tag": "0040_material_lilandra",
+      "breakpoints": true
     }
   ]
 }

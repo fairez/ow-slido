@@ -15,3 +15,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
 ---
 
 ---
+
+## 2026-10-21 - US-001
+- Added `user_totp` and `recovery_codes` (migration 0040, both cascade from users), `lib/auth/totp.ts` (RFC 6238 SHA-1/6 digits/30 s, +/-1 step, base32, otpauth URI) and `lib/auth/two-factor.ts` (AES-256-GCM secret encryption from `TWOFA_ENCRYPTION_KEY`, enrolment begin/confirm, TOTP and recovery verification, rate limit).
+- Files: db/schema.ts, db/migrations/0040_*, lib/auth/totp.ts, lib/auth/two-factor.ts, .env.example, tests/totp.test.ts, tests/two-factor.test.ts, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - `lib/auth/two-factor.ts` is the API for the next 2FA stories: `beginEnrolment` (new secret; refuses once confirmed), `confirmEnrolment` (returns the 10 recovery codes once), `verifyTotpCode`, `verifyRecoveryCode`, `getTwoFactorStatus`, `isTwoFactorConfigured`. All verifiers return `{ok:false, reason:"invalid"|"rate_limited"|"not_enabled"}`; `rate_limited` carries `retryAfterSeconds`.
+  - Attempts (TOTP, recovery and the enrolment confirm) share one rate-limit key `2fa:<userId>`: 10 per 15 minutes, successes count too. Tests call `getRateLimitStore().reset()` in `beforeEach`.
+  - The key is read lazily (`vi.stubEnv("TWOFA_ENCRYPTION_KEY", "a".repeat(64))`); 64 hex or base64 of 32 bytes. Recovery codes are stored as HMAC-SHA256 under that key, so rotating the key invalidates both secrets and recovery codes.
+  - No replay protection on a TOTP step yet (a code works again within its window); add it with the login step if US-002 needs it.
+  - `npm run lint` reports errors only in the gitignored `scripts/ralph/screens/*.mjs` scratch files; `npx eslint lib tests db app components` is clean. Full `npm test` took ~470 s this run.
+---
