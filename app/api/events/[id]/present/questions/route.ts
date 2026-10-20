@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { findOwnedEvent } from "@/lib/polls";
 import { listApprovedQuestions } from "@/lib/questions";
@@ -7,6 +8,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.user.id);
-  if (!event) return Response.json({ error: "Event not found" }, { status: 404 });
+  if (!event) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
   return Response.json({ questions: await listApprovedQuestions(event.id) });
 }

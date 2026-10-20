@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { authorizeModeration } from "@/lib/auth/require-moderation";
 import { isUuid } from "@/lib/events";
 import { deleteNoteAsHost, moderateNote } from "@/lib/moderation";
@@ -8,7 +9,7 @@ async function authorize(request: Request, { params }: Context): Promise<Respons
   const { id, noteId } = await params;
   const denied = await authorizeModeration(request, id);
   if (denied) return denied;
-  if (!isUuid(id) || !isUuid(noteId)) return Response.json({ error: "Note not found" }, { status: 404 });
+  if (!isUuid(id) || !isUuid(noteId)) return Response.json({ error: serverT(request, "api.noteNotFound") }, { status: 404 });
   return { eventId: id, noteId };
 }
 
@@ -19,7 +20,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
   const body = await request.json().catch(() => null);
   const change = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const result = await moderateNote(found.eventId, found.noteId, change);
-  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
   return Response.json({ ok: true, note: result.note });
 }
 
@@ -27,7 +28,7 @@ export async function DELETE(request: Request, context: Context): Promise<Respon
   const found = await authorize(request, context);
   if (found instanceof Response) return found;
   if (!(await deleteNoteAsHost(found.eventId, found.noteId))) {
-    return Response.json({ error: "Note not found" }, { status: 404 });
+    return Response.json({ error: serverT(request, "api.noteNotFound") }, { status: 404 });
   }
   return new Response(null, { status: 204 });
 }

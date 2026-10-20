@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { eq, sql } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { readCredentials } from "@/lib/auth/credentials";
@@ -9,32 +10,32 @@ import { clientIp, rateLimit } from "@/lib/rate-limit";
 const LOGIN_LIMIT = 10;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
 
-const tooMany = (retryAfterSeconds: number) =>
+const tooMany = (request: Request, retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many login attempts. Try again later." },
+    { error: serverT(request, "api.tooManyLogins") },
     { status: 429, headers: { "retry-after": String(retryAfterSeconds) } },
   );
 
-const invalid = () => Response.json({ error: "Email or password is incorrect." }, { status: 401 });
+const invalid = (request: Request) => Response.json({ error: serverT(request, "api.loginInvalid") }, { status: 401 });
 
 // Compared against when the email is unknown so response time doesn't reveal which emails exist.
 const dummyHash = hashPassword("dummy-password-for-timing");
 
 export async function POST(request: Request) {
   const creds = await readCredentials(request);
-  if (!creds) return invalid();
+  if (!creds) return invalid(request);
 
   const [byIp, byEmail] = await Promise.all([
     rateLimit(`login:ip:${clientIp(request)}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS),
     rateLimit(`login:email:${creds.email}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS),
   ]);
   if (!byIp.allowed || !byEmail.allowed) {
-    return tooMany(Math.max(byIp.retryAfterSeconds, byEmail.retryAfterSeconds));
+    return tooMany(request, Math.max(byIp.retryAfterSeconds, byEmail.retryAfterSeconds));
   }
 
   const [user] = await getDb().select().from(users).where(eq(users.email, creds.email));
   const passwordOk = await verifyPassword(creds.password, user?.passwordHash ?? (await dummyHash));
-  if (!user || !user.active || !passwordOk) return invalid();
+  if (!user || !user.active || !passwordOk) return invalid(request);
 
   await getDb()
     .update(users)

@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { isUuid } from "@/lib/events";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
@@ -9,9 +10,9 @@ const NOTE_WINDOW_SECONDS = 60;
 
 type Context = { params: Promise<{ id: string }> };
 
-const tooMany = (retryAfterSeconds: number) =>
+const tooMany = (request: Request, retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests. Wait a moment, then try again." },
+    { error: serverT(request, "api.tooManyRequests") },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -19,22 +20,22 @@ const tooMany = (retryAfterSeconds: number) =>
 async function authorize(request: Request, { params }: Context) {
   const { id } = await params;
   const ip = await rateLimit(`notes:ip:${clientIp(request)}`, NOTE_IP_LIMIT, NOTE_WINDOW_SECONDS);
-  if (!ip.allowed) return tooMany(ip.retryAfterSeconds);
+  if (!ip.allowed) return tooMany(request, ip.retryAfterSeconds);
 
   const eventId = isUuid(id) ? await findNoteEventId(id) : null;
-  if (!eventId) return Response.json({ error: "Note not found" }, { status: 404 });
+  if (!eventId) return Response.json({ error: serverT(request, "api.noteNotFound") }, { status: 404 });
 
   const token = readParticipantToken(request, eventId);
   const participantId = token ? verifyParticipantToken(token, eventId) : null;
-  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
+  if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
 
   const byToken = await rateLimit(`notes:token:${participantId}`, NOTE_TOKEN_LIMIT, NOTE_WINDOW_SECONDS);
-  if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);
+  if (!byToken.allowed) return tooMany(request, byToken.retryAfterSeconds);
   return { noteId: id, participantId };
 }
 
-const failure = (result: Extract<NoteResult, { ok: false }>) =>
-  Response.json({ error: result.error }, { status: result.status });
+const failure = (request: Request, result: Extract<NoteResult, { ok: false }>) =>
+  Response.json({ error: apiMessage(request, result) }, { status: result.status });
 
 export async function PATCH(request: Request, context: Context) {
   const auth = await authorize(request, context);
@@ -42,12 +43,12 @@ export async function PATCH(request: Request, context: Context) {
   const body = await request.json().catch(() => null);
   const text = body && typeof body === "object" ? (body as Record<string, unknown>).text : undefined;
   const result = await editNote(auth.noteId, auth.participantId, text);
-  return result.ok ? Response.json({ note: result.note }) : failure(result);
+  return result.ok ? Response.json({ note: result.note }) : failure(request, result);
 }
 
 export async function DELETE(request: Request, context: Context) {
   const auth = await authorize(request, context);
   if (auth instanceof Response) return auth;
   const result = await deleteNote(auth.noteId, auth.participantId);
-  return result.ok ? new Response(null, { status: 204 }) : failure(result);
+  return result.ok ? new Response(null, { status: 204 }) : failure(request, result);
 }

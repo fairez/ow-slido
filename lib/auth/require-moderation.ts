@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { MODERATOR_HEADER, verifyModeratorToken } from "@/lib/moderator-token";
@@ -11,12 +12,12 @@ export async function authorizeModeration(request: Request, eventId: string): Pr
   const token = request.headers.get(MODERATOR_HEADER);
   if (token) {
     if (await verifyModeratorToken(eventId, token)) return null;
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
   }
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   if (!isUuid(eventId) || !(await findOwnedEvent(eventId, auth.user.id))) {
-    return Response.json({ error: "Event not found" }, { status: 404 });
+    return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
   }
   return null;
 }

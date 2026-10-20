@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { randomInt } from "node:crypto";
 
 export const EVENT_NAME_MAX = 80;
@@ -27,7 +28,7 @@ export async function generateUniqueJoinCode(
   throw new Error("Could not generate a unique join code");
 }
 
-type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 
 export type EventInput = {
   name?: string;
@@ -44,33 +45,33 @@ function parseDate(value: unknown) {
 
 /** Validates an event body. With `partial`, absent fields are skipped (PATCH). */
 export function parseEventInput(body: unknown, partial: boolean): Parsed<EventInput> {
-  if (!body || typeof body !== "object") return { ok: false, error: "Invalid request body" };
+  if (!body || typeof body !== "object") return { ok: false, error: "api.invalidBody" };
   const b = body as Record<string, unknown>;
   const value: EventInput = {};
 
   if (!partial || b.name !== undefined) {
     const name = typeof b.name === "string" ? b.name.trim() : "";
-    if (!name) return { ok: false, error: "Event name is required" };
+    if (!name) return { ok: false, error: "api.eventNameRequired" };
     if (name.length > EVENT_NAME_MAX) {
-      return { ok: false, error: `Event name must be at most ${EVENT_NAME_MAX} characters` };
+      return { ok: false, error: "api.eventNameMax", params: { max: EVENT_NAME_MAX } };
     }
     value.name = name;
   }
-  for (const [key, label] of [["startsAt", "Start"], ["endsAt", "End"]] as const) {
+  for (const [key, label] of [["startsAt", "api.startDateInvalid"], ["endsAt", "api.endDateInvalid"]] as const) {
     if (!partial || b[key] !== undefined) {
       const date = parseDate(b[key]);
-      if (!date) return { ok: false, error: `${label} date is required and must be a valid date` };
+      if (!date) return { ok: false, error: label };
       value[key] = date;
     }
   }
   if (b.moderationMode !== undefined) {
     if (!MODERATION_MODES.includes(b.moderationMode as ModerationMode)) {
-      return { ok: false, error: "Moderation mode must be 'open' or 'moderated'" };
+      return { ok: false, error: "api.moderationModeInvalid" };
     }
     value.moderationMode = b.moderationMode as ModerationMode;
   }
   if (value.startsAt && value.endsAt && value.endsAt < value.startsAt) {
-    return { ok: false, error: "End date cannot be before the start date" };
+    return { ok: false, error: "api.endBeforeStart" };
   }
   return { ok: true, value };
 }

@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, questionVotes, questions, sharedNoteVotes, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -36,9 +37,9 @@ export type ModerationChange = { status?: unknown; pinned?: unknown; answered?: 
 
 type ModerationResult =
   | { ok: true; question: HostQuestion | null }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
-const notFound = { ok: false, status: 404, error: "Question not found" } as const;
+const notFound = { ok: false, status: 404, error: "api.questionNotFound" } as const;
 
 async function upvoteCount(questionId: string) {
   const [{ n }] = await getDb()
@@ -59,13 +60,13 @@ export async function moderateQuestion(
 ): Promise<ModerationResult> {
   const { status, pinned, answered } = change;
   if (status !== undefined && status !== "approved" && status !== "rejected") {
-    return { ok: false, status: 400, error: "Status must be 'approved' or 'rejected'" };
+    return { ok: false, status: 400, error: "api.statusInvalid" };
   }
   if ((pinned !== undefined && typeof pinned !== "boolean") || (answered !== undefined && typeof answered !== "boolean")) {
-    return { ok: false, status: 400, error: "pinned and answered must be booleans" };
+    return { ok: false, status: 400, error: "api.pinnedAnsweredBoolean" };
   }
   if (status === undefined && pinned === undefined && answered === undefined) {
-    return { ok: false, status: 400, error: "Nothing to change" };
+    return { ok: false, status: 400, error: "api.nothingToChange" };
   }
 
   const db = getDb();
@@ -80,14 +81,14 @@ export async function moderateQuestion(
     const set: Partial<Pick<Row, "status" | "pinned" | "answered">> = {};
     if (status !== undefined) {
       if (current.status !== "pending") {
-        return { ok: false, status: 409, error: "Question was already moderated" } as const;
+        return { ok: false, status: 409, error: "api.questionAlreadyModerated" } as const;
       }
       set.status = status;
     }
     const finalStatus = set.status ?? current.status;
     if (pinned !== undefined || answered !== undefined) {
       if (finalStatus !== "approved") {
-        return { ok: false, status: 409, error: "Approve the question first" } as const;
+        return { ok: false, status: 409, error: "api.approveQuestionFirst" } as const;
       }
       if (pinned !== undefined) set.pinned = pinned;
       if (answered !== undefined) set.answered = answered;
@@ -158,9 +159,9 @@ export type NoteModerationChange = { status?: unknown; pinned?: unknown };
 
 type NoteModerationResult =
   | { ok: true; note: HostNote | null }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
-const noteNotFound = { ok: false, status: 404, error: "Note not found" } as const;
+const noteNotFound = { ok: false, status: 404, error: "api.noteNotFound" } as const;
 
 /**
  * Applies a host change to a note of the event. `status` moves a pending note to approved/rejected;
@@ -173,13 +174,13 @@ export async function moderateNote(
 ): Promise<NoteModerationResult> {
   const { status, pinned } = change;
   if (status !== undefined && status !== "approved" && status !== "rejected") {
-    return { ok: false, status: 400, error: "Status must be 'approved' or 'rejected'" };
+    return { ok: false, status: 400, error: "api.statusInvalid" };
   }
   if (pinned !== undefined && typeof pinned !== "boolean") {
-    return { ok: false, status: 400, error: "pinned must be a boolean" };
+    return { ok: false, status: 400, error: "api.pinnedBoolean" };
   }
   if (status === undefined && pinned === undefined) {
-    return { ok: false, status: 400, error: "Nothing to change" };
+    return { ok: false, status: 400, error: "api.nothingToChange" };
   }
 
   const outcome = await getDb().transaction(async (tx) => {
@@ -195,13 +196,13 @@ export async function moderateNote(
     const set: Partial<Pick<NoteRow, "status" | "pinned">> = {};
     if (status !== undefined) {
       if (current.status !== "pending") {
-        return { ok: false, status: 409, error: "Note was already moderated" } as const;
+        return { ok: false, status: 409, error: "api.noteAlreadyModerated" } as const;
       }
       set.status = status;
     }
     if (pinned !== undefined) {
       if ((set.status ?? current.status) !== "approved") {
-        return { ok: false, status: 409, error: "Approve the note first" } as const;
+        return { ok: false, status: 409, error: "api.approveNoteFirst" } as const;
       }
       set.pinned = pinned;
     }

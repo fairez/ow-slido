@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { eq, sql } from "drizzle-orm";
 import { interactions, participants, pollVotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -32,7 +33,7 @@ export async function getPollCounts(
 
 export type VoteResult =
   | { ok: true; counts: PollCounts }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
 export async function castVote(
   interactionId: string,
@@ -42,15 +43,15 @@ export async function castVote(
   const outcome = await getDb().transaction(async (tx): Promise<VoteResult & { eventId?: string }> => {
     // Share lock: closing (an UPDATE) waits for in-flight votes, so no vote lands after close.
     const [row] = await tx.select().from(interactions).where(eq(interactions.id, interactionId)).for("share");
-    if (!row || row.type !== "poll") return { ok: false, status: 404, error: "Interaction not found" };
+    if (!row || row.type !== "poll") return { ok: false, status: 404, error: "api.interactionNotFound" };
     const [participant] = await tx
       .select({ eventId: participants.eventId })
       .from(participants)
       .where(eq(participants.id, participantId));
     if (!participant || participant.eventId !== row.eventId) {
-      return { ok: false, status: 404, error: "Interaction not found" };
+      return { ok: false, status: 404, error: "api.interactionNotFound" };
     }
-    if (row.state !== "live") return { ok: false, status: 409, error: "Voting is not open" };
+    if (row.state !== "live") return { ok: false, status: 409, error: "api.votingNotOpen" };
 
     const config = pollConfig(row.config as Partial<PollConfig>);
     const valid = new Set(config.options.map((o) => o.id));
@@ -60,10 +61,10 @@ export async function castVote(
       !rawOptionIds.every((id) => typeof id === "string" && valid.has(id)) ||
       new Set(rawOptionIds).size !== rawOptionIds.length
     ) {
-      return { ok: false, status: 400, error: "Choose valid options from this poll" };
+      return { ok: false, status: 400, error: "api.optionsInvalid" };
     }
     if (!config.multiSelect && rawOptionIds.length > 1) {
-      return { ok: false, status: 400, error: "Only one option can be selected" };
+      return { ok: false, status: 400, error: "api.oneOption" };
     }
 
     const inserted = await tx
@@ -71,7 +72,7 @@ export async function castVote(
       .values({ interactionId, participantId, optionIds: rawOptionIds as string[] })
       .onConflictDoNothing()
       .returning({ id: pollVotes.id });
-    if (inserted.length === 0) return { ok: false, status: 409, error: "You have already voted" };
+    if (inserted.length === 0) return { ok: false, status: 409, error: "api.alreadyVoted" };
 
     await tx
       .update(participants)

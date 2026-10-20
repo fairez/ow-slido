@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -12,7 +13,7 @@ export async function GET(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.user.id);
-  if (!event) return eventNotFound();
+  if (!event) return eventNotFound(request);
   const list = await getDb()
     .select()
     .from(interactions)
@@ -25,13 +26,13 @@ export async function POST(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.user.id);
-  if (!event) return eventNotFound();
+  if (!event) return eventNotFound(request);
 
   const body = await request.json().catch(() => null);
   const type = body && typeof body === "object" ? (body as { type?: unknown }).type : undefined;
   if (type !== "poll" && type !== "wordcloud" && !isNewInteractionType(type)) {
     return Response.json(
-      { error: "Interaction type must be 'poll', 'wordcloud', 'sharedNotes', 'openText' or 'rating'" },
+      { error: serverT(request, "api.typeInvalid") },
       { status: 400 },
     );
   }
@@ -39,17 +40,17 @@ export async function POST(request: Request, { params }: Context) {
   let config: Record<string, unknown>;
   if (type === "poll") {
     const parsed = parsePollInput(body, false);
-    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
     title = parsed.value.title!;
     config = pollConfig(parsed.value.config);
   } else if (isNewInteractionType(type)) {
     const parsed = parseNewInteractionInput(type, body, false);
-    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
     title = parsed.value.title!;
     config = newInteractionConfig(type, parsed.value.config);
   } else {
     const parsed = parseWordcloudInput(body, false);
-    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
     title = parsed.value.title!;
     config = wordcloudConfig(parsed.value.config);
   }

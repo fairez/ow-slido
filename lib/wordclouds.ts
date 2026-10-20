@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, sql } from "drizzle-orm";
 import { interactions, participants, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -16,19 +17,19 @@ export { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX, WOR
 export type WordcloudConfig = { prompt: string; maxEntriesPerParticipant: number };
 export type WordcloudInput = { title?: string; config: Partial<WordcloudConfig> };
 
-type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 
 /** Validates a word cloud body. With `partial`, absent fields are skipped (PATCH). */
 export function parseWordcloudInput(body: unknown, partial: boolean): Parsed<WordcloudInput> {
-  if (!body || typeof body !== "object") return { ok: false, error: "Invalid request body" };
+  if (!body || typeof body !== "object") return { ok: false, error: "api.invalidBody" };
   const b = body as Record<string, unknown>;
   const value: WordcloudInput = { config: {} };
 
   if (!partial || b.prompt !== undefined) {
     const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
-    if (!prompt) return { ok: false, error: "Prompt is required" };
+    if (!prompt) return { ok: false, error: "api.promptRequired" };
     if (prompt.length > WORDCLOUD_PROMPT_MAX) {
-      return { ok: false, error: `Prompt must be at most ${WORDCLOUD_PROMPT_MAX} characters` };
+      return { ok: false, error: "api.promptMax", params: { max: WORDCLOUD_PROMPT_MAX } };
     }
     value.title = prompt;
     value.config.prompt = prompt;
@@ -43,7 +44,8 @@ export function parseWordcloudInput(body: unknown, partial: boolean): Parsed<Wor
     ) {
       return {
         ok: false,
-        error: `Entries per participant must be a whole number from ${WORDCLOUD_MIN_ENTRIES} to ${WORDCLOUD_MAX_ENTRIES}`,
+        error: "api.entriesRange",
+        params: { min: WORDCLOUD_MIN_ENTRIES, max: WORDCLOUD_MAX_ENTRIES },
       };
     }
     value.config.maxEntriesPerParticipant = n;
@@ -82,7 +84,7 @@ export async function getWordcloudResults(
 
 export type WordResult =
   | { ok: true; remaining: number }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
 export async function submitWord(
   interactionId: string,
@@ -93,7 +95,7 @@ export async function submitWord(
     async (tx): Promise<WordResult & { eventId?: string; visible?: boolean }> => {
       // Share lock: closing (an UPDATE) waits for in-flight submissions.
       const [row] = await tx.select().from(interactions).where(eq(interactions.id, interactionId)).for("share");
-      if (!row || row.type !== "wordcloud") return { ok: false, status: 404, error: "Interaction not found" };
+      if (!row || row.type !== "wordcloud") return { ok: false, status: 404, error: "api.interactionNotFound" };
       // Row lock serialises one participant's submissions so the limit can't be raced.
       const [participant] = await tx
         .select({ eventId: participants.eventId })
@@ -101,18 +103,18 @@ export async function submitWord(
         .where(eq(participants.id, participantId))
         .for("update");
       if (!participant || participant.eventId !== row.eventId) {
-        return { ok: false, status: 404, error: "Interaction not found" };
+        return { ok: false, status: 404, error: "api.interactionNotFound" };
       }
-      if (row.state !== "live") return { ok: false, status: 409, error: "Submissions are not open" };
+      if (row.state !== "live") return { ok: false, status: 409, error: "api.submissionsNotOpen" };
 
       const word = typeof rawWord === "string" ? normalizeWord(rawWord) : "";
-      if (!word) return { ok: false, status: 400, error: "Enter a word" };
+      if (!word) return { ok: false, status: 400, error: "api.enterWord" };
       if (word.length > WORDCLOUD_WORD_MAX) {
-        return { ok: false, status: 400, error: `Words must be at most ${WORDCLOUD_WORD_MAX} characters` };
+        return { ok: false, status: 400, error: "api.wordMax", params: { max: WORDCLOUD_WORD_MAX } };
       }
       // A bare connector ("dan", "yang", "di") would only clutter the cloud; it does not use up an entry.
       if (isIndonesianStopWord(word)) {
-        return { ok: false, status: 400, error: "That word is too common to show in the cloud. Try another." };
+        return { ok: false, status: 400, error: "api.wordTooCommon" };
       }
 
       const { maxEntriesPerParticipant: max } = wordcloudConfig(
@@ -129,7 +131,7 @@ export async function submitWord(
           ),
         );
       if (used >= max) {
-        return { ok: false, status: 409, error: "You have used all your entries" };
+        return { ok: false, status: 409, error: "api.entriesUsed" };
       }
 
       const hidden = isProfane(word);

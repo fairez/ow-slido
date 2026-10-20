@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { MIN_PASSWORD_LENGTH, isValidEmail, readCredentials } from "@/lib/auth/credentials";
@@ -9,15 +10,15 @@ const signupClosed = () => process.env.ALLOW_SIGNUP?.trim().toLowerCase() === "f
 
 export async function POST(request: Request) {
   if (signupClosed()) {
-    return Response.json({ error: "Sign-up is closed. Ask an existing admin for an account." }, { status: 403 });
+    return Response.json({ error: serverT(request, "api.signupClosed") }, { status: 403 });
   }
   const creds = await readCredentials(request);
   if (!creds || !isValidEmail(creds.email)) {
-    return Response.json({ error: "Enter a valid email address" }, { status: 400 });
+    return Response.json({ error: serverT(request, "api.emailInvalid") }, { status: 400 });
   }
   if (creds.password.length < MIN_PASSWORD_LENGTH) {
     return Response.json(
-      { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` },
+      { error: serverT(request, "api.passwordMin", { min: MIN_PASSWORD_LENGTH }) },
       { status: 400 },
     );
   }
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     .onConflictDoNothing({ target: users.email })
     .returning({ id: users.id, email: users.email });
   if (!user) {
-    return Response.json({ error: "That email already has an account. Log in instead." }, { status: 409 });
+    return Response.json({ error: serverT(request, "api.emailTaken") }, { status: 409 });
   }
 
   return Response.json(

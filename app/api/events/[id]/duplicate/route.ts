@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { and, asc, eq } from "drizzle-orm";
 import { events, interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -25,7 +26,7 @@ export async function POST(request: Request, { params }: Context) {
         .from(events)
         .where(and(eq(events.id, id), eq(events.ownerId, auth.user.id)))
     : [];
-  if (!source) return Response.json({ error: "Event not found" }, { status: 404 });
+  if (!source) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 
   const copies = await getDb()
     .select()
@@ -68,5 +69,5 @@ export async function POST(request: Request, { params }: Context) {
       if ((err as { code?: string }).code !== UNIQUE_VIOLATION) throw err;
     }
   }
-  return Response.json({ error: "Could not generate a join code" }, { status: 500 });
+  return Response.json({ error: serverT(request, "api.joinCodeFailed") }, { status: 500 });
 }

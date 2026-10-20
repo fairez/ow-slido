@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -11,12 +12,12 @@ export async function POST(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const event = await findOwnedEvent((await params).id, auth.user.id);
-  if (!event) return eventNotFound();
+  if (!event) return eventNotFound(request);
 
   const body = (await request.json().catch(() => null)) as { ids?: unknown } | null;
   const ids = body?.ids;
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
-    return Response.json({ error: "ids must be a list of interaction ids" }, { status: 400 });
+    return Response.json({ error: serverT(request, "api.idsList") }, { status: 400 });
   }
 
   const db = getDb();
@@ -38,7 +39,7 @@ export async function POST(request: Request, { params }: Context) {
     return true;
   });
   if (!ok) {
-    return Response.json({ error: "ids must list every interaction of the event once" }, { status: 400 });
+    return Response.json({ error: serverT(request, "api.idsEvery") }, { status: 400 });
   }
   return Response.json({ ok: true });
 }

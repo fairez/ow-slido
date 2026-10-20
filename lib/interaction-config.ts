@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating"] as const;
 export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
@@ -21,7 +22,8 @@ type ConfigByType = {
   openText: OpenTextConfig;
   rating: RatingConfig;
 };
-type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
+type FieldError = { error: MessageKey; params?: TParams };
 export type ParsedInteraction<T extends NewInteractionType> = { title?: string; config: Partial<ConfigByType[T]> };
 
 export const isNewInteractionType = (v: unknown): v is NewInteractionType =>
@@ -33,11 +35,18 @@ const DEFAULTS: ConfigByType = {
   rating: { prompt: "", scale: "stars5" },
 };
 
-function intField(b: Record<string, unknown>, key: string, label: string, min: number, max: number, out: Record<string, unknown>) {
+function intField(
+  b: Record<string, unknown>,
+  key: string,
+  errorKey: MessageKey,
+  min: number,
+  max: number,
+  out: Record<string, unknown>,
+): FieldError | null {
   if (b[key] === undefined) return null;
   const n = b[key];
   if (typeof n !== "number" || !Number.isInteger(n) || n < min || n > max) {
-    return `${label} must be a whole number from ${min} to ${max}`;
+    return { error: errorKey, params: { min, max } };
   }
   out[key] = n;
   return null;
@@ -49,39 +58,39 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
   body: unknown,
   partial: boolean,
 ): Parsed<ParsedInteraction<T>> {
-  if (!body || typeof body !== "object") return { ok: false, error: "Invalid request body" };
+  if (!body || typeof body !== "object") return { ok: false, error: "api.invalidBody" };
   const b = body as Record<string, unknown>;
   const config: Record<string, unknown> = {};
   let title: string | undefined;
 
   if (!partial || b.prompt !== undefined) {
     const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
-    if (!prompt) return { ok: false, error: "Prompt is required" };
+    if (!prompt) return { ok: false, error: "api.promptRequired" };
     if (prompt.length > INTERACTION_PROMPT_MAX) {
-      return { ok: false, error: `Prompt must be at most ${INTERACTION_PROMPT_MAX} characters` };
+      return { ok: false, error: "api.promptMax", params: { max: INTERACTION_PROMPT_MAX } };
     }
     title = prompt;
     config.prompt = prompt;
   }
 
-  let error: string | null = null;
+  let error: FieldError | null = null;
   if (type === "sharedNotes") {
-    error = intField(b, "maxNotesPerParticipant", "Notes per participant", NOTES_MIN, NOTES_MAX, config);
+    error = intField(b, "maxNotesPerParticipant", "api.notesPerParticipantRange", NOTES_MIN, NOTES_MAX, config);
     if (!error && b.moderation !== undefined) {
-      if (b.moderation !== "open" && b.moderation !== "moderated") error = "Moderation must be 'open' or 'moderated'";
+      if (b.moderation !== "open" && b.moderation !== "moderated") error = { error: "api.moderationInvalid" };
       else config.moderation = b.moderation;
     }
     if (!error && b.showAuthorNames !== undefined) {
-      if (typeof b.showAuthorNames !== "boolean") error = "showAuthorNames must be true or false";
+      if (typeof b.showAuthorNames !== "boolean") error = { error: "api.showAuthorNamesBoolean" };
       else config.showAuthorNames = b.showAuthorNames;
     }
   } else if (type === "openText") {
-    error = intField(b, "maxResponsesPerParticipant", "Responses per participant", OPEN_TEXT_MIN, OPEN_TEXT_MAX, config);
+    error = intField(b, "maxResponsesPerParticipant", "api.responsesPerParticipantRange", OPEN_TEXT_MIN, OPEN_TEXT_MAX, config);
   } else if (b.scale !== undefined) {
-    if (b.scale !== "stars5" && b.scale !== "numeric10") error = "Scale must be 'stars5' or 'numeric10'";
+    if (b.scale !== "stars5" && b.scale !== "numeric10") error = { error: "api.scaleInvalid" };
     else config.scale = b.scale;
   }
-  if (error) return { ok: false, error };
+  if (error) return { ok: false, ...error };
   return { ok: true, value: { title, config: config as Partial<ConfigByType[T]> } };
 }
 

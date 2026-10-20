@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { events, interactions, users } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -5,7 +6,7 @@ import { publish } from "@/lib/realtime/publisher";
 
 export type InteractionRow = typeof interactions.$inferSelect;
 export type StateChange = { interactionId: string; state: InteractionRow["state"] };
-type Result = { ok: true; interaction: InteractionRow } | { ok: false; error: string };
+type Result = { ok: true; interaction: InteractionRow } | { ok: false; error: MessageKey; params?: TParams };
 
 function broadcast(eventId: string, changes: StateChange[]) {
   for (const change of changes) publish(eventId, "state-changed", change);
@@ -49,8 +50,8 @@ export async function startInteraction(eventId: string, id: string): Promise<Res
       ok: false,
       error:
         state === "live"
-          ? "Interaction is already live"
-          : "Only draft or paused interactions can be started; duplicate a closed one to run it again",
+          ? "api.alreadyLive"
+          : "api.startInvalid",
     };
   }
   broadcast(eventId, [
@@ -67,7 +68,7 @@ export async function pauseInteraction(eventId: string, id: string): Promise<Res
     .set({ state: "paused" })
     .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId), eq(interactions.state, "live")))
     .returning();
-  if (!paused) return { ok: false, error: "Only a live interaction can be paused" };
+  if (!paused) return { ok: false, error: "api.pauseInvalid" };
   broadcast(eventId, [{ interactionId: id, state: "paused" }]);
   return { ok: true, interaction: paused };
 }
@@ -79,7 +80,7 @@ export async function closeInteraction(eventId: string, id: string): Promise<Res
     .set({ state: "closed" })
     .where(and(eq(interactions.id, id), eq(interactions.eventId, eventId), inArray(interactions.state, ["live", "paused"])))
     .returning();
-  if (!closed) return { ok: false, error: "Only a live or paused interaction can be closed" };
+  if (!closed) return { ok: false, error: "api.closeInvalid" };
   broadcast(eventId, [{ interactionId: id, state: "closed" }]);
   return { ok: true, interaction: closed };
 }

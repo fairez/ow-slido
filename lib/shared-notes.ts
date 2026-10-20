@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, sql } from "drizzle-orm";
 import { interactions, participants, sharedNoteVotes, sharedNotes } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -35,7 +36,7 @@ export type ParticipantNote = PublicNote & { mine: boolean; iUpvoted: boolean };
 
 export type NoteResult =
   | { ok: true; note: NoteView }
-  | { ok: false; status: 400 | 403 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 403 | 404 | 409; error: MessageKey; params?: TParams };
 
 const toView = (row: typeof sharedNotes.$inferSelect): NoteView => ({
   id: row.id,
@@ -48,25 +49,25 @@ const toView = (row: typeof sharedNotes.$inferSelect): NoteView => ({
   updatedAt: row.updatedAt,
 });
 
-function validateText(raw: unknown): { ok: true; text: string } | { ok: false; status: 400; error: string } {
+function validateText(raw: unknown): { ok: true; text: string } | { ok: false; status: 400; error: MessageKey; params?: TParams } {
   const text = typeof raw === "string" ? raw.trim() : "";
-  if (!text) return { ok: false, status: 400, error: "Write something first" };
+  if (!text) return { ok: false, status: 400, error: "api.writeFirst" };
   if (text.length > NOTE_TEXT_MAX) {
-    return { ok: false, status: 400, error: `Notes must be at most ${NOTE_TEXT_MAX} characters` };
+    return { ok: false, status: 400, error: "api.notesMax", params: { max: NOTE_TEXT_MAX } };
   }
-  if (isProfane(text)) return { ok: false, status: 400, error: "That note contains language we can't accept" };
+  if (isProfane(text)) return { ok: false, status: 400, error: "api.profaneNote" };
   return { ok: true, text };
 }
 
 /** The optional display name sent with a note; empty means "use the participant's nickname, if any". */
-function validateAuthorName(raw: unknown): { ok: true; name: string | null } | { ok: false; status: 400; error: string } {
+function validateAuthorName(raw: unknown): { ok: true; name: string | null } | { ok: false; status: 400; error: MessageKey; params?: TParams } {
   if (raw === undefined || raw === null) return { ok: true, name: null };
-  if (typeof raw !== "string") return { ok: false, status: 400, error: "Invalid name" };
+  if (typeof raw !== "string") return { ok: false, status: 400, error: "api.invalidName" };
   const name = raw.trim();
   if (name.length > AUTHOR_NAME_MAX_LENGTH) {
-    return { ok: false, status: 400, error: `Names must be at most ${AUTHOR_NAME_MAX_LENGTH} characters` };
+    return { ok: false, status: 400, error: "api.namesMax", params: { max: AUTHOR_NAME_MAX_LENGTH } };
   }
-  if (name && isProfane(name)) return { ok: false, status: 400, error: "That name contains language we can't accept" };
+  if (name && isProfane(name)) return { ok: false, status: 400, error: "api.profaneName" };
   return { ok: true, name: name || null };
 }
 
@@ -98,8 +99,8 @@ async function lockContext(tx: Tx, interactionId: string, participantId: string)
   return { interaction, nickname: participant.nickname };
 }
 
-const NOT_FOUND = { ok: false, status: 404, error: "Interaction not found" } as const;
-const NOT_OPEN = { ok: false, status: 409, error: "Notes are not open" } as const;
+const NOT_FOUND = { ok: false, status: 404, error: "api.interactionNotFound" } as const;
+const NOT_OPEN = { ok: false, status: 409, error: "api.notesNotOpen" } as const;
 
 export async function submitNote(
   interactionId: string,
@@ -123,7 +124,7 @@ export async function submitNote(
       .from(sharedNotes)
       .where(and(eq(sharedNotes.interactionId, interactionId), eq(sharedNotes.participantId, participantId)));
     if (used >= config.maxNotesPerParticipant) {
-      return { ok: false, status: 409, error: "You have used all your notes" };
+      return { ok: false, status: 409, error: "api.notesUsed" };
     }
 
     const nickname = name.name ?? (ctx.nickname?.trim() || null);
@@ -154,14 +155,14 @@ async function withOwnNote(
   return getDb().transaction(async (tx): Promise<NoteResult> => {
     const [found] = await tx.select().from(sharedNotes).where(eq(sharedNotes.id, noteId));
     if (!found || found.participantId !== participantId) {
-      return { ok: false, status: 404, error: "Note not found" };
+      return { ok: false, status: 404, error: "api.noteNotFound" };
     }
     const ctx = await lockContext(tx, found.interactionId, participantId);
-    if (!ctx) return { ok: false, status: 404, error: "Note not found" };
+    if (!ctx) return { ok: false, status: 404, error: "api.noteNotFound" };
     if (ctx.interaction.state !== "live") return NOT_OPEN;
     // Re-read under the lock: the note may have been deleted meanwhile.
     const [note] = await tx.select().from(sharedNotes).where(eq(sharedNotes.id, noteId));
-    if (!note) return { ok: false, status: 404, error: "Note not found" };
+    if (!note) return { ok: false, status: 404, error: "api.noteNotFound" };
     return run(tx, note, settings(ctx.interaction.config));
   });
 }
@@ -238,7 +239,7 @@ export type NoteSort = "popular" | "recent";
 
 export type ListResult =
   | { ok: true; notes: ParticipantNote[] }
-  | { ok: false; status: 404; error: string };
+  | { ok: false; status: 404; error: MessageKey; params?: TParams };
 
 /** Approved notes only, pinned first. Draft interactions look like they don't exist. */
 export async function listNotes(
@@ -252,13 +253,13 @@ export async function listNotes(
     .from(interactions)
     .where(eq(interactions.id, interactionId));
   if (!interaction || interaction.type !== "sharedNotes" || interaction.state === "draft") {
-    return { ok: false, status: 404, error: "Interaction not found" };
+    return { ok: false, status: 404, error: "api.interactionNotFound" };
   }
   const [participant] = await db
     .select({ id: participants.id })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.eventId, interaction.eventId)));
-  if (!participant) return { ok: false, status: 404, error: "Interaction not found" };
+  if (!participant) return { ok: false, status: 404, error: "api.interactionNotFound" };
 
   const rows = await db
     .select()
@@ -329,27 +330,27 @@ export async function listPresenterNotes(interactionId: string): Promise<PublicN
 
 export type UpvoteResult =
   | { ok: true; upvoted: boolean; upvotes: number }
-  | { ok: false; status: 403 | 404 | 409; error: string };
+  | { ok: false; status: 403 | 404 | 409; error: MessageKey; params?: TParams };
 
 /** Toggles the participant's upvote. Hidden (pending/rejected) notes look like they don't exist. */
 export async function toggleNoteUpvote(noteId: string, participantId: string): Promise<UpvoteResult> {
   const db = getDb();
   const outcome = await db.transaction(async (tx): Promise<UpvoteResult & { eventId?: string; interactionId?: string }> => {
     const [found] = await tx.select({ interactionId: sharedNotes.interactionId }).from(sharedNotes).where(eq(sharedNotes.id, noteId));
-    if (!found) return { ok: false, status: 404, error: "Note not found" };
+    if (!found) return { ok: false, status: 404, error: "api.noteNotFound" };
     // Share-lock the interaction like the write paths, so closing waits for in-flight votes.
     const [interaction] = await tx.select().from(interactions).where(eq(interactions.id, found.interactionId)).for("share");
     // FOR SHARE keeps a concurrent moderation change from slipping between the status check and the write.
     const [note] = await tx.select().from(sharedNotes).where(eq(sharedNotes.id, noteId)).for("share");
-    if (!interaction || !note || note.status !== "approved") return { ok: false, status: 404, error: "Note not found" };
+    if (!interaction || !note || note.status !== "approved") return { ok: false, status: 404, error: "api.noteNotFound" };
     const [participant] = await tx
       .select({ id: participants.id })
       .from(participants)
       .where(and(eq(participants.id, participantId), eq(participants.eventId, interaction.eventId)));
-    if (!participant) return { ok: false, status: 404, error: "Note not found" };
-    if (interaction.state === "draft") return { ok: false, status: 409, error: "Notes are not open" };
+    if (!participant) return { ok: false, status: 404, error: "api.noteNotFound" };
+    if (interaction.state === "draft") return { ok: false, status: 409, error: "api.notesNotOpen" };
     if (note.participantId === participantId) {
-      return { ok: false, status: 403, error: "You can't upvote your own note" };
+      return { ok: false, status: 403, error: "api.ownNoteUpvote" };
     }
 
     const removed = await tx

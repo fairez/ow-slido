@@ -1,3 +1,5 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
+import { serverT } from "@/lib/i18n/server";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { events, interactions } from "@/db/schema";
@@ -16,15 +18,16 @@ export type PollConfig = {
 };
 export type PollInput = { title?: string; config: Partial<PollConfig> };
 
-type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 
 /** Accepts plain labels or `{id?, label}`; ids of existing options are kept, others generated. */
 function parseOptions(raw: unknown): Parsed<PollOption[]> {
-  if (!Array.isArray(raw)) return { ok: false, error: "Options must be a list" };
+  if (!Array.isArray(raw)) return { ok: false, error: "api.optionsList" };
   if (raw.length < POLL_MIN_OPTIONS || raw.length > POLL_MAX_OPTIONS) {
     return {
       ok: false,
-      error: `A poll needs ${POLL_MIN_OPTIONS} to ${POLL_MAX_OPTIONS} options`,
+      error: "api.pollOptionsRange",
+      params: { min: POLL_MIN_OPTIONS, max: POLL_MAX_OPTIONS },
     };
   }
   const options: PollOption[] = [];
@@ -33,9 +36,9 @@ function parseOptions(raw: unknown): Parsed<PollOption[]> {
     const obj = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
     const labelRaw = typeof entry === "string" ? entry : obj?.label;
     const label = typeof labelRaw === "string" ? labelRaw.trim() : "";
-    if (!label) return { ok: false, error: "Option labels cannot be empty" };
+    if (!label) return { ok: false, error: "api.optionLabelEmpty" };
     if (label.length > POLL_OPTION_MAX) {
-      return { ok: false, error: `Option labels must be at most ${POLL_OPTION_MAX} characters` };
+      return { ok: false, error: "api.optionLabelMax", params: { max: POLL_OPTION_MAX } };
     }
     let id = typeof obj?.id === "string" && obj.id ? obj.id : randomUUID();
     if (seen.has(id)) id = randomUUID();
@@ -47,15 +50,15 @@ function parseOptions(raw: unknown): Parsed<PollOption[]> {
 
 /** Validates a poll body. With `partial`, absent fields are skipped (PATCH). */
 export function parsePollInput(body: unknown, partial: boolean): Parsed<PollInput> {
-  if (!body || typeof body !== "object") return { ok: false, error: "Invalid request body" };
+  if (!body || typeof body !== "object") return { ok: false, error: "api.invalidBody" };
   const b = body as Record<string, unknown>;
   const value: PollInput = { config: {} };
 
   if (!partial || b.question !== undefined) {
     const question = typeof b.question === "string" ? b.question.trim() : "";
-    if (!question) return { ok: false, error: "Question is required" };
+    if (!question) return { ok: false, error: "api.questionRequired" };
     if (question.length > POLL_QUESTION_MAX) {
-      return { ok: false, error: `Question must be at most ${POLL_QUESTION_MAX} characters` };
+      return { ok: false, error: "api.questionMax", params: { max: POLL_QUESTION_MAX } };
     }
     value.title = question;
   }
@@ -66,7 +69,7 @@ export function parsePollInput(body: unknown, partial: boolean): Parsed<PollInpu
   }
   for (const key of ["multiSelect", "showResultsToParticipants"] as const) {
     if (b[key] !== undefined) {
-      if (typeof b[key] !== "boolean") return { ok: false, error: `${key} must be true or false` };
+      if (typeof b[key] !== "boolean") return { ok: false, error: "api.fieldBoolean", params: { field: key } };
       value.config[key] = b[key];
     }
   }
@@ -99,6 +102,6 @@ export async function findInteraction(eventId: string, id: string) {
   return row ?? null;
 }
 
-export const eventNotFound = () => Response.json({ error: "Event not found" }, { status: 404 });
-export const interactionNotFound = () =>
-  Response.json({ error: "Interaction not found" }, { status: 404 });
+export const eventNotFound = (request: Request) => Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
+export const interactionNotFound = (request: Request) =>
+  Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });

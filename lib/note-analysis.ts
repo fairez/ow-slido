@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { interactions, noteAnalyses, sharedNotes } from "@/db/schema";
@@ -92,7 +93,7 @@ export async function getLatestAnalysis(interactionId: string): Promise<Analysis
 
 export type StartResult =
   | { ok: true; analysis: AnalysisView; done: Promise<void> }
-  | { ok: false; status: 400 | 409; error: string };
+  | { ok: false; status: 400 | 409; error: MessageKey; params?: TParams };
 
 /**
  * Creates a queued job and starts it in the background. Only called from the host's explicit
@@ -118,10 +119,10 @@ export async function startAnalysis(eventId: string, interactionId: string): Pro
       .from(noteAnalyses)
       .where(and(eq(noteAnalyses.interactionId, interactionId), inArray(noteAnalyses.status, ["queued", "running"])))
       .limit(1);
-    if (active) return { kind: "rejected" as const, error: "An analysis is already running", status: 409 as const };
+    if (active) return { kind: "rejected" as const, error: "api.analysisRunning" as const, status: 409 as const };
 
     const notes = await approvedNotes(tx as unknown as Db, interactionId);
-    if (notes.length === 0) return { kind: "rejected" as const, error: "There are no approved notes to analyze", status: 400 as const };
+    if (notes.length === 0) return { kind: "rejected" as const, error: "api.noNotesToAnalyze" as const, status: 400 as const };
     const [row] = await tx
       .insert(noteAnalyses)
       .values({ interactionId, notesSnapshotHash: hashNotes(notes), noteCount: notes.length })
@@ -310,7 +311,7 @@ function storedKeywords(raw: unknown): EditableKeyword[] {
   return normalizeKeywords(items);
 }
 
-export type EditOutcome = { ok: true; analysis: AnalysisView } | { ok: false; status: 400 | 409; error: string };
+export type EditOutcome = { ok: true; analysis: AnalysisView } | { ok: false; status: 400 | 409; error: MessageKey; params?: TParams };
 
 /** Applies a host edit to the newest finished analysis and marks it edited. */
 export async function editAnalysis(interactionId: string, edit: AnalysisEdit): Promise<EditOutcome> {
@@ -325,11 +326,11 @@ async function editAnalysisRow(interactionId: string, edit: AnalysisEdit): Promi
       sql`SELECT id FROM note_analyses WHERE interaction_id = ${interactionId} AND status = 'done' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
     );
     const target = (found.rows[0] as { id: string } | undefined)?.id;
-    if (!target) return { ok: false, status: 409, error: "There is no finished analysis to edit" };
+    if (!target) return { ok: false, status: 409, error: "api.noAnalysisToEdit" };
     const [row] = await tx.select().from(noteAnalyses).where(eq(noteAnalyses.id, target));
     const notes = await approvedNotes(tx as unknown as Db, interactionId);
     if (edit.op === "moveNote" && !notes.some((n) => n.id === edit.noteId)) {
-      return { ok: false, status: 400, error: "That note is no longer approved." };
+      return { ok: false, status: 400, error: "api.noteNotApproved" };
     }
     const result = applyEdit(
       { summary: row.summary, categories: storedCategories(row.categories), keywords: storedKeywords(row.keywords) },

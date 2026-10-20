@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { events, participants, questionVotes, questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -21,7 +22,7 @@ export const toPublicQuestion = (row: Row, upvotes = 0, upvoted = false): Public
 
 type SubmitResult =
   | { ok: true; status: "pending" | "approved"; question: PublicQuestion }
-  | { ok: false; status: 400 | 404; error: string };
+  | { ok: false; status: 400 | 404; error: MessageKey; params?: TParams };
 
 /** Anonymous unless a non-empty name is given; pending in moderated events, approved in open ones. */
 export async function submitQuestion(
@@ -30,21 +31,21 @@ export async function submitQuestion(
   input: { text?: unknown; authorName?: unknown },
 ): Promise<SubmitResult> {
   const text = typeof input.text === "string" ? input.text.trim() : "";
-  if (!text) return { ok: false, status: 400, error: "Question is required" };
+  if (!text) return { ok: false, status: 400, error: "api.questionRequired" };
   if (text.length > QUESTION_MAX_LENGTH) {
-    return { ok: false, status: 400, error: `Question must be at most ${QUESTION_MAX_LENGTH} characters` };
+    return { ok: false, status: 400, error: "api.questionMax", params: { max: QUESTION_MAX_LENGTH } };
   }
   let authorName: string | null = null;
   if (input.authorName !== undefined && input.authorName !== null) {
-    if (typeof input.authorName !== "string") return { ok: false, status: 400, error: "Invalid name" };
+    if (typeof input.authorName !== "string") return { ok: false, status: 400, error: "api.invalidName" };
     const name = input.authorName.trim();
     if (name.length > AUTHOR_NAME_MAX_LENGTH) {
-      return { ok: false, status: 400, error: `Name must be at most ${AUTHOR_NAME_MAX_LENGTH} characters` };
+      return { ok: false, status: 400, error: "api.nameMax", params: { max: AUTHOR_NAME_MAX_LENGTH } };
     }
     authorName = name || null;
   }
   if (isProfane(text) || (authorName && isProfane(authorName))) {
-    return { ok: false, status: 400, error: "That question contains language we can't accept" };
+    return { ok: false, status: 400, error: "api.profaneQuestion" };
   }
 
   const db = getDb();
@@ -52,12 +53,12 @@ export async function submitQuestion(
     .select({ moderationMode: events.moderationMode })
     .from(events)
     .where(eq(events.id, eventId));
-  if (!event) return { ok: false, status: 404, error: "Event not found" };
+  if (!event) return { ok: false, status: 404, error: "api.eventNotFound" };
   const [participant] = await db
     .select({ id: participants.id })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.eventId, eventId)));
-  if (!participant) return { ok: false, status: 404, error: "Event not found" };
+  if (!participant) return { ok: false, status: 404, error: "api.eventNotFound" };
 
   const status = event.moderationMode === "moderated" ? "pending" : "approved";
   const [row] = await db
@@ -103,11 +104,11 @@ export async function listApprovedQuestions(eventId: string, participantId?: str
 
 type UpvoteResult =
   | { ok: true; upvoted: boolean; upvotes: number }
-  | { ok: false; status: 404; error: string };
+  | { ok: false; status: 404; error: MessageKey; params?: TParams };
 
 /** Toggles the participant's upvote on an approved question; pending/rejected ones look like they don't exist. */
 export async function toggleUpvote(questionId: string, participantId: string): Promise<UpvoteResult> {
-  const notFound = { ok: false, status: 404, error: "Question not found" } as const;
+  const notFound = { ok: false, status: 404, error: "api.questionNotFound" } as const;
   const db = getDb();
   const result = await db.transaction(async (tx) => {
     // FOR SHARE keeps a concurrent moderation change from slipping between the status check and the write.

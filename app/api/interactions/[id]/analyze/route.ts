@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isUuid } from "@/lib/events";
 import { findNotesInteractionEvent, startAnalysis } from "@/lib/note-analysis";
@@ -15,13 +16,13 @@ export async function POST(request: Request, { params }: Context) {
   const { id } = await params;
   const interaction = isUuid(id) ? await findNotesInteractionEvent(id) : null;
   const event = interaction ? await findOwnedEvent(interaction.eventId, auth.user.id) : null;
-  if (!interaction || !event) return Response.json({ error: "Interaction not found" }, { status: 404 });
+  if (!interaction || !event) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
   if (!event.aiNoticeAcceptedAt) {
     const body = (await request.json().catch(() => null)) as { acceptNotice?: unknown } | null;
     if (body?.acceptNotice !== true) {
       return Response.json(
-        { error: "Accept the AI notice before the first analysis", code: "notice_required" },
+        { error: serverT(request, "api.aiNoticeRequired"), code: "notice_required" },
         { status: 409 },
       );
     }
@@ -32,6 +33,6 @@ export async function POST(request: Request, { params }: Context) {
   }
 
   const result = await startAnalysis(event.id, id);
-  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
   return Response.json({ analysis: result.analysis }, { status: 202 });
 }

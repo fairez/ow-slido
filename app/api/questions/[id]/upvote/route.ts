@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { eq } from "drizzle-orm";
 import { questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -10,9 +11,9 @@ const UPVOTE_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const UPVOTE_TOKEN_LIMIT = 30;
 const UPVOTE_WINDOW_SECONDS = 60;
 
-const tooMany = (retryAfterSeconds: number) =>
+const tooMany = (request: Request, retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests. Wait a moment, then try again." },
+    { error: serverT(request, "api.tooManyRequests") },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -21,24 +22,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   const ip = await rateLimit(`upvote:ip:${clientIp(request)}`, UPVOTE_IP_LIMIT, UPVOTE_WINDOW_SECONDS);
-  if (!ip.allowed) return tooMany(ip.retryAfterSeconds);
+  if (!ip.allowed) return tooMany(request, ip.retryAfterSeconds);
 
-  if (!isUuid(id)) return Response.json({ error: "Question not found" }, { status: 404 });
+  if (!isUuid(id)) return Response.json({ error: serverT(request, "api.questionNotFound") }, { status: 404 });
   // The participant cookie is per event, so the event comes from the question itself.
   const [question] = await getDb()
     .select({ eventId: questions.eventId })
     .from(questions)
     .where(eq(questions.id, id));
-  if (!question) return Response.json({ error: "Question not found" }, { status: 404 });
+  if (!question) return Response.json({ error: serverT(request, "api.questionNotFound") }, { status: 404 });
 
   const token = readParticipantToken(request, question.eventId);
   const participantId = token ? verifyParticipantToken(token, question.eventId) : null;
-  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
+  if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
 
   const byToken = await rateLimit(`upvote:token:${participantId}`, UPVOTE_TOKEN_LIMIT, UPVOTE_WINDOW_SECONDS);
-  if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);
+  if (!byToken.allowed) return tooMany(request, byToken.retryAfterSeconds);
 
   const result = await toggleUpvote(id, participantId);
-  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
   return Response.json({ ok: true, upvoted: result.upvoted, upvotes: result.upvotes });
 }

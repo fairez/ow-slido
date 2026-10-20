@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth/require-admin";
@@ -12,10 +13,10 @@ const WORD_IP_LIMIT = AUDIENCE_IP_LIMIT;
 const WORD_TOKEN_LIMIT = 20;
 const WORD_WINDOW_SECONDS = 60;
 
-const notFound = () => Response.json({ error: "Interaction not found" }, { status: 404 });
-const tooMany = (retryAfterSeconds: number) =>
+const notFound = (request: Request) => Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+const tooMany = (request: Request, retryAfterSeconds: number) =>
   Response.json(
-    { error: "Too many requests. Wait a moment, then try again." },
+    { error: serverT(request, "api.tooManyRequests") },
     { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
   );
 
@@ -40,22 +41,22 @@ export async function POST(request: Request, { params }: Context) {
   const { id } = await params;
 
   const ip = await rateLimit(`words:ip:${clientIp(request)}`, WORD_IP_LIMIT, WORD_WINDOW_SECONDS);
-  if (!ip.allowed) return tooMany(ip.retryAfterSeconds);
+  if (!ip.allowed) return tooMany(request, ip.retryAfterSeconds);
 
   const interaction = await findWordcloud(id);
-  if (!interaction) return notFound();
+  if (!interaction) return notFound(request);
 
   const participantId = participantFor(request, interaction.eventId);
-  if (!participantId) return Response.json({ error: "Join the event first, then try again." }, { status: 401 });
+  if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
 
   const byToken = await rateLimit(`words:token:${participantId}`, WORD_TOKEN_LIMIT, WORD_WINDOW_SECONDS);
-  if (!byToken.allowed) return tooMany(byToken.retryAfterSeconds);
+  if (!byToken.allowed) return tooMany(request, byToken.retryAfterSeconds);
 
   const body = await request.json().catch(() => null);
   const word = body && typeof body === "object" ? (body as Record<string, unknown>).word : undefined;
 
   const result = await submitWord(id, participantId, word);
-  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
   return Response.json({ ok: true, remaining: result.remaining }, { status: 201 });
 }
 
@@ -63,12 +64,12 @@ export async function POST(request: Request, { params }: Context) {
 export async function GET(request: Request, { params }: Context) {
   const { id } = await params;
   const interaction = await findWordcloud(id);
-  if (!interaction) return notFound();
+  if (!interaction) return notFound(request);
 
   if (!participantFor(request, interaction.eventId)) {
     const user = await getSessionUser(request);
-    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-    if (!(await findOwnedEvent(interaction.eventId, user.id))) return notFound();
+    if (!user) return Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 });
+    if (!(await findOwnedEvent(interaction.eventId, user.id))) return notFound(request);
   }
   const { words, total } = await getWordcloudResults(id);
   return Response.json({ words, total });

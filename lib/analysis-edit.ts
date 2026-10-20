@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 /** Host edits to a stored analysis. Db-free so the rules can be tested and reused on the client. */
 
 export const UNCATEGORIZED_NAME = "Uncategorized";
@@ -21,10 +22,10 @@ export type AnalysisEdit =
   | { op: "setSummary"; summary: string }
   | { op: "removeKeyword"; word: string };
 
-export type EditResult = { ok: true; value: EditState } | { ok: false; error: string };
+export type EditResult = { ok: true; value: EditState } | { ok: false; error: MessageKey; params?: TParams };
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const fail = (error: string): EditResult => ({ ok: false, error });
+const fail = (error: MessageKey, params?: TParams): EditResult => ({ ok: false, error, params });
 
 function find(categories: EditableCategory[], name: string) {
   return categories.findIndex((c) => same(c.name, name));
@@ -55,12 +56,12 @@ export function applyEdit(state: EditState, edit: AnalysisEdit): EditResult {
   switch (edit.op) {
     case "renameCategory": {
       const to = edit.to.trim();
-      if (!to) return fail("Give the category a name.");
-      if (to.length > CATEGORY_NAME_MAX) return fail(`Category names can be up to ${CATEGORY_NAME_MAX} characters.`);
+      if (!to) return fail("api.categoryNameRequired");
+      if (to.length > CATEGORY_NAME_MAX) return fail("api.categoryNameMax", { max: CATEGORY_NAME_MAX });
       const at = find(categories, edit.name);
-      if (at === -1) return fail("That category no longer exists.");
+      if (at === -1) return fail("api.categoryGone");
       if (categories.some((c, i) => i !== at && same(c.name, to))) {
-        return fail("A category with that name already exists. Merge them instead.");
+        return fail("api.categoryExists");
       }
       const next = categories.map((c, i) => (i === at ? { ...c, name: to } : c));
       return { ok: true, value: { ...state, categories: next } };
@@ -68,16 +69,16 @@ export function applyEdit(state: EditState, edit: AnalysisEdit): EditResult {
     case "mergeCategories": {
       const from = find(categories, edit.from);
       const into = find(categories, edit.into);
-      if (from === -1 || into === -1) return fail("That category no longer exists.");
-      if (from === into) return fail("Pick two different categories to merge.");
+      if (from === -1 || into === -1) return fail("api.categoryGone");
+      if (from === into) return fail("api.mergeSame");
       const moved = addTo(categories, categories[into].name, categories[from].noteIds);
-      if (!moved) return fail("That category no longer exists.");
+      if (!moved) return fail("api.categoryGone");
       return { ok: true, value: { ...state, categories: moved.filter((c) => !same(c.name, categories[from].name)) } };
     }
     case "deleteCategory": {
       const at = find(categories, edit.name);
-      if (at === -1) return fail("That category no longer exists.");
-      if (same(categories[at].name, UNCATEGORIZED_NAME)) return fail("Uncategorized holds the notes that belong nowhere else.");
+      if (at === -1) return fail("api.categoryGone");
+      if (same(categories[at].name, UNCATEGORIZED_NAME)) return fail("api.uncategorizedKeep");
       const rest = categories.filter((_, i) => i !== at);
       const next = addTo(rest, UNCATEGORIZED_NAME, categories[at].noteIds);
       return { ok: true, value: { ...state, categories: next ?? rest } };
@@ -85,18 +86,18 @@ export function applyEdit(state: EditState, edit: AnalysisEdit): EditResult {
     case "moveNote": {
       const stripped = categories.map((c) => ({ ...c, noteIds: c.noteIds.filter((id) => id !== edit.noteId) }));
       const next = addTo(stripped, edit.to, [edit.noteId]);
-      if (!next) return fail("That category no longer exists.");
+      if (!next) return fail("api.categoryGone");
       return { ok: true, value: { ...state, categories: tidy(next) } };
     }
     case "setSummary": {
       const summary = edit.summary.trim();
-      if (!summary) return fail("The summary cannot be empty.");
-      if (summary.length > SUMMARY_MAX) return fail(`The summary can be up to ${SUMMARY_MAX} characters.`);
+      if (!summary) return fail("api.summaryEmpty");
+      if (summary.length > SUMMARY_MAX) return fail("api.summaryMax", { max: SUMMARY_MAX });
       return { ok: true, value: { ...state, summary } };
     }
     case "removeKeyword": {
       const keywords = state.keywords.filter((k) => !same(k.word, edit.word));
-      if (keywords.length === state.keywords.length) return fail("That keyword was already removed.");
+      if (keywords.length === state.keywords.length) return fail("api.keywordRemoved");
       return { ok: true, value: { ...state, keywords } };
     }
   }
@@ -105,9 +106,9 @@ export function applyEdit(state: EditState, edit: AnalysisEdit): EditResult {
 const str = (v: unknown) => (typeof v === "string" ? v : null);
 
 /** Validates a request body into an edit. */
-export function parseEdit(body: unknown): { ok: true; value: AnalysisEdit } | { ok: false; error: string } {
+export function parseEdit(body: unknown): { ok: true; value: AnalysisEdit } | { ok: false; error: MessageKey; params?: TParams } {
   const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
-  const bad = { ok: false as const, error: "That edit is not valid." };
+  const bad = { ok: false as const, error: "api.editInvalid" as MessageKey };
   switch (b.op) {
     case "renameCategory": {
       const name = str(b.name), to = str(b.to);

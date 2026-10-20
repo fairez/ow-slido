@@ -22,9 +22,9 @@ export async function POST(request: Request, { params }: Context) {
   if (!auth.ok) return auth.response;
   const { id, interactionId } = await params;
   const event = await findOwnedEvent(id, auth.user.id);
-  if (!event) return eventNotFound();
+  if (!event) return eventNotFound(request);
   const source = await findInteraction(event.id, interactionId);
-  if (!source) return interactionNotFound();
+  if (!source) return interactionNotFound(request);
 
   const config = isNewInteractionType(source.type)
     ? newInteractionConfig(source.type, source.config)

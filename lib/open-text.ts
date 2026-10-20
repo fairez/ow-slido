@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { events, interactions, openTextResponses, participants } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -20,7 +21,7 @@ export type HostResponse = PublicResponse & { hidden: boolean };
 
 export type SubmitResult =
   | { ok: true; response: PublicResponse }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
 const toPublic = (row: typeof openTextResponses.$inferSelect): PublicResponse => ({
   id: row.id,
@@ -39,11 +40,11 @@ export async function submitResponse(
   rawText: unknown,
 ): Promise<SubmitResult> {
   const text = typeof rawText === "string" ? rawText.trim() : "";
-  if (!text) return { ok: false, status: 400, error: "Write something first" };
+  if (!text) return { ok: false, status: 400, error: "api.writeFirst" };
   if (text.length > OPEN_TEXT_RESPONSE_MAX) {
-    return { ok: false, status: 400, error: `Responses must be at most ${OPEN_TEXT_RESPONSE_MAX} characters` };
+    return { ok: false, status: 400, error: "api.responsesMax", params: { max: OPEN_TEXT_RESPONSE_MAX } };
   }
-  if (isProfane(text)) return { ok: false, status: 400, error: "That response contains language we can't accept" };
+  if (isProfane(text)) return { ok: false, status: 400, error: "api.profaneResponse" };
 
   const outcome = await getDb().transaction(async (tx) => {
     // Share lock: closing (an UPDATE) waits for in-flight writes.
@@ -56,14 +57,14 @@ export async function submitResponse(
       .where(eq(participants.id, participantId))
       .for("update");
     if (!participant || participant.eventId !== interaction.eventId) return { error: 404 as const };
-    if (interaction.state !== "live") return { error: 409 as const, message: "This question is not open" };
+    if (interaction.state !== "live") return { error: 409 as const, message: "api.questionNotOpen" as const };
 
     const [{ used }] = await tx
       .select({ used: sql<number>`count(*)::int` })
       .from(openTextResponses)
       .where(and(eq(openTextResponses.interactionId, interactionId), eq(openTextResponses.participantId, participantId)));
     if (used >= maxResponses(interaction.config)) {
-      return { error: 409 as const, message: "You have used all your responses" };
+      return { error: 409 as const, message: "api.responsesUsed" as const };
     }
     const [row] = await tx.insert(openTextResponses).values({ interactionId, participantId, text }).returning();
     await tx
@@ -75,7 +76,7 @@ export async function submitResponse(
 
   if ("error" in outcome) {
     return outcome.error === 404
-      ? { ok: false, status: 404, error: "Interaction not found" }
+      ? { ok: false, status: 404, error: "api.interactionNotFound" }
       : { ok: false, status: 409, error: outcome.message! };
   }
   const response = toPublic(outcome.row);
@@ -83,7 +84,7 @@ export async function submitResponse(
   return { ok: true, response };
 }
 
-export type ListResult<T> = { ok: true; responses: T[] } | { ok: false; status: 404; error: string };
+export type ListResult<T> = { ok: true; responses: T[] } | { ok: false; status: 404; error: MessageKey; params?: TParams };
 
 async function listFor(interactionId: string, includeHidden: boolean) {
   const rows = await getDb()
@@ -106,13 +107,13 @@ export async function listResponses(interactionId: string, participantId: string
     .from(interactions)
     .where(eq(interactions.id, interactionId));
   if (!interaction || interaction.type !== "openText" || interaction.state === "draft") {
-    return { ok: false, status: 404, error: "Interaction not found" };
+    return { ok: false, status: 404, error: "api.interactionNotFound" };
   }
   const [participant] = await db
     .select({ id: participants.id })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.eventId, interaction.eventId)));
-  if (!participant) return { ok: false, status: 404, error: "Interaction not found" };
+  if (!participant) return { ok: false, status: 404, error: "api.interactionNotFound" };
   return { ok: true, responses: (await listFor(interactionId, false)).map(toPublic) };
 }
 
@@ -126,7 +127,7 @@ export async function listResponsesForHost(
     .from(interactions)
     .innerJoin(events, eq(events.id, interactions.eventId))
     .where(and(eq(interactions.id, interactionId), eq(events.ownerId, ownerId)));
-  if (!row || row.type !== "openText") return { ok: false, status: 404, error: "Interaction not found" };
+  if (!row || row.type !== "openText") return { ok: false, status: 404, error: "api.interactionNotFound" };
   const rows = await listFor(interactionId, true);
   return { ok: true, responses: rows.map((r) => ({ ...toPublic(r), hidden: r.hidden })) };
 }
@@ -148,7 +149,7 @@ async function findOwned(responseId: string, ownerId: string) {
 
 export type HostChangeResult =
   | { ok: true; response: HostResponse }
-  | { ok: false; status: 400 | 404; error: string };
+  | { ok: false; status: 400 | 404; error: MessageKey; params?: TParams };
 
 /** Owner only: toggle `highlighted` and/or `hidden`. Hiding also removes the highlight. */
 export async function updateResponseAsHost(
@@ -159,20 +160,20 @@ export async function updateResponseAsHost(
   const patch: { hidden?: boolean; highlighted?: boolean } = {};
   for (const key of ["hidden", "highlighted"] as const) {
     if (change[key] === undefined) continue;
-    if (typeof change[key] !== "boolean") return { ok: false, status: 400, error: `${key} must be true or false` };
+    if (typeof change[key] !== "boolean") return { ok: false, status: 400, error: "api.fieldBoolean", params: { field: key } };
     patch[key] = change[key];
   }
-  if (Object.keys(patch).length === 0) return { ok: false, status: 400, error: "Nothing to change" };
+  if (Object.keys(patch).length === 0) return { ok: false, status: 400, error: "api.nothingToChange" };
 
   const found = await findOwned(responseId, ownerId);
-  if (!found) return { ok: false, status: 404, error: "Response not found" };
+  if (!found) return { ok: false, status: 404, error: "api.responseNotFound" };
   if (patch.hidden) patch.highlighted = false;
   const [row] = await getDb()
     .update(openTextResponses)
     .set(patch)
     .where(eq(openTextResponses.id, responseId))
     .returning();
-  if (!row) return { ok: false, status: 404, error: "Response not found" };
+  if (!row) return { ok: false, status: 404, error: "api.responseNotFound" };
 
   if (row.hidden) {
     publish(found.eventId, "response:removed", { interactionId: row.interactionId, responseId });

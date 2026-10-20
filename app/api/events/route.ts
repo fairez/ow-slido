@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { asc, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const parsed = parseEventInput(await request.json().catch(() => null), false);
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
   const { name, startsAt, endsAt, moderationMode } = parsed.value;
 
   // A concurrent create can take the code between the check and the insert; retry on that.
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
       if ((err as { code?: string }).code !== UNIQUE_VIOLATION) throw err;
     }
   }
-  return Response.json({ error: "Could not generate a join code" }, { status: 500 });
+  return Response.json({ error: serverT(request, "api.joinCodeFailed") }, { status: 500 });
 }
 
 export async function GET(request: Request) {

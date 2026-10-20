@@ -1,3 +1,4 @@
+import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, sql } from "drizzle-orm";
 import { events, interactions, participants, ratingResponses } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -42,7 +43,7 @@ export async function computeResults(db: Db, interactionId: string, scale: Ratin
 
 export type SubmitRatingResult =
   | { ok: true; value: number; results: RatingResults }
-  | { ok: false; status: 400 | 404 | 409; error: string };
+  | { ok: false; status: 400 | 404 | 409; error: MessageKey; params?: TParams };
 
 export async function submitRating(
   interactionId: string,
@@ -50,32 +51,32 @@ export async function submitRating(
   rawValue: unknown,
 ): Promise<SubmitRatingResult> {
   type Outcome =
-    | { error: 400 | 404 | 409; message: string }
+    | { error: 400 | 404 | 409; message: MessageKey; params?: TParams }
     | { error?: undefined; eventId: string; scale: RatingConfig["scale"]; value: number };
   const outcome: Outcome = await getDb().transaction(async (tx): Promise<Outcome> => {
     // Share lock: closing (an UPDATE) waits for in-flight writes.
     const [interaction] = await tx.select().from(interactions).where(eq(interactions.id, interactionId)).for("share");
-    if (!interaction || interaction.type !== "rating") return { error: 404 as const, message: "Interaction not found" };
+    if (!interaction || interaction.type !== "rating") return { error: 404 as const, message: "api.interactionNotFound" };
     const scale = scaleOf(interaction.config);
     const max = RATING_SCALE_MAX[scale];
     if (typeof rawValue !== "number" || !Number.isInteger(rawValue) || rawValue < 1 || rawValue > max) {
-      return { error: 400 as const, message: `Rating must be a whole number from 1 to ${max}` };
+      return { error: 400 as const, message: "api.ratingRange", params: { max } };
     }
     const [participant] = await tx
       .select({ eventId: participants.eventId })
       .from(participants)
       .where(eq(participants.id, participantId));
     if (!participant || participant.eventId !== interaction.eventId) {
-      return { error: 404 as const, message: "Interaction not found" };
+      return { error: 404 as const, message: "api.interactionNotFound" };
     }
-    if (interaction.state !== "live") return { error: 409 as const, message: "This question is not open" };
+    if (interaction.state !== "live") return { error: 409 as const, message: "api.questionNotOpen" };
 
     const inserted = await tx
       .insert(ratingResponses)
       .values({ interactionId, participantId, value: rawValue })
       .onConflictDoNothing()
       .returning({ id: ratingResponses.id });
-    if (inserted.length === 0) return { error: 409 as const, message: "You have already rated this" };
+    if (inserted.length === 0) return { error: 409 as const, message: "api.alreadyRated" };
     await tx
       .update(participants)
       .set({ firstResponseAt: sql`coalesce(${participants.firstResponseAt}, now())` })
@@ -91,9 +92,9 @@ export async function submitRating(
 
 export type RatingReadResult =
   | { ok: true; results: RatingResults; mine: number | null }
-  | { ok: false; status: 404; error: string };
+  | { ok: false; status: 404; error: MessageKey; params?: TParams };
 
-const notFound = { ok: false, status: 404, error: "Interaction not found" } as const;
+const notFound = { ok: false, status: 404, error: "api.interactionNotFound" } as const;
 
 /** Aggregates for a joined participant, with their own rating. Draft interactions look missing. */
 export async function getResultsForParticipant(interactionId: string, participantId: string): Promise<RatingReadResult> {

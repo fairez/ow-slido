@@ -44,3 +44,14 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Keys built from template literals (`auth.${mode}.title`) are invisible to grep; check typecheck instead.
   - Browser check: home, login, signup at 360/1280, no overflow. Authenticated pages (dashboard, presenter) were not screenshotted.
 ---
+
+## 2026-10-20 - US-004
+- API error text now comes from `api.*` keys. `serverT(request, key, params)` and `apiMessage(request, result)` live in lib/i18n/server.ts and read the `lang` cookie / Accept-Language from the Request. Lib validators return `{ ok: false, error: MessageKey, params? }` instead of English strings.
+- Added tests/api-error-locale.test.ts (join route returns the id text with `lang=id`); `api.eventNotFound` is the first real Indonesian value in id.ts.
+- Files: lib/i18n/{server,en,id}.ts, lib/*.ts validators, lib/auth/*, app/api/**/route.ts, docs/i18n.md
+- **Learnings for future iterations:**
+  - Module-level helpers like `tooMany`/`notFound` in routes now take `request`; pass it when adding new ones.
+  - New lib errors: add the key to en.ts and id.ts, return `error: "api.x" as const` where the object is not contextually typed.
+  - /api/ai/test and AiError messages, and AI-validator errors fed to the model, stay English on purpose.
+  - Typecheck is what finds a route still forwarding a raw `result.error`.
+---

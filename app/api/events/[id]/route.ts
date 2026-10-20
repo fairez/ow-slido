@@ -1,3 +1,4 @@
+import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -6,7 +7,7 @@ import { isUuid, parseEventInput } from "@/lib/events";
 
 type Context = { params: Promise<{ id: string }> };
 
-const notFound = () => Response.json({ error: "Event not found" }, { status: 404 });
+const notFound = (request: Request) => Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 
 async function findOwned(id: string, ownerId: string) {
   if (!isUuid(id)) return null;
@@ -21,22 +22,22 @@ export async function GET(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const event = await findOwned((await params).id, auth.user.id);
-  return event ? Response.json({ event }) : notFound();
+  return event ? Response.json({ event }) : notFound(request);
 }
 
 export async function PATCH(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const current = await findOwned((await params).id, auth.user.id);
-  if (!current) return notFound();
+  if (!current) return notFound(request);
 
   const parsed = parseEventInput(await request.json().catch(() => null), true);
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+  if (!parsed.ok) return Response.json({ error: apiMessage(request, parsed) }, { status: 400 });
   const changes = parsed.value;
   const startsAt = changes.startsAt ?? current.startsAt;
   const endsAt = changes.endsAt ?? current.endsAt;
   if (endsAt < startsAt) {
-    return Response.json({ error: "End date cannot be before the start date" }, { status: 400 });
+    return Response.json({ error: serverT(request, "api.endBeforeStart") }, { status: 400 });
   }
 
   const [event] = await getDb()
@@ -51,7 +52,7 @@ export async function DELETE(request: Request, { params }: Context) {
   const auth = await requireAdmin(request);
   if (!auth.ok) return auth.response;
   const current = await findOwned((await params).id, auth.user.id);
-  if (!current) return notFound();
+  if (!current) return notFound(request);
   await getDb().delete(events).where(eq(events.id, current.id));
   return new Response(null, { status: 204 });
 }

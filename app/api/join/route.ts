@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { events, participants } from "@/db/schema";
 import { isSecureRequest } from "@/lib/auth/session";
@@ -12,7 +13,7 @@ import { JOIN_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 const JOIN_WINDOW_SECONDS = 60;
 
-const notFound = () => Response.json({ error: "Event not found" }, { status: 404 });
+const notFound = (request: Request) => Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
 
 export async function POST(request: Request) {
   const limit = await rateLimit(`join:ip:${clientIp(request)}`, JOIN_IP_LIMIT, JOIN_WINDOW_SECONDS);
@@ -20,18 +21,18 @@ export async function POST(request: Request) {
     // No address in the log: it is only here to tell "a room behind one IP" apart from other failures.
     console.warn("[join] per-IP rate limit reached");
     return Response.json(
-      { error: "Too many attempts. Try again shortly." },
+      { error: serverT(request, "api.tooManyAttempts") },
       { status: 429, headers: { "retry-after": String(limit.retryAfterSeconds) } },
     );
   }
 
   const body = await request.json().catch(() => null);
   const code = typeof body?.code === "string" ? body.code.trim() : "";
-  if (!/^[0-9]{4,6}$/.test(code)) return notFound();
+  if (!/^[0-9]{4,6}$/.test(code)) return notFound(request);
 
   const db = getDb();
   const [event] = await db.select().from(events).where(eq(events.joinCode, code));
-  if (!event) return notFound();
+  if (!event) return notFound(request);
 
   let participantId: string | null = null;
   const token = readParticipantToken(request, event.id);

@@ -1,3 +1,4 @@
+import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { getDb } from "@/lib/db";
@@ -24,7 +25,7 @@ export async function requireAdmin(
 ): Promise<{ ok: true; user: AuthUser } | { ok: false; response: Response }> {
   const user = await getSessionUser(request);
   if (!user) {
-    return { ok: false, response: Response.json({ error: "Unauthorized" }, { status: 401 }) };
+    return { ok: false, response: Response.json({ error: serverT(request, "api.unauthorized") }, { status: 401 }) };
   }
   return { ok: true, user };
 }
