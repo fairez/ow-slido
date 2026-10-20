@@ -374,3 +374,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Never `pkill -f` a path that is in your own command line (killed the shell again); kill by PID from `ss -ltnp`.
   - Browser check at 360/1280 (light and dark, menu open): no overflow, no console errors; live add from another session appeared without reload; keyboard and drag reorder persisted. Screenshot users deleted from the dev DB. Full suite 919 tests, e2e 4 specs, typecheck and eslint clean.
 ---
+## 2026-10-20 - US-033
+- Templates: `templates` (workspace, name, kind interaction|event, created_by set null) and `template_items` (position, type, title, config), both cascading (migration 0032). `lib/templates.ts` saves from an event (one interaction or the whole list), lists, inserts items as drafts after the event's content. `copyConfig` (lib/interaction-copy.ts) is the one place that decides what a copy carries; the interaction duplicate route now uses it too. No state, responses, participants, questions or notes are ever read.
+- Routes: `GET/POST /api/templates` (list for any member; save needs `templates.manage`), `PATCH/DELETE /api/templates/[id]`, `POST /api/events/[id]/interactions/from-template` (402 and nothing added if a type is not in the plan), `POST /api/events/from-template` (skips types the plan lacks, returns `skipped`; monthly event limit applies). Limit: `assertTemplateSlot` in lib/limits.ts (402 `template_limit`, workspace row locked during save).
+- Files: db/schema.ts, db/migrations/0032_*, lib/{templates,interaction-copy,limits}.ts, lib/i18n/{en,id}.ts, app/api/templates/**, app/api/events/from-template, app/api/events/[id]/interactions/{from-template,[interactionId]/duplicate}, tests/templates.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - There is no image storage yet, so "images are copied" is covered only by `copyConfig` passing the whole config through; when images ship, check that it copies the reference (or file) and update the storage count.
+  - Editors can list and use templates but not save, rename or delete (matrix: `templates.manage` is owner/admin). US-034's UI should hide Save/Rename/Delete for other roles.
+  - Template list response: `{templates: [{..., items: [{type, title}]}], usage: {used, limit}}` is what the Templates page and picker need.
+  - Adding ranking/quiz/survey later: extend the type enum and check in `template_items` (and `interactions`) in the same migration.
+  - Full suite 933 tests green (~350s); typecheck and eslint (source dirs) clean. The dev DB was not migrated (US-034 browser check needs `npm run db:migrate`).
+  - No UI change, no browser check.
+---

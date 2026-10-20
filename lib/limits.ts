@@ -1,5 +1,5 @@
 import { and, count, eq, gte, lt } from "drizzle-orm";
-import { aiCalls, events, participants } from "@/db/schema";
+import { aiCalls, events, participants, templates } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import type { MessageKey } from "@/lib/i18n/en";
 import { serverT } from "@/lib/i18n/server";
@@ -15,6 +15,7 @@ export type LimitReason =
   | "ai_event_limit"
   | "ai_month_limit"
   | "report_format"
+  | "template_limit"
   | "over_limit";
 
 /**
@@ -110,4 +111,13 @@ export async function assertReportFormat(workspaceId: string, format: ReportForm
   if (limits.reportFormats.includes(format)) return;
   const requiredPlan = cheapestPlan((p) => PLANS[p].reportFormats.includes(format));
   throw new PlanLimitError("report_format", "api.planReportFormat", requiredPlan, { format });
+}
+
+/** Templates are counted per workspace; the one being saved needs a free slot. */
+export async function assertTemplateSlot(workspaceId: string, db: Db = getDb()) {
+  const { limits } = await getEntitlements(workspaceId, { db });
+  const [{ used }] = await db.select({ used: count() }).from(templates).where(eq(templates.workspaceId, workspaceId));
+  if (used < limits.templates) return;
+  const requiredPlan = cheapestPlan((p) => used < PLANS[p].templates);
+  throw new PlanLimitError("template_limit", "api.planTemplateLimit", requiredPlan, { limit: limits.templates });
 }

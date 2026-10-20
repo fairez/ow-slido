@@ -245,6 +245,43 @@ export const interactions = pgTable(
   ],
 );
 
+/** Reusable content of a workspace: one interaction or a whole event's list. Content only, never responses. */
+export const templates = pgTable(
+  "templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["interaction", "event"] }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("templates_kind", sql`${t.kind} in ('interaction', 'event')`),
+    index("templates_workspace_idx").on(t.workspaceId),
+  ],
+);
+
+export const templateItems = pgTable(
+  "template_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => templates.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa"] }).notNull(),
+    title: text("title").notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [
+    check("template_items_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa')`),
+    index("template_items_template_position_idx").on(t.templateId, t.position),
+  ],
+);
+
 export const pollVotes = pgTable(
   "poll_votes",
   {

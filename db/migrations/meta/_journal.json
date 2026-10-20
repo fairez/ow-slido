@@ -225,6 +225,13 @@
       "when": 1792496084205,
       "tag": "0031_loose_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792502896742,
+      "tag": "0032_low_amphibian",
+      "breakpoints": true
     }
   ]
 }
