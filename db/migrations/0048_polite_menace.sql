@@ -1,0 +1,2 @@
+ALTER TABLE "workspaces" ADD COLUMN "brand_accent" text;--> statement-breakpoint
+ALTER TABLE "workspaces" ADD CONSTRAINT "workspaces_brand_accent" CHECK ("workspaces"."brand_accent" is null or "workspaces"."brand_accent" ~ '^#[0-9a-f]{6}$');

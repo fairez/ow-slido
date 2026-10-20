@@ -48,3 +48,9 @@ export function auditLogLock(limits: PlanLimits): Lock | undefined {
   if (limits.auditLog) return undefined;
   return { requiredPlan: cheapestPlan((p) => PLANS[p].auditLog) };
 }
+
+/** Set when the plan has no branding, so the colour field on the settings page becomes a pointer to the plan page. */
+export function brandingLock(limits: PlanLimits): Lock | undefined {
+  if (limits.branding) return undefined;
+  return { requiredPlan: cheapestPlan((p) => PLANS[p].branding) };
+}

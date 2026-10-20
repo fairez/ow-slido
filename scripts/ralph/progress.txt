@@ -200,3 +200,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Not covered: an owner of a suspended workspace can still delete their own account (`/api/auth/account` uses `getSessionUser`), which removes a workspace they are the only member of. Participants already inside the event page keep their socket until reconnect (the client shows the notice after a reload).
   - A workspace that only has an override gets a `subscriptions` row with plan `free` and status `active`, so the ops list shows "Active" for it.
 ---
+
+## 2026-10-21 - US-017
+- `workspaces.brand_accent` (migration 0048, nullable, check `^#[0-9a-f]{6}$`). `PATCH /api/workspaces/active/branding {accent}` (+ GET) needs `branding.manage`; setting needs the `branding` entitlement (`assertBranding`, 402 `branding`, requiredPlan team) and AA contrast (422 `contrast_failed` with `failures`, message names the worst pair, theme and ratio); `{accent: null}` removes it and never needs the plan. Audited as `workspace.settings_changed` (`brand_accent`, only on change).
+- `lib/brand-accent.ts` (client-safe): `parseAccent`, `contrastRatio`, `pickInk`, `darkAccent`, `checkAccentContrast`, `contrastFailureMessage`. `brandingLock` in lib/plan-hints.ts is ready for the settings page.
+- Files: db/schema.ts, db/migrations/0048_*, lib/brand-accent.ts, lib/limits.ts, lib/plan-hints.ts, app/api/workspaces/active/branding/route.ts, lib/i18n en/id, docs/branding.md (logo TODO), tests/brand-accent.test.ts, tests/branding-route.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - One hex cannot reach 4.5:1 on both the cream (light) and near-black (dark) surfaces, so the dark theme gets `darkAccent(hex)`: the same hue mixed toward white until it passes. US-018 must apply `variants.light` and `variants.dark` (accent + ink) to `--accent`/`--accent-ink` per theme, not the raw hex in both.
+  - The accent may only be applied while `getEntitlements(...).limits.branding` is true (a downgrade lifts it without clearing the column).
+  - Surface tokens in lib/brand-accent.ts mirror globals.css/DESIGN.md; tests/brand-accent.test.ts fails if they drift.
+  - Full `npm test`: 124 files passed. No UI change in this story, so no browser check.
+---

@@ -18,6 +18,7 @@ export type LimitReason =
   | "template_limit"
   | "enforced_2fa"
   | "audit_log"
+  | "branding"
   | "over_limit";
 
 /**
@@ -138,4 +139,12 @@ export async function assertAuditLog(workspaceId: string, db: Db = getDb()) {
   if (limits.auditLog) return;
   const requiredPlan = cheapestPlan((p) => PLANS[p].auditLog);
   throw new PlanLimitError("audit_log", "api.planAuditLogNotIncluded", requiredPlan, { plan });
+}
+
+/** Setting an accent colour is a Team feature; removing one is always allowed. */
+export async function assertBranding(workspaceId: string, db: Db = getDb()) {
+  const { limits, plan } = await getEntitlements(workspaceId, { db });
+  if (limits.branding) return;
+  const requiredPlan = cheapestPlan((p) => PLANS[p].branding);
+  throw new PlanLimitError("branding", "api.planBrandingNotIncluded", requiredPlan, { plan });
 }

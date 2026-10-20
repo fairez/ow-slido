@@ -100,8 +100,13 @@ export const workspaces = pgTable("workspaces", {
   /** Set by the platform operator: every member request and the events' audience screens are refused while set. */
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   suspendedReason: text("suspended_reason"),
+  /** Owner's accent colour as lowercase `#rrggbb`. Null uses the default accent. Only applied while the plan has branding. */
+  brandAccent: text("brand_accent"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check("workspaces_retention_days", sql`${t.retentionDays} is null or ${t.retentionDays} in (30, 90, 365)`)]);
+}, (t) => [
+  check("workspaces_retention_days", sql`${t.retentionDays} is null or ${t.retentionDays} in (30, 90, 365)`),
+  check("workspaces_brand_accent", sql`${t.brandAccent} is null or ${t.brandAccent} ~ '^#[0-9a-f]{6}$'`),
+]);
 
 /**
  * Append-only: triggers reject UPDATE and DELETE, except the delete a workspace removal cascades.
