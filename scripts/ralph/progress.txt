@@ -242,3 +242,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - The dev server's in-memory sign-up limiter (5/h per IP) blocks a second screenshot run; restart the dev server (kill by PID) between runs.
   - Screenshots at 360/1280 (free owner, pro owner, viewer, dark, event page with hints, members with full seats): no overflow, no console errors; hint link goes to /dashboard/plan. Screenshot users/workspaces deleted from the dev DB. Full suite: 766 tests green.
 ---
+## 2026-10-20 - US-022
+- Added `lib/billing/` (`BillingProvider`: createCheckout, createPortalSession, cancelSubscription, parseWebhook; `getBillingProvider()`; mock provider) and `billing_events` (provider + provider_event_id unique, cascades from `workspaces`; migration 0028). `receiveWebhook` = verify signature, then `applyBillingEvent`: one transaction that records the event id and upserts `subscriptions` (plan, status, interval, period end, provider ids; plan overrides untouched). Duplicate ids answer 200 `duplicate`, unknown workspaces 200 `ignored`, bad signature or body 400.
+- Routes: `POST /api/billing/{checkout,portal,cancel,webhook}`, `GET /api/billing/mock/complete`. Checkout/portal/cancel need `billing.manage`; checkout also a verified email. Cancel sets status `canceled` and keeps `current_period_end`, so `resolveEntitlements` gives access until then. Mock checkout is an HMAC-signed link; "paying" sends a signed webhook through the same path.
+- Files: lib/billing/*, app/api/billing/**, db/schema.ts, db/migrations/0028_*, lib/i18n/{en,id}.ts, tests/billing.test.ts, playwright.config.ts, .env.example, README.md, CLAUDE.md
+- **Learnings for future iterations:**
+  - `BILLING_PROVIDER` unset means mock outside production and no billing in production (routes 503). Playwright sets `BILLING_PROVIDER=mock` and a webhook secret because its server runs with NODE_ENV=production. The mock's dev-default secret never applies in production.
+  - A workspace without a `subscriptions` row has no row after a failed or ignored event; tests assert `undefined`, not `plan: "free"`.
+  - Stripe (US-023) maps its events onto `BillingEvent` inside `parseWebhook` and returns null for kinds we ignore. Stripe's `cancel_at_period_end` keeps status `active` until the end: map it to `canceled` in `parseWebhook` so entitlements show the end date.
+  - Not handled: out-of-order delivery (an older event arriving after a newer one overwrites it). Stripe sends `created`; US-023 may want to store the last applied time on `subscriptions` and skip older events.
+  - Mock checkout reuse: opening the same link twice repeats the same event id, so it is applied once.
+  - No UI change (the upgrade/cancel UI is US-024), so no browser check. Full suite: 783 tests, ~310s. Test and dev DBs migrated to 0028.
+---

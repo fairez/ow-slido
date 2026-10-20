@@ -30,6 +30,9 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
       // Deterministic fake: the e2e run never reaches a real AI service.
       AI_PROVIDER: "mock",
+      // Billing never leaves the machine: checkout completes through a local route.
+      BILLING_PROVIDER: "mock",
+      BILLING_WEBHOOK_SECRET: "e2e-webhook-secret",
     },
   },
 });

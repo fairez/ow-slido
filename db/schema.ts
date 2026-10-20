@@ -125,6 +125,22 @@ export const subscriptions = pgTable(
   ],
 );
 
+/** One row per provider event already applied, so a redelivered webhook changes nothing. */
+export const billingEvents = pgTable(
+  "billing_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull(),
+    providerEventId: text("provider_event_id").notNull(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("billing_events_provider_event").on(t.provider, t.providerEventId)],
+);
+
 export const invitations = pgTable(
   "invitations",
   {
