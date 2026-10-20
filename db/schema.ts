@@ -209,15 +209,24 @@ export const events = pgTable(
   ],
 );
 
-export const participants = pgTable("participants", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  eventId: uuid("event_id")
-    .notNull()
-    .references(() => events.id, { onDelete: "cascade" }),
-  nickname: text("nickname"),
-  joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
-  firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
-});
+export const participants = pgTable(
+  "participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    nickname: text("nickname"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
+  },
+  (t) => [
+    // One display name per event, ignoring case; the check in lib/nickname.ts gives the friendly error first.
+    uniqueIndex("participants_event_nickname_unique")
+      .on(t.eventId, sql`lower(${t.nickname})`)
+      .where(sql`${t.nickname} is not null`),
+  ],
+);
 
 export const interactions = pgTable(
   "interactions",

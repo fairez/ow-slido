@@ -29,6 +29,7 @@ const MIGRATED = [
   "components/rating-form.tsx",
   "components/ranking-form.tsx",
   "components/quiz-form.tsx",
+  "components/nickname-form.tsx",
   "components/published-analysis.tsx",
   "components/word-cloud.tsx",
   "app/dashboard/events/[id]/page.tsx",

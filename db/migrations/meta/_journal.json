@@ -253,6 +253,13 @@
       "when": 1792510967045,
       "tag": "0035_parallel_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792511588737,
+      "tag": "0036_blue_starjammers",
+      "breakpoints": true
     }
   ]
 }

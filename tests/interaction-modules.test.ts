@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { eq } from "drizzle-orm";
 import { events, interactions, participants, pollVotes, questions, users } from "@/db/schema";
 import { INTERACTION_MODULES, interactionModule } from "@/lib/interaction-modules";
 import { buildInteractionCsv } from "@/lib/export";
@@ -84,4 +85,10 @@ test("csv and responseCount of each type come from its module", async () => {
   expect(text).toContain("Shown");
   expect(text).not.toContain("Gone");
   expect(text).not.toContain(p.id);
+});
+
+test("a live Q&A has no participant live view of its own (the Q&A tab shows it)", async () => {
+  const qaId = await qaFor(db, eventId);
+  const [row] = await db.select().from(interactions).where(eq(interactions.id, qaId));
+  expect(await interactionModule("qa").live(row)).toBeNull();
 });

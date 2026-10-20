@@ -8,3 +8,4 @@ export const QUIZ_TIME_DEFAULT = 20;
 export const QUIZ_POINTS_MIN = 1;
 export const QUIZ_POINTS_MAX = 10000;
 export const QUIZ_POINTS_DEFAULT = 1000;
+export const NICKNAME_MAX = 20;

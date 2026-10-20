@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "participants_event_nickname_unique" ON "participants" USING btree ("event_id",lower("nickname")) WHERE "participants"."nickname" is not null;

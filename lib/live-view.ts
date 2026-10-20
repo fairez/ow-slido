@@ -89,6 +89,10 @@ export type LiveQuiz = {
   serverNow: number;
   /** This participant's selected option ids, or null; an answer cannot be changed. */
   mine: string[] | null;
+  /** The display name the leaderboard shows, or null until the participant picks one. */
+  nickname: string | null;
+  /** True after the first quiz answer of the event; the name no longer changes. */
+  nicknameLocked: boolean;
 };
 
 export type LiveInteraction = LivePoll | LiveWordcloud | LiveNotes | LiveOpenText | LiveRating | LiveRanking | LiveQuiz;

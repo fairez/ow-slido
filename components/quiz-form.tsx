@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
+import { NicknameForm } from "@/components/nickname-form";
 import type { LiveQuiz } from "@/lib/live-view";
 import type { QuizOutcome } from "@/lib/quiz";
 import { useT } from "@/lib/i18n/client";
@@ -26,7 +27,7 @@ const ANNOUNCE_AT = [10, 5];
  * the offset between the server's "now" in the payload and its own clock when the payload arrived. Seconds are
  * announced to screen readers at 10 and 5 only; the ticking number is hidden from them.
  */
-export function QuizForm({ quiz }: { quiz: LiveQuiz }) {
+export function QuizForm({ eventId, quiz }: { eventId: string; quiz: LiveQuiz }) {
   const t = useT();
   const [selected, setSelected] = useState<string[]>(quiz.mine ?? []);
   const [sent, setSent] = useState(quiz.mine !== null);
@@ -38,19 +39,33 @@ export function QuizForm({ quiz }: { quiz: LiveQuiz }) {
   const [now, setNow] = useState(quiz.serverNow);
   const [startSeconds] = useState(() => Math.max(0, Math.ceil(((quiz.deadlineAt ?? quiz.serverNow) - quiz.serverNow) / 1000)));
   const [timedOut, setTimedOut] = useState(false);
+  const [nickname, setNickname] = useState(quiz.nickname);
+  const [renaming, setRenaming] = useState(false);
+  const renameButton = useRef<HTMLButtonElement>(null);
   const closed = quiz.state === "closed";
   const counting = quiz.state === "live" && quiz.deadlineAt !== null && !sent && !closed;
   const remainingMs = quiz.deadlineAt === null ? Infinity : quiz.deadlineAt - now;
   const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
   const timeUp = counting && (timedOut || remainingMs <= 0);
   const locked = sent || submitting || timeUp || closed;
-  const hintShown = !closed && !sent && !timeUp;
+  // The leaderboard needs a name before the first answer; it can change until that answer is sent.
+  const needsName = !closed && nickname === null;
+  const nameLocked = sent || quiz.nicknameLocked;
+  const answering = !needsName && !renaming;
+  const hintShown = !closed && !sent && !timeUp && answering;
 
   useEffect(() => {
     if (!counting) return;
     const id = window.setInterval(() => setNow(Date.now() + offset), TICK_MS);
     return () => window.clearInterval(id);
   }, [counting, offset]);
+
+  // Back from renaming, focus returns to the button that opened it.
+  const wasRenaming = useRef(false);
+  useEffect(() => {
+    if (wasRenaming.current && !renaming) renameButton.current?.focus();
+    wasRenaming.current = renaming;
+  }, [renaming]);
 
   useEffect(() => {
     if (!closed) return;
@@ -141,59 +156,91 @@ export function QuizForm({ quiz }: { quiz: LiveQuiz }) {
         </p>
       )}
 
+      {needsName && (
+        <>
+          {counting && !timeUp && <p className="field-meta">{t("quiz.nicknameTimerNote")}</p>}
+          <NicknameForm eventId={eventId} initial={null} onSaved={setNickname} />
+        </>
+      )}
+      {!needsName && !closed && nickname !== null && (
+        renaming ? (
+          <NicknameForm
+            eventId={eventId}
+            initial={nickname}
+            keepName={nickname}
+            onSaved={(next) => {
+              setNickname(next);
+              setRenaming(false);
+            }}
+            onCancel={() => setRenaming(false)}
+          />
+        ) : (
+          <p className="quiz-player">
+            <span>{t("quiz.playingAs", { name: nickname })}</span>
+            {!nameLocked && (
+              <Button ref={renameButton} type="button" variant="quiet" onClick={() => setRenaming(true)}>
+                {t("quiz.nicknameChange")}
+              </Button>
+            )}
+          </p>
+        )
+      )}
+
       {hintShown && (
         <p className="field-meta" id={`quiz-hint-${quiz.id}`}>
           {t(quiz.multiple ? "quiz.hintMany" : "quiz.hintOne")}
         </p>
       )}
 
-      <ul className="quiz-options" aria-label={t("quiz.legend")}>
-        {quiz.options.map((o, i) => {
-          const mine = mineIds.includes(o.id);
-          const right = closed && correctIds.includes(o.id);
-          const tags = (
-            <>
-              {right && <span className="quiz-tag">{t("quiz.correctAnswer")}</span>}
-              {mine && <span className="quiz-tag">{t(closed ? "quiz.yourAnswer" : "quiz.selected")}</span>}
-            </>
-          );
-          const body = (
-            <>
-              <svg className="quiz-shape" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
-                {QUIZ_SHAPES[i % QUIZ_SHAPES.length]}
-              </svg>
-              <span className="quiz-option-text">{o.text}</span>
-              {/* Whitespace between the spans keeps the accessible name "Java Selected", not "JavaSelected". */}
-              {" "}
-              {tags}
-            </>
-          );
-          return (
-            <li key={o.id}>
-              {closed ? (
-                <div className="quiz-option" data-n={(i % 6) + 1}>
-                  {body}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="quiz-option"
-                  data-n={(i % 6) + 1}
-                  aria-pressed={quiz.multiple || sent ? mine : undefined}
-                  aria-disabled={locked || undefined}
-                  aria-describedby={hintShown ? `quiz-hint-${quiz.id}` : undefined}
-                  data-selected={mine}
-                  onClick={() => choose(o.id)}
-                >
-                  {body}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {(closed || answering) && (
+        <ul className="quiz-options" aria-label={t("quiz.legend")}>
+          {quiz.options.map((o, i) => {
+            const mine = mineIds.includes(o.id);
+            const right = closed && correctIds.includes(o.id);
+            const tags = (
+              <>
+                {right && <span className="quiz-tag">{t("quiz.correctAnswer")}</span>}
+                {mine && <span className="quiz-tag">{t(closed ? "quiz.yourAnswer" : "quiz.selected")}</span>}
+              </>
+            );
+            const body = (
+              <>
+                <svg className="quiz-shape" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+                  {QUIZ_SHAPES[i % QUIZ_SHAPES.length]}
+                </svg>
+                <span className="quiz-option-text">{o.text}</span>
+                {/* Whitespace between the spans keeps the accessible name "Java Selected", not "JavaSelected". */}
+                {" "}
+                {tags}
+              </>
+            );
+            return (
+              <li key={o.id}>
+                {closed ? (
+                  <div className="quiz-option" data-n={(i % 6) + 1}>
+                    {body}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="quiz-option"
+                    data-n={(i % 6) + 1}
+                    aria-pressed={quiz.multiple || sent ? mine : undefined}
+                    aria-disabled={locked || undefined}
+                    aria-describedby={hintShown ? `quiz-hint-${quiz.id}` : undefined}
+                    data-selected={mine}
+                    onClick={() => choose(o.id)}
+                  >
+                    {body}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-      {quiz.multiple && !closed && !sent && !timeUp && (
+      {quiz.multiple && !closed && !sent && !timeUp && answering && (
         <Button
           type="button"
           variant="primary"

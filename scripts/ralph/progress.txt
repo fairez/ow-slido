@@ -520,3 +520,18 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - No nickname entry yet (US-045); `participants.nickname` already exists and is untouched by rejoin.
   - No UI change, no browser check. Full suite 1080 tests green (~410 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0035.
 ---
+
+## 2026-10-21 - US-045
+- Quiz nickname entry. `lib/nickname.ts` (`validateNickname`, `setNickname`, `getNicknameState`, `hasAnsweredQuiz`) and `PUT /api/events/[id]/nickname` (participant token, IP and token rate limits): 1-20 characters, whitespace collapsed, control characters and the profanity list rejected (400), a name taken in the event ignoring case rejected (409 `api.nicknameTaken`), no change after the first quiz answer of the event (409 `api.nicknameLocked`). Migration 0036 adds the unique index `participants_event_nickname_unique` (event, lower(nickname)); a simultaneous save of the same name gives 409 for one of them.
+- Participant screen: `LiveQuiz` now has `nickname` and `nicknameLocked`; `QuizForm` shows `NicknameForm` (explains the name appears on the leaderboard) in place of the options until a name is set, then "Playing as X" with "Change nickname" until the first answer is sent; the same participant token keeps the name across reloads. Keys in en and id.
+- Fixed a slip from US-042: the `qa` module's `live` had been overwritten with a copy of the quiz payload (a live Q&A would have sent participants a bogus quiz). It is `live: async () => null` again, with a test.
+- Files: db/schema.ts, db/migrations/0036_*, lib/{nickname,quiz-limits,live-view,interaction-modules}.ts, app/api/events/[id]/nickname/route.ts, components/{nickname-form,quiz-form,live-view,ui/button}.tsx, app/globals.css, lib/i18n/{en,id}.ts, tests/{nickname.test.ts,quiz-ui.test.tsx,interaction-modules.test.ts,no-inline-strings.test.ts}, scripts/ralph/screens/quiz-nickname.mjs, CLAUDE.md
+- **Learnings for future iterations:**
+  - `Button` now takes a `ref` (React 19 passes it as a prop); used to return focus to "Change nickname".
+  - A `hidden` attribute does not hide an element whose class sets `display: grid`; render conditionally instead.
+  - In Playwright, `getByRole("alert")` also matches Next's route announcer; use `.ui-error`.
+  - The nickname is not required to answer (server side), so US-046 needs a fallback label for participants without one.
+  - A first-time nickname form does not autofocus (no keyboard pop-up on phones); the form opened by "Change nickname" does.
+  - The countdown keeps running while a participant picks a name (the form says so); the server deadline is not affected.
+  - Browser check at 360 and 1280, light and dark (scripts/ralph/screens/quiz-nickname.mjs): empty, taken, profane and valid names, change, focus return, answer locks the name, reload keeps it; no horizontal overflow, only the expected 400/409 console errors. Dev server on :3200 killed, next-env.d.ts/tsconfig.json restored. Dev and test DB migrated to 0036.
+---
