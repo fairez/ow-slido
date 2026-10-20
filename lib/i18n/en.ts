@@ -554,6 +554,13 @@ export const en = {
   "api.inviteInvalid": "This invitation link is not valid. It may have expired, been used or been revoked.",
   "api.inviteWrongEmail": "This invitation was sent to a different email address. Log in with that account.",
   "api.inviteLoginRequired": "An account with this email already exists. Log in to accept the invitation.",
+  "api.memberNotFound": "Member not found",
+  "api.memberOwnerOnly": "Only an owner can change an owner or give someone the owner role.",
+  "api.memberLastOwner": "A workspace needs at least one active owner. Make someone else an owner first.",
+  "api.memberSelfSuspend": "You cannot suspend yourself.",
+  "api.memberSelfReset": "Use the change password page for your own account.",
+  "api.memberRoleInvalid": "Choose a role: owner, admin, editor, moderator or viewer.",
+  "api.memberStatusInvalid": "Status must be 'active' or 'suspended'.",
   "email.invite.subject": "You are invited to {workspace}",
   "email.invite.body": "You have been invited to join {workspace} as {role}.\n\nOpen this link to accept:\n\n{link}\n\nThe link works once and expires in {days} days. If you were not expecting it, ignore this message.",
 };

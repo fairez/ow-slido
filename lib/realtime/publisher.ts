@@ -27,3 +27,17 @@ export function getPublisher(): Publisher {
 export function publish(eventId: string, name: string, payload: unknown, options?: PublishOptions) {
   getPublisher().publish(eventId, name, payload, options);
 }
+
+export const memberRoom = (userId: string, workspaceId: string) => `member:${workspaceId}:${userId}`;
+
+type MemberRevoker = (userId: string, workspaceId: string) => void;
+const globalForRevoker = globalThis as unknown as { memberRevoker?: MemberRevoker };
+
+export function setMemberRevoker(revoker: MemberRevoker | null) {
+  globalForRevoker.memberRevoker = revoker ?? undefined;
+}
+
+/** Drops a member's host and moderator sockets for a workspace; they must pass the access check again to reconnect. */
+export function revokeMemberSockets(userId: string, workspaceId: string) {
+  globalForRevoker.memberRevoker?.(userId, workspaceId);
+}

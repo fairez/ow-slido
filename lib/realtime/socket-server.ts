@@ -10,7 +10,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 import { participantConnected, participantDisconnected, presenceCount } from "./presence";
-import { eventRoom, hostRoom, setPublisher, type Publisher } from "./publisher";
+import { eventRoom, hostRoom, memberRoom, setMemberRevoker, setPublisher, type Publisher } from "./publisher";
 
 export type SocketRole = "participant" | "host" | "moderator";
 
@@ -24,7 +24,9 @@ function parseCookies(header: string | undefined) {
 }
 
 /** Returns the role granted to the socket for the event, or null if it is not allowed in. */
-async function authorize(socket: Socket): Promise<{ role: SocketRole; participantId?: string } | null> {
+async function authorize(
+  socket: Socket,
+): Promise<{ role: SocketRole; participantId?: string; userId?: string; workspaceId?: string } | null> {
   const { eventId, role } = socket.handshake.auth as { eventId?: unknown; role?: unknown };
   if (typeof eventId !== "string" || !isUuid(eventId)) return null;
   const cookies = parseCookies(socket.handshake.headers.cookie);
@@ -40,7 +42,7 @@ async function authorize(socket: Socket): Promise<{ role: SocketRole; participan
       .select({ id: events.id })
       .from(events)
       .where(and(eq(events.id, eventId), eq(events.workspaceId, membership.workspaceId)));
-    return event ? { role } : null;
+    return event ? { role, userId: user.id, workspaceId: membership.workspaceId } : null;
   }
 
   const token = cookies.get(participantCookieName(eventId));
@@ -77,6 +79,8 @@ export function attachSocketServer(httpServer: HttpServer) {
       const { eventId } = socket.handshake.auth as { eventId: string };
       socket.data.role = granted.role;
       socket.data.participantId = granted.participantId;
+      socket.data.userId = granted.userId;
+      socket.data.workspaceId = granted.workspaceId;
       socket.data.eventId = eventId;
       next();
     } catch {
@@ -85,10 +89,17 @@ export function attachSocketServer(httpServer: HttpServer) {
   });
 
   io.on("connection", (socket) => {
-    const { eventId, role, participantId } = socket.data as { eventId: string; role: SocketRole; participantId?: string };
+    const { eventId, role, participantId, userId, workspaceId } = socket.data as {
+      eventId: string;
+      role: SocketRole;
+      participantId?: string;
+      userId?: string;
+      workspaceId?: string;
+    };
     socket.join(eventRoom(eventId));
     if (role === "host" || role === "moderator") {
       socket.join(hostRoom(eventId));
+      if (userId && workspaceId) socket.join(memberRoom(userId, workspaceId));
       socket.emit("presence", { count: presenceCount(eventId) });
     }
     if (role === "participant" && participantId) {
@@ -98,5 +109,6 @@ export function attachSocketServer(httpServer: HttpServer) {
   });
 
   setPublisher(createSocketPublisher(io));
+  setMemberRevoker((userId, workspaceId) => io.in(memberRoom(userId, workspaceId)).disconnectSockets(true));
   return io;
 }

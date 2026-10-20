@@ -557,6 +557,13 @@ export const id: Record<MessageKey, string> = {
   "api.inviteInvalid": "Tautan undangan ini tidak berlaku. Mungkin sudah kedaluwarsa, sudah dipakai atau dibatalkan.",
   "api.inviteWrongEmail": "Undangan ini dikirim ke alamat email lain. Masuk dengan akun tersebut.",
   "api.inviteLoginRequired": "Akun dengan email ini sudah ada. Masuk untuk menerima undangan.",
+  "api.memberNotFound": "Anggota tidak ditemukan",
+  "api.memberOwnerOnly": "Hanya pemilik yang dapat mengubah pemilik lain atau memberikan peran pemilik.",
+  "api.memberLastOwner": "Ruang kerja harus punya minimal satu pemilik aktif. Jadikan orang lain pemilik terlebih dahulu.",
+  "api.memberSelfSuspend": "Anda tidak dapat menangguhkan diri sendiri.",
+  "api.memberSelfReset": "Gunakan halaman ganti kata sandi untuk akun Anda sendiri.",
+  "api.memberRoleInvalid": "Pilih peran: pemilik, admin, editor, moderator, atau pembaca.",
+  "api.memberStatusInvalid": "Status harus 'active' atau 'suspended'.",
   "email.invite.subject": "Anda diundang ke {workspace}",
   "email.invite.body": "Anda diundang untuk bergabung dengan {workspace} sebagai {role}.\n\nBuka tautan ini untuk menerima:\n\n{link}\n\nTautan hanya berlaku sekali dan kedaluwarsa dalam {days} hari. Jika Anda tidak mengharapkannya, abaikan pesan ini.",
 };

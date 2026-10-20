@@ -173,3 +173,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Anyone holding the link (the inviter sees it) can accept it as a new user and so create a verified account for an email they do not control, because the spec makes invite-created accounts verified. Worth a look in the security audit; an existing account is protected (it must log in).
   - No UI change, no browser check. Dev DB migrated to 0026.
 ---
+## 2026-10-20 - US-016
+- Added `lib/members.ts` and routes: `GET /api/members` (list + `selfId`), `PATCH /api/members/[userId]` (`{role}` or `{status: "active"|"suspended"}`, one per request), `DELETE /api/members/[userId]`, `POST /api/members/[userId]/password` (random 16-char temporary password returned once with `no-store`, sets `must_change_password` and `sessions_valid_after`, no email). All need `members.manage`.
+- Rules: admins cannot change, suspend, remove or reset an owner or grant owner (403 `api.memberOwnerOnly`); the last active owner cannot be demoted, suspended or removed (409, reason `last_owner`), enforced in a transaction that locks the workspace's owner rows `FOR UPDATE`; nobody suspends or resets themselves (400). Removal deletes the membership only; events and the account stay.
+- Suspend, remove and role change call `revokeMemberSockets` (new in lib/realtime/publisher.ts, wired in socket-server via a `member:<ws>:<user>` room) so live host/moderator sockets drop and must pass `authorize` again. HTTP access ends on the next request since memberships are read per request.
+- Files: lib/members.ts, lib/realtime/{publisher,socket-server}.ts, app/api/members/**, lib/i18n/{en,id}.ts, tests/members.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - A suspended or removed member is not shown a 403 when their `workspace` cookie names the old workspace: `resolveActiveMembership` falls back to their first other active membership, so the request silently acts in another workspace. Assert on the data returned (or `getSessionMember(req, workspaceId)` returning null), not on a status, in tests.
+  - Sign-up is rate limited per IP (5/h), so tests that need many users must insert them directly and build the cookie with `createSessionToken` + `createPersonalWorkspace` (see makeUser in tests/members.test.ts).
+  - The password reset replaces the password of the whole account, not just the membership, so an admin of one workspace can take over a member who also belongs to other workspaces. The spec asks for it; worth a look in the security audit (e.g. limit to members with no other workspace).
+  - Reactivating a member does not check seat limits yet; US-019 should add that to `setMemberStatus`.
+  - No UI change (members page is US-017), so no browser check.
+---

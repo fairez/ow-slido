@@ -20,6 +20,8 @@
 - Access: `requireMember(request)` (`lib/auth/require-admin.ts`) resolves the active workspace (cookie `workspace`, else first active membership) and returns `{user, workspaceId, role}`; use `getSessionMember` where anonymous callers are also allowed. Find events with `findOwnedEvent(id, auth.workspaceId)`; pages and the socket server use `resolveActiveMembership` from `lib/auth/workspace.ts`. Test users who act as hosts or strangers need a workspace (`workspaceFor`), else they get 403.
 - Tests that insert events directly need `workspaceId: await workspaceFor(db, user.id)` from `tests/helpers/db.ts`. In routes, `lib/workspaces.ts` has `createPersonalWorkspace` and `firstWorkspaceId`.
 
+- Members: `lib/members.ts` holds the rules (admins cannot touch owners or grant owner, last active owner is protected under a row lock, no self-suspend) behind `/api/members` routes. Changing a role, suspending or removing a member also calls `revokeMemberSockets` (lib/realtime/publisher.ts) so their live host sockets drop; HTTP access ends on the next request because memberships are read per request.
+
 ## Interactions
 - Types: `poll`, `wordcloud`, `sharedNotes`, `openText`, `rating`. Config for the last three is validated in `lib/interaction-config.ts` (hand-written parsers; no zod). Adding a type means updating the `db/schema.ts` enum and check, the create/PATCH/duplicate routes and a migration.
 - Every table that holds event data (responses, notes, analyses...) must reference `interactions` or `events` with `onDelete: "cascade"`, so deleting an event removes it. Add a cascade test for each new table.
