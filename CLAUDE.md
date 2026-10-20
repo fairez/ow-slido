@@ -44,3 +44,6 @@ For UI, copy, people, mobile layout, or code comments work, read `docs/antislop/
 - Code comments: `docs/antislop/skills/antislop-code/SKILL.md`
 Resolve the mode from the project note above (`during`, or `after` for the final audit story). Direction is `DESIGN.md`.
 <!-- antislop:end -->
+
+## i18n
+No inline UI strings in new code. Add the key to `lib/i18n/en.ts` and `id.ts`, then use `t()`, `getT()` (server) or `useT()` (client). Details in `docs/i18n.md`.
