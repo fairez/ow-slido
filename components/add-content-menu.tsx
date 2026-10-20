@@ -8,20 +8,20 @@ import { useT } from "@/lib/i18n/client";
 import type { MessageKey } from "@/lib/i18n";
 import type { Lock } from "@/lib/plan-hints";
 
-export type AddEntry = { kind: IconKind; label: MessageKey };
+export type AddEntry<K extends IconKind = IconKind> = { kind: K; label: MessageKey };
 
 /**
  * One "Add content" button that opens the list of every type. A type the plan leaves out stays in
  * the list as a link naming the tier that unlocks it.
  */
-export function AddContentMenu({
+export function AddContentMenu<K extends IconKind>({
   entries,
   locks,
   onPick,
 }: {
-  entries: AddEntry[];
-  locks: Partial<Record<IconKind, Lock>>;
-  onPick: (kind: IconKind) => void;
+  entries: AddEntry<K>[];
+  locks: Partial<Record<K, Lock>>;
+  onPick: (kind: K) => void;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);

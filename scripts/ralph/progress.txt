@@ -422,3 +422,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Browser check at 360 and 1280: buttons wrap, no horizontal overflow, download is `Zip-shot-results.zip` and `unzip -l` lists the expected files. Killed my own dev server on :3200 and restored next-env.d.ts/tsconfig.json.
 ---
 (US-036 addendum) tests/qa-tab.test.tsx "asks the server again..." was flaky (about 1 run in 3): the test emitted `question:added` before the socket effect re-bound to the new Q&A id. It now awaits `act(async () => {})` first. Full suite: 965 tests, the only failure was that flake.
+
+## 2026-10-20 - US-037
+- Added the `ranking` interaction type: config `{prompt, options: [{id, text}]}` (2-10 options, text ≤ 80) validated in `parseNewInteractionInput`; `ranking_responses` (order jsonb of option ids, unique per participant, cascades from interactions and participants); migration 0033 also widens the `interactions_type` and `template_items_type` checks. `lib/ranking.ts`: `scoreRanking` (1st = N … last = 1, ties share a rank and keep the host's option order, partial/unknown/repeated ids tolerated), `isPermutation`, `submitRanking` (share lock, live only, 400 not a permutation, 409 second submit via the unique constraint). `POST /api/interactions/[id]/ranking {order}`. Ranking module registered (results, CSV `rank,option,score,rankings`, responseCount); `copyConfig` gives duplicated/templated options new ids.
+- Files: db/schema.ts, db/migrations/0033_*, lib/{ranking,ranking-limits,interaction-config,interaction-copy,interaction-modules,type-labels}.ts, lib/i18n/{en,id}.ts, app/api/interactions/[id]/ranking/route.ts, components/{type-icon,add-content-menu,poll-manager}.tsx, tests/{ranking,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Ranking is not on Free: tests that create one through the route need `setPlan(db, workspaceId, "pro")` or POST answers 402.
+  - Widening `IconKind` forced `AddContentMenu` to be generic over the kind, so the host builder keeps its narrower `Kind` until US-039 adds ranking to it.
+  - The per-participant token limit is 10 requests/minute; a test that sends many bad submissions must `getRateLimitStore().reset()` before the valid one.
+  - The module's `presenter` and `live` return null for now; US-038 fills `live`, US-039 `presenter`. The `ranking:results` message is host-only (participants do not see aggregates).
+  - tests/interaction-modules.test.ts used "ranking" as its example of an unregistered type; it now uses a made-up one.
+  - No UI change, so no browser check. Full suite 980 tests green, typecheck and eslint (source dirs) clean.
+---

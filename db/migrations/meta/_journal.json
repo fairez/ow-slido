@@ -232,6 +232,13 @@
       "when": 1792502896742,
       "tag": "0032_low_amphibian",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792505801301,
+      "tag": "0033_acoustic_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

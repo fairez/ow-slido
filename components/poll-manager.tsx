@@ -26,7 +26,7 @@ import { TYPE_LABELS } from "@/lib/type-labels";
 
 export type InteractionItem = {
   id: string;
-  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa";
+  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa" | "ranking";
   title: string;
   state: "draft" | "live" | "paused" | "closed";
   position: number;

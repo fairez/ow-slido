@@ -6,6 +6,7 @@ import {
   pollVotes,
   questions,
   questionVotes,
+  rankingResponses,
   ratingResponses,
   sharedNotes,
   sharedNoteVotes,
@@ -20,6 +21,7 @@ import { listPresenterResponses } from "@/lib/open-text";
 import { parsePollInput, pollConfig, type PollConfig } from "@/lib/polls";
 import type { PresenterState } from "@/lib/presenter";
 import { listApprovedQuestions } from "@/lib/questions";
+import { computeResults as computeRankingResults } from "@/lib/ranking";
 import { computeResults, getPresenterResults } from "@/lib/rating";
 import { listPresenterNotes } from "@/lib/shared-notes";
 import { getPollCounts } from "@/lib/votes";
@@ -32,6 +34,7 @@ export const EXPORT_HEADER = ["section", "title", "item", "count", "author"] as 
 export const NOTES_EXPORT_HEADER = ["section", "title", "note", "status", "pinned", "upvotes", "author"] as const;
 export const OPEN_TEXT_EXPORT_HEADER = ["section", "title", "response", "highlighted"] as const;
 export const RATING_EXPORT_HEADER = ["section", "title", "scale", "average", "total", "value", "count"] as const;
+export const RANKING_EXPORT_HEADER = ["section", "title", "rank", "option", "score", "rankings"] as const;
 export const ANALYSIS_EXPORT_HEADER = ["section", "title", "kind", "item", "count", "weight", "model", "run_at", "ai_generated", "edited"] as const;
 
 /**
@@ -333,6 +336,34 @@ const ratingModule: InteractionModule = {
   },
 };
 
+const rankingModule: InteractionModule = {
+  type: "ranking",
+  presentWhenClosed: true,
+  validateConfig: (body, partial) => parseNewInteractionInput("ranking", body, partial),
+  async results(interactionId) {
+    const row = await loadRow(interactionId);
+    return computeRankingResults(db(), interactionId, row.config);
+  },
+  async csv(interactionId) {
+    const row = await loadRow(interactionId);
+    const results = await computeRankingResults(db(), interactionId, row.config);
+    return [
+      {
+        header: RANKING_EXPORT_HEADER,
+        rows: results.options.map((o) => ["ranking", row.title, o.rank, o.text, o.score, results.total]),
+      },
+    ];
+  },
+  async responseCount(interactionId) {
+    return countOf(
+      db().select({ n: sql<number>`count(*)::int` }).from(rankingResponses).where(eq(rankingResponses.interactionId, interactionId)),
+    );
+  },
+  // The presenter and participant screens arrive with the ranking UI stories.
+  presenter: async () => null,
+  live: async () => null,
+};
+
 /** Registration order is the order of tables in the combined event CSV. */
 export const INTERACTION_MODULES: readonly InteractionModule[] = [
   pollModule,
@@ -341,6 +372,7 @@ export const INTERACTION_MODULES: readonly InteractionModule[] = [
   sharedNotesModule,
   openTextModule,
   ratingModule,
+  rankingModule,
 ];
 
 const byType = new Map<string, InteractionModule>(INTERACTION_MODULES.map((m) => [m.type, m]));

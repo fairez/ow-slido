@@ -37,7 +37,7 @@ test("every type the interactions table accepts has a module", () => {
 });
 
 test("an unregistered type throws instead of being skipped", () => {
-  expect(() => interactionModule("ranking")).toThrow(/ranking/);
+  expect(() => interactionModule("hologram")).toThrow(/hologram/);
 });
 
 test("validateConfig accepts a good body and rejects a bad one for every type", () => {
@@ -48,6 +48,7 @@ test("validateConfig accepts a good body and rejects a bad one for every type", 
     sharedNotes: { prompt: "Ideas" },
     openText: { prompt: "Thoughts" },
     rating: { prompt: "How was it?" },
+    ranking: { prompt: "Rank", options: ["A", "B"] },
   };
   for (const m of INTERACTION_MODULES) {
     expect(m.validateConfig(good[m.type], false), m.type).toMatchObject({ ok: true });

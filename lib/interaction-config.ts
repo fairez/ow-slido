@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { MessageKey, TParams } from "@/lib/i18n";
-export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa"] as const;
+import { RANKING_MAX_OPTIONS, RANKING_MIN_OPTIONS, RANKING_OPTION_MAX } from "@/lib/ranking-limits";
+export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa", "ranking"] as const;
 export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
 export const INTERACTION_PROMPT_MAX = 200;
@@ -16,6 +18,8 @@ export type SharedNotesConfig = {
 };
 export type OpenTextConfig = { prompt: string; maxResponsesPerParticipant: number };
 export type RatingConfig = { prompt: string; scale: "stars5" | "numeric10" };
+export type RankingOption = { id: string; text: string };
+export type RankingConfig = { prompt: string; options: RankingOption[] };
 export type QaConfig = { prompt: string; moderation: "open" | "moderated"; profanityFilter: boolean };
 
 export const QA_DEFAULT_TITLE = "Q&A";
@@ -26,6 +30,7 @@ type ConfigByType = {
   openText: OpenTextConfig;
   rating: RatingConfig;
   qa: QaConfig;
+  ranking: RankingConfig;
 };
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 type FieldError = { error: MessageKey; params?: TParams };
@@ -39,7 +44,30 @@ const DEFAULTS: ConfigByType = {
   openText: { prompt: "", maxResponsesPerParticipant: 1 },
   rating: { prompt: "", scale: "stars5" },
   qa: { prompt: QA_DEFAULT_PROMPT, moderation: "open", profanityFilter: true },
+  ranking: { prompt: "", options: [] },
 };
+
+/** Accepts plain texts or `{id?, text}`; ids already seen are replaced so every option id is unique. */
+function parseRankingOptions(raw: unknown): Parsed<RankingOption[]> {
+  if (!Array.isArray(raw)) return { ok: false, error: "api.optionsList" };
+  if (raw.length < RANKING_MIN_OPTIONS || raw.length > RANKING_MAX_OPTIONS) {
+    return { ok: false, error: "api.rankingOptionsRange", params: { min: RANKING_MIN_OPTIONS, max: RANKING_MAX_OPTIONS } };
+  }
+  const options: RankingOption[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    const obj = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
+    const textRaw = typeof entry === "string" ? entry : obj?.text;
+    const text = typeof textRaw === "string" ? textRaw.trim() : "";
+    if (!text) return { ok: false, error: "api.optionLabelEmpty" };
+    if (text.length > RANKING_OPTION_MAX) return { ok: false, error: "api.optionLabelMax", params: { max: RANKING_OPTION_MAX } };
+    let id = typeof obj?.id === "string" && obj.id ? obj.id : randomUUID();
+    if (seen.has(id)) id = randomUUID();
+    seen.add(id);
+    options.push({ id, text });
+  }
+  return { ok: true, value: options };
+}
 
 function intField(
   b: Record<string, unknown>,
@@ -121,6 +149,12 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
     }
   } else if (type === "openText") {
     error = intField(b, "maxResponsesPerParticipant", "api.responsesPerParticipantRange", OPEN_TEXT_MIN, OPEN_TEXT_MAX, config);
+  } else if (type === "ranking") {
+    if (!partial || b.options !== undefined) {
+      const options = parseRankingOptions(b.options);
+      if (options.ok) config.options = options.value;
+      else error = options;
+    }
   } else if (b.scale !== undefined) {
     if (b.scale !== "stars5" && b.scale !== "numeric10") error = { error: "api.scaleInvalid" };
     else config.scale = b.scale;
