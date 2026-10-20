@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { EventUnavailable } from "@/components/event-unavailable";
+import { BrandStyle, brandAttrs } from "@/components/brand-style";
+import { eventAccent } from "@/lib/branding";
 import { eventUnavailable } from "@/lib/workspace-suspension";
 import { ParticipantView } from "@/components/participant-view";
 import { isUuid } from "@/lib/events";
@@ -41,8 +43,10 @@ export default async function ParticipantPage({
     redirect(`/join/${event.joinCode}${j ? "?cookies=blocked" : ""}`);
   }
 
+  const accent = await eventAccent(event.id);
   return (
-    <main id="main" className="participant">
+    <main id="main" className="participant" {...brandAttrs(accent)}>
+      <BrandStyle accent={accent} />
       <h1>{event.name}</h1>
       <ParticipantView
         eventId={event.id}

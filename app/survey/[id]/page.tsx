@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { BrandStyle, brandAttrs } from "@/components/brand-style";
 import { EventUnavailable } from "@/components/event-unavailable";
 import { SurveyForm } from "@/components/survey-form";
+import { interactionAccent } from "@/lib/branding";
 import { participantCookieName } from "@/lib/participant-token";
 import { getSurveyPage } from "@/lib/survey-page";
 
@@ -20,8 +22,10 @@ export default async function SurveyPage({ params }: { params: Promise<{ id: str
       </main>
     );
   }
+  const accent = await interactionAccent(id);
   return (
-    <main id="main" className="participant">
+    <main id="main" className="participant" {...brandAttrs(accent)}>
+      <BrandStyle accent={accent} />
       <SurveyForm survey={survey} />
     </main>
   );

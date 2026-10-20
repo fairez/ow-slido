@@ -11,11 +11,14 @@ import type { MessageKey } from "@/lib/i18n/en";
 
 export const AA_TEXT_RATIO = 4.5;
 
+/** The `--accent` of the light theme in app/globals.css: what a workspace without a colour uses. */
+export const DEFAULT_ACCENT = "#b5472b";
+
 export type Theme = "light" | "dark";
 
-export const SURFACE_TOKENS: Record<Theme, { bg: string; surface: string }> = {
-  light: { bg: "#faf6ee", surface: "#fffdf8" },
-  dark: { bg: "#1c1815", surface: "#26211d" },
+export const SURFACE_TOKENS: Record<Theme, { bg: string; surface: string; ink: string }> = {
+  light: { bg: "#faf6ee", surface: "#fffdf8", ink: "#1f1a17" },
+  dark: { bg: "#1c1815", surface: "#26211d", ink: "#f3ece1" },
 };
 
 /** The two `--accent-ink` values of the design tokens; text on a custom accent uses whichever reads better. */

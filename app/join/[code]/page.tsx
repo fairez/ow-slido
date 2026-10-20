@@ -1,4 +1,6 @@
+import { BrandStyle, brandAttrs } from "@/components/brand-style";
 import { JoinRedirect } from "@/components/join-redirect";
+import { eventAccentByJoinCode } from "@/lib/branding";
 
 export default async function JoinPage({
   params,
@@ -9,8 +11,10 @@ export default async function JoinPage({
 }) {
   const { code } = await params;
   const { cookies } = await searchParams;
+  const accent = await eventAccentByJoinCode(code);
   return (
-    <main id="main" className="entry-page">
+    <main id="main" className="entry-page" {...brandAttrs(accent)}>
+      <BrandStyle accent={accent} />
       <JoinRedirect code={code} cookiesBlocked={cookies === "blocked"} />
     </main>
   );

@@ -211,3 +211,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Surface tokens in lib/brand-accent.ts mirror globals.css/DESIGN.md; tests/brand-accent.test.ts fails if they drift.
   - Full `npm test`: 124 files passed. No UI change in this story, so no browser check.
 ---
+
+## 2026-10-21 - US-018
+- Brand accent applied and settable. `/dashboard/settings` has a "Brand colour" section (`BrandingSettings`, `branding.manage`): hex field plus colour picker, a live preview of the join screen in the light and dark theme, a contrast table (3 pairs x 2 themes), Apply and Remove. Without the plan the form is a `PlanHint` and only Remove stays. The join page, `/e/[eventId]`, `/survey/[id]` and `/present/[eventId]` render `<BrandStyle accent>` and `data-brand` on their root; `brandCss` sets only `--accent`, `--accent-ink`, `--focus` under `[data-brand]` per theme (dark uses `darkAccent`). Removing, a downgrade, or a failing stored value falls back to the default.
+- Files: lib/branding.ts, lib/brand-style.ts, lib/brand-accent.ts (`DEFAULT_ACCENT`, `ink` in `SURFACE_TOKENS`), components/brand-style.tsx, components/branding-settings.tsx, the four pages, settings page, app/globals.css (`.brand-*`), lib/i18n en/id (`branding.*`), docs/branding.md, CLAUDE.md, tests/branding-apply.test.tsx, tests/branding-settings-ui.test.tsx, tests/brand-accent.test.ts, tests/no-inline-strings.test.ts.
+- **Learnings for future iterations:**
+  - A scoped `<style>` plus a `data-brand` attribute beats inline custom properties here, because the dark values need `prefers-color-scheme` and `data-theme` selectors. Anything inside the root inherits the tokens, so no component changed. Dashboard pages and the app shell keep the default accent on purpose.
+  - A new audience or presenter page must call one of the accent lookups and render `BrandStyle`; the shell around the page (header, theme button) is outside the root and stays default.
+  - The no-inline-strings test flags string literals such as `"checks" in obj`; narrow types with a derived value instead.
+  - Browser check: production build on `.next-shot` against the test DB, script scripts/ralph/screens/us018.mjs [360|1280] [dark]. It makes two hosts (Team with #1f6f5c, Free) and prints the computed `--accent` per screen (branded #1f6f5c light / #599486 dark; plain #b5472b / #e07a5a; default again after Remove). Signup is rate limited per IP, so restart the server between runs (kill by pid from `ps | grep tsx`; a `pkill -f`-style pattern also matched my own shell once). Screens: us018-*.png.
+  - Full `npm test`: one unrelated deadlock in tests/operational-limits.test.ts between parallel files; it passes alone. The presenter with zero votes shows little accent (bars are empty); the token is applied, checked by computed style.
+---

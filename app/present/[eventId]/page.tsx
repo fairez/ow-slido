@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { BrandStyle, brandAttrs } from "@/components/brand-style";
 import { PresenterView } from "@/components/presenter-view";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
@@ -7,6 +8,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { asc, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { workspaceAccent } from "@/lib/branding";
 import { getDb } from "@/lib/db";
 import { findOwnedEvent } from "@/lib/polls";
 import { getPresenterState, getSurveyPresenter } from "@/lib/presenter";
@@ -44,8 +46,10 @@ export default async function PresentPage({
   // `?view=survey&survey=<id>` opens a survey's results; an id that is not a shown survey of this event falls back.
   const survey = query.view === "survey" && query.survey ? await getSurveyPresenter(event.id, query.survey) : null;
 
+  const accent = await workspaceAccent(membership.workspaceId);
   return (
-    <main id="main" className="present">
+    <main id="main" className="present" {...brandAttrs(accent)}>
+      <BrandStyle accent={accent} />
       <PresenterView
         eventId={event.id}
         initial={await getPresenterState(event.id)}

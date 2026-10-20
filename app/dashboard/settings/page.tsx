@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { workspaces } from "@/db/schema";
+import { BrandingSettings } from "@/components/branding-settings";
 import { DeleteWorkspace } from "@/components/delete-workspace";
 import { RetentionSettings } from "@/components/retention-settings";
 import { can } from "@/lib/auth/permissions";
@@ -11,6 +12,8 @@ import { redirectIfTwoFactorMissing } from "@/lib/auth/two-factor-policy";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
+import { getEntitlements } from "@/lib/plans";
+import { brandingLock } from "@/lib/plan-hints";
 import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +30,11 @@ export default async function SettingsPage() {
   if (!can(membership.role, "members.manage")) redirect("/dashboard");
 
   const [workspace] = await getDb()
-    .select({ name: workspaces.name, retentionDays: workspaces.retentionDays })
+    .select({ name: workspaces.name, retentionDays: workspaces.retentionDays, brandAccent: workspaces.brandAccent })
     .from(workspaces)
     .where(eq(workspaces.id, membership.workspaceId));
+
+  const { limits } = await getEntitlements(membership.workspaceId);
 
   return (
     <main id="main" className="page">
@@ -44,6 +49,9 @@ export default async function SettingsPage() {
       </header>
       <div className="stack">
         <RetentionSettings initial={workspace?.retentionDays ?? null} />
+        {can(membership.role, "branding.manage") && (
+          <BrandingSettings initial={workspace?.brandAccent ?? null} lock={brandingLock(limits)} />
+        )}
         {workspace && can(membership.role, "workspace.delete") && <DeleteWorkspace name={workspace.name} />}
       </div>
     </main>

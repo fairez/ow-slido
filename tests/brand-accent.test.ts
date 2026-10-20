@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_ACCENT,
   INK_CHOICES,
   SURFACE_TOKENS,
   checkAccentContrast,
@@ -106,11 +107,13 @@ describe("surface tokens", () => {
     for (const [name, light, dark] of [
       ["bg", SURFACE_TOKENS.light.bg, SURFACE_TOKENS.dark.bg],
       ["surface", SURFACE_TOKENS.light.surface, SURFACE_TOKENS.dark.surface],
+      ["ink", SURFACE_TOKENS.light.ink, SURFACE_TOKENS.dark.ink],
     ]) {
       expect(css).toContain(`--${name}: ${light};`);
       expect(css).toContain(`--${name}: ${dark};`);
       expect(design.toLowerCase()).toContain(`| \`--${name}\` | ${light} | ${dark} |`);
     }
+    expect(css).toContain(`--accent: ${DEFAULT_ACCENT};`);
     expect(css).toContain(`--accent-ink: ${INK_CHOICES[0]};`);
     expect(css).toContain(`--accent-ink: ${INK_CHOICES[1]};`);
   });

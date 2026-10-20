@@ -32,6 +32,7 @@ const MIGRATED = [
   "app/e/[eventId]/page.tsx",
   "components/join-form.tsx",
   "components/join-redirect.tsx",
+  "components/branding-settings.tsx",
   "components/participant-view.tsx",
   "components/live-view.tsx",
   "components/qa-tab.tsx",
