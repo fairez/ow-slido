@@ -12,7 +12,17 @@ import {
   QUIZ_TIME_MIN,
 } from "@/lib/quiz-limits";
 import { RANKING_MAX_OPTIONS, RANKING_MIN_OPTIONS, RANKING_OPTION_MAX } from "@/lib/ranking-limits";
-export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa", "ranking", "quiz"] as const;
+import {
+  SURVEY_KINDS,
+  SURVEY_MAX_OPTIONS,
+  SURVEY_MAX_QUESTIONS,
+  SURVEY_MIN_OPTIONS,
+  SURVEY_MIN_QUESTIONS,
+  SURVEY_OPTION_MAX,
+  SURVEY_QUESTION_MAX,
+  type SurveyKind,
+} from "@/lib/survey-limits";
+export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa", "ranking", "quiz", "survey"] as const;
 export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
 export const INTERACTION_PROMPT_MAX = 200;
@@ -39,6 +49,20 @@ export type QuizConfig = {
   timeLimitSeconds: number;
   points: number;
 };
+export type SurveyQuestion = {
+  id: string;
+  kind: SurveyKind;
+  text: string;
+  required: boolean;
+  /** choice only */
+  options?: RankingOption[];
+  /** choice only: several options may be picked */
+  multiple?: boolean;
+  /** rating only */
+  scale?: RatingConfig["scale"];
+};
+/** The survey's name is the interaction title. */
+export type SurveyConfig = { questions: SurveyQuestion[] };
 export type QaConfig = { prompt: string; moderation: "open" | "moderated"; profanityFilter: boolean };
 
 export const QA_DEFAULT_TITLE = "Q&A";
@@ -51,6 +75,7 @@ type ConfigByType = {
   qa: QaConfig;
   ranking: RankingConfig;
   quiz: QuizConfig;
+  survey: SurveyConfig;
 };
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 type FieldError = { error: MessageKey; params?: TParams };
@@ -72,6 +97,7 @@ const DEFAULTS: ConfigByType = {
     timeLimitSeconds: QUIZ_TIME_DEFAULT,
     points: QUIZ_POINTS_DEFAULT,
   },
+  survey: { questions: [] },
 };
 
 /** Accepts plain texts or `{id?, text}`; ids already seen are replaced so every option id is unique. */
@@ -109,6 +135,47 @@ const parseRankingOptions = (raw: unknown) =>
 
 const parseQuizOptions = (raw: unknown) =>
   parseOptionList(raw, { min: QUIZ_MIN_OPTIONS, max: QUIZ_MAX_OPTIONS, textMax: QUIZ_OPTION_MAX, error: "api.quizOptionsRange" });
+
+const parseSurveyOptions = (raw: unknown) =>
+  parseOptionList(raw, { min: SURVEY_MIN_OPTIONS, max: SURVEY_MAX_OPTIONS, textMax: SURVEY_OPTION_MAX, error: "api.surveyOptionsRange" });
+
+/** 1 to 20 questions; ids are kept when unique, else replaced. Each kind keeps only its own fields. */
+function parseSurveyQuestions(raw: unknown): Parsed<SurveyQuestion[]> {
+  if (!Array.isArray(raw)) return { ok: false, error: "api.surveyQuestionsList" };
+  if (raw.length < SURVEY_MIN_QUESTIONS || raw.length > SURVEY_MAX_QUESTIONS) {
+    return { ok: false, error: "api.surveyQuestionsRange", params: { min: SURVEY_MIN_QUESTIONS, max: SURVEY_MAX_QUESTIONS } };
+  }
+  const questions: SurveyQuestion[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") return { ok: false, error: "api.surveyQuestionInvalid" };
+    const q = entry as Record<string, unknown>;
+    const text = typeof q.text === "string" ? q.text.trim() : "";
+    if (!text) return { ok: false, error: "api.surveyQuestionTextRequired" };
+    if (text.length > SURVEY_QUESTION_MAX) {
+      return { ok: false, error: "api.surveyQuestionTextMax", params: { max: SURVEY_QUESTION_MAX } };
+    }
+    if (!(SURVEY_KINDS as readonly unknown[]).includes(q.kind)) return { ok: false, error: "api.surveyKindInvalid" };
+    const kind = q.kind as SurveyKind;
+    if (q.required !== undefined && typeof q.required !== "boolean") return { ok: false, error: "api.surveyQuestionInvalid" };
+    let id = typeof q.id === "string" && q.id && q.id.length <= 64 ? q.id : randomUUID();
+    if (seen.has(id)) id = randomUUID();
+    seen.add(id);
+    const question: SurveyQuestion = { id, kind, text, required: q.required === true };
+    if (kind === "choice") {
+      const options = parseSurveyOptions(q.options);
+      if (!options.ok) return options;
+      if (q.multiple !== undefined && typeof q.multiple !== "boolean") return { ok: false, error: "api.surveyQuestionInvalid" };
+      question.options = options.value;
+      question.multiple = q.multiple === true;
+    } else if (kind === "rating") {
+      if (q.scale !== undefined && q.scale !== "stars5" && q.scale !== "numeric10") return { ok: false, error: "api.scaleInvalid" };
+      question.scale = q.scale === "numeric10" ? "numeric10" : "stars5";
+    }
+    questions.push(question);
+  }
+  return { ok: true, value: questions };
+}
 
 /** At least one correct id, no repeats, every id one of `options` (when they are known). */
 function parseCorrectIds(raw: unknown, options: readonly RankingOption[] | undefined): Parsed<string[]> {
@@ -176,6 +243,15 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
     } else if (!partial) {
       title = QA_DEFAULT_TITLE;
     }
+  } else if (type === "survey") {
+    if (!partial || b.title !== undefined) {
+      const name = typeof b.title === "string" ? b.title.trim() : "";
+      if (!name) return { ok: false, error: "api.titleRequired" };
+      if (name.length > INTERACTION_PROMPT_MAX) {
+        return { ok: false, error: "api.promptMax", params: { max: INTERACTION_PROMPT_MAX } };
+      }
+      title = name;
+    }
   } else if (!partial || b.prompt !== undefined) {
     const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
     if (!prompt) return { ok: false, error: "api.promptRequired" };
@@ -231,6 +307,12 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
     }
     if (!error) error = intField(b, "timeLimitSeconds", "api.quizTimeLimitRange", QUIZ_TIME_MIN, QUIZ_TIME_MAX, config);
     if (!error) error = intField(b, "points", "api.quizPointsRange", QUIZ_POINTS_MIN, QUIZ_POINTS_MAX, config);
+  } else if (type === "survey") {
+    if (!partial || b.questions !== undefined) {
+      const questions = parseSurveyQuestions(b.questions);
+      if (questions.ok) config.questions = questions.value;
+      else error = questions;
+    }
   } else if (b.scale !== undefined) {
     if (b.scale !== "stars5" && b.scale !== "numeric10") error = { error: "api.scaleInvalid" };
     else config.scale = b.scale;

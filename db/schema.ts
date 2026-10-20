@@ -236,7 +236,7 @@ export const interactions = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa", "ranking", "quiz"] }).notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa", "ranking", "quiz", "survey"] }).notNull(),
     title: text("title").notNull(),
     state: text("state", { enum: ["draft", "live", "paused", "closed"] })
       .notNull()
@@ -249,7 +249,7 @@ export const interactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa', 'ranking', 'quiz')`),
+    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa', 'ranking', 'quiz', 'survey')`),
     check("interactions_state", sql`${t.state} in ('draft', 'live', 'paused', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
     uniqueIndex("interactions_one_live_per_event")
@@ -285,12 +285,12 @@ export const templateItems = pgTable(
       .notNull()
       .references(() => templates.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa", "ranking", "quiz"] }).notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa", "ranking", "quiz", "survey"] }).notNull(),
     title: text("title").notNull(),
     config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
   },
   (t) => [
-    check("template_items_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa', 'ranking', 'quiz')`),
+    check("template_items_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa', 'ranking', 'quiz', 'survey')`),
     index("template_items_template_position_idx").on(t.templateId, t.position),
   ],
 );
@@ -526,6 +526,37 @@ export const quizScores = pgTable(
     primaryKey({ columns: [t.eventId, t.participantId] }),
     check("quiz_scores_nonnegative", sql`${t.points} >= 0 and ${t.answeredCount} >= 0 and ${t.correctCount} >= 0 and ${t.totalElapsedMs} >= 0`),
   ],
+);
+
+/** One finished survey per participant; the answers hang off it. */
+export const surveySubmissions = pgTable(
+  "survey_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("survey_submissions_one_per_participant").on(t.interactionId, t.participantId)],
+);
+
+export const surveyAnswers = pgTable(
+  "survey_answers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => surveySubmissions.id, { onDelete: "cascade" }),
+    /** Id of the question inside the survey's config. */
+    questionId: text("question_id").notNull(),
+    /** Choice: array of option ids; rating: whole number; open text: string. */
+    value: jsonb("value").$type<string[] | number | string>().notNull(),
+  },
+  (t) => [unique("survey_answers_one_per_question").on(t.submissionId, t.questionId)],
 );
 
 /**

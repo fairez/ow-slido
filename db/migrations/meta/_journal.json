@@ -267,6 +267,13 @@
       "when": 1792512532830,
       "tag": "0037_condemned_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792514709388,
+      "tag": "0038_wise_invisible_woman",
+      "breakpoints": true
     }
   ]
 }

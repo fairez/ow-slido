@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isNewInteractionType, newInteractionConfig, type QuizConfig, type RankingConfig } from "@/lib/interaction-config";
+import { isNewInteractionType, newInteractionConfig, type QuizConfig, type RankingConfig, type SurveyConfig } from "@/lib/interaction-config";
 import { pollConfig, type PollConfig } from "@/lib/polls";
 import { wordcloudConfig, type WordcloudConfig } from "@/lib/wordclouds";
 
@@ -20,6 +20,17 @@ export function copyConfig(type: string, title: string, config: unknown): Record
       ...quiz,
       options: quiz.options.map((o) => ({ ...o, id: ids.get(o.id)! })),
       correctOptionIds: quiz.correctOptionIds.flatMap((id) => ids.get(id) ?? []),
+    };
+  }
+  if (type === "survey") {
+    const survey = newInteractionConfig("survey", (config ?? {}) as Partial<SurveyConfig>);
+    return {
+      ...survey,
+      questions: survey.questions.map((q) => ({
+        ...q,
+        id: randomUUID(),
+        ...(q.options && { options: q.options.map((o) => ({ ...o, id: randomUUID() })) }),
+      })),
     };
   }
   if (isNewInteractionType(type)) return newInteractionConfig(type, (config ?? {}) as never);

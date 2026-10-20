@@ -26,6 +26,7 @@ import { LEADERBOARD_TOP, allStandings, topStandings } from "@/lib/leaderboard/s
 import { getNicknameState } from "@/lib/nickname";
 import { computeQuizResults, countQuizAnswers, databaseNowMs, quizTimeLimitSeconds } from "@/lib/quiz";
 import { computeResults as computeRankingResults } from "@/lib/ranking";
+import { computeSurveyResults, countSurveySubmissions, listSubmissions, questionsOf } from "@/lib/survey";
 import { RANKING_MAX_OPTIONS } from "@/lib/ranking-limits";
 import { computeResults, getPresenterResults } from "@/lib/rating";
 import { listPresenterNotes } from "@/lib/shared-notes";
@@ -49,6 +50,8 @@ export const RANKING_EXPORT_HEADER = [
   "rankings",
   ...Array.from({ length: RANKING_MAX_OPTIONS }, (_, i) => `position_${i + 1}`),
 ] as const;
+/** Fixed columns first; a survey adds one column per question after them. */
+export const SURVEY_EXPORT_HEADER = ["section", "title", "submission"] as const;
 export const QUIZ_EXPORT_HEADER = ["section", "title", "option", "correct", "count", "answers", "correct_percent"] as const;
 /** The event's cumulative standings; the only place a nickname appears in an export. */
 export const LEADERBOARD_EXPORT_HEADER = ["section", "rank", "nickname", "points", "correct_answers"] as const;
@@ -513,6 +516,35 @@ const quizModule: InteractionModule = {
   },
 };
 
+const surveyModule: InteractionModule = {
+  type: "survey",
+  presentWhenClosed: true,
+  validateConfig: (body, partial) => parseNewInteractionInput("survey", body, partial),
+  async results(interactionId) {
+    const row = await loadRow(interactionId);
+    return computeSurveyResults(db(), interactionId, row.config);
+  },
+  // One row per submission, numbered in the order they came in; nothing identifies the person.
+  async csv(interactionId) {
+    const row = await loadRow(interactionId);
+    const questions = questionsOf(row.config);
+    const options = new Map(questions.flatMap((q) => (q.options ?? []).map((o) => [o.id, o.text] as const)));
+    const submissions = await listSubmissions(db(), interactionId);
+    const cell = (value: string | number | string[] | undefined) =>
+      Array.isArray(value) ? value.map((id) => options.get(id) ?? id).join("; ") : (value ?? "");
+    return [
+      {
+        header: [...SURVEY_EXPORT_HEADER, ...questions.map((q, i) => `${i + 1}. ${q.text}`)],
+        rows: submissions.map((answers, i) => ["survey", row.title, i + 1, ...questions.map((q) => cell(answers.get(q.id)))]),
+      },
+    ];
+  },
+  responseCount: countSurveySubmissions,
+  // The presenter and participant screens arrive with the survey UI stories.
+  presenter: async () => null,
+  live: async () => null,
+};
+
 /** Registration order is the order of tables in the combined event CSV. */
 export const INTERACTION_MODULES: readonly InteractionModule[] = [
   pollModule,
@@ -523,6 +555,7 @@ export const INTERACTION_MODULES: readonly InteractionModule[] = [
   ratingModule,
   rankingModule,
   quizModule,
+  surveyModule,
 ];
 
 const byType = new Map<string, InteractionModule>(INTERACTION_MODULES.map((m) => [m.type, m]));

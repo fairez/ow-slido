@@ -11,4 +11,5 @@ export const TYPE_LABELS: Record<IconKind, MessageKey> = {
   rating: "pollMgr.type.rating",
   ranking: "pollMgr.type.ranking",
   quiz: "pollMgr.type.quiz",
+  survey: "pollMgr.type.survey",
 };

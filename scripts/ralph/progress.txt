@@ -559,3 +559,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `QuizForm` registers its `quiz:outcome` listener for the life of the form (not only once closed), because the push follows `state-changed` closely; the fallback GET timer is a separate effect that stops once a result exists.
   - No visible UI change (same result screen), so no screenshots.
 ---
+
+## 2026-10-21 - US-048
+- Survey type, storage and submit API. `survey` joins `interactions.type` and `template_items.type`; migration 0038 adds `survey_submissions` (unique per participant) and `survey_answers` (submission, question id, jsonb value), both cascading. Config is `questions` only (1-20; choice with 2-10 options and `multiple`, rating with `scale`, openText; each with `required`); the survey name is `interactions.title` (`title` in the body, required on create). Create, PATCH (a `questions` key replaces the list) and duplicate (`copyConfig` gives new question and option ids) are wired.
+- `POST /api/interactions/[id]/survey {answers}` (`submitSurvey`, lib/survey.ts): live only, each answer checked against its question; 400 carries `questionId` (and `missing`, all unanswered required ids); second submission 409 "Already submitted"; profanity filter on open text; host-only `survey:results`. Module registered: `results` (total, completed, per-question counts/percent, rating average/distribution, latest open-text answers), `csv` (one row per submission, columns `N. Question text`, no identifiers), `responseCount`; `presenter`/`live` are null until US-049..051.
+- Files: db/schema.ts, db/migrations/0038_*, lib/{survey,survey-limits,interaction-config,interaction-copy,interaction-modules,type-labels}.ts, app/api/interactions/[id]/survey/route.ts, components/{type-icon,poll-manager}.tsx, lib/i18n/{en,id}.ts, tests/{survey,interaction-modules}.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - US-050 wants a live survey beside another live interaction, but `interactions_one_live_per_event` forbids two live rows per event: the index (and `startInteraction`, which pauses the current live one) must exempt surveys, with a migration.
+  - The CSV header holds the question texts, so surveys with different questions do not merge into one table of the event CSV; each gets its own block (the ZIP has one file each anyway).
+  - `poll-manager.tsx`'s `Kind` (builder kinds) was left without `survey`; `InteractionItem.type` and `IconKind` have it so the library lists surveys. US-049 adds the builder kind and an Add content entry (label key `pollMgr.type.survey` exists).
+  - The percent of a multi-choice question is of respondents who answered it, so the percents can add up to more than 100.
+  - No UI change, no browser check. Full suite 1137 tests green (~425 s), typecheck and eslint (source dirs) clean. Dev and test DB migrated to 0038.
+---
