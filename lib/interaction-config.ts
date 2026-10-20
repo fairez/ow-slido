@@ -1,5 +1,5 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating"] as const;
+export const NEW_INTERACTION_TYPES = ["sharedNotes", "openText", "rating", "qa"] as const;
 export type NewInteractionType = (typeof NEW_INTERACTION_TYPES)[number];
 
 export const INTERACTION_PROMPT_MAX = 200;
@@ -16,11 +16,16 @@ export type SharedNotesConfig = {
 };
 export type OpenTextConfig = { prompt: string; maxResponsesPerParticipant: number };
 export type RatingConfig = { prompt: string; scale: "stars5" | "numeric10" };
+export type QaConfig = { prompt: string; moderation: "open" | "moderated" };
+
+export const QA_DEFAULT_TITLE = "Q&A";
+export const QA_DEFAULT_PROMPT = "Ask a question";
 
 type ConfigByType = {
   sharedNotes: SharedNotesConfig;
   openText: OpenTextConfig;
   rating: RatingConfig;
+  qa: QaConfig;
 };
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: MessageKey; params?: TParams };
 type FieldError = { error: MessageKey; params?: TParams };
@@ -33,6 +38,7 @@ const DEFAULTS: ConfigByType = {
   sharedNotes: { prompt: "", maxNotesPerParticipant: 3, moderation: "open", showAuthorNames: false },
   openText: { prompt: "", maxResponsesPerParticipant: 1 },
   rating: { prompt: "", scale: "stars5" },
+  qa: { prompt: QA_DEFAULT_PROMPT, moderation: "open" },
 };
 
 function intField(
@@ -63,7 +69,27 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
   const config: Record<string, unknown> = {};
   let title: string | undefined;
 
-  if (!partial || b.prompt !== undefined) {
+  if (type === "qa") {
+    // Q&A names itself: the prompt is optional and the title stays "Q&A" unless the host gives one.
+    if (b.prompt !== undefined) {
+      const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
+      if (!prompt) return { ok: false, error: "api.promptRequired" };
+      if (prompt.length > INTERACTION_PROMPT_MAX) {
+        return { ok: false, error: "api.promptMax", params: { max: INTERACTION_PROMPT_MAX } };
+      }
+      config.prompt = prompt;
+    }
+    if (b.title !== undefined) {
+      const name = typeof b.title === "string" ? b.title.trim() : "";
+      if (!name) return { ok: false, error: "api.titleRequired" };
+      if (name.length > INTERACTION_PROMPT_MAX) {
+        return { ok: false, error: "api.promptMax", params: { max: INTERACTION_PROMPT_MAX } };
+      }
+      title = name;
+    } else if (!partial) {
+      title = QA_DEFAULT_TITLE;
+    }
+  } else if (!partial || b.prompt !== undefined) {
     const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
     if (!prompt) return { ok: false, error: "api.promptRequired" };
     if (prompt.length > INTERACTION_PROMPT_MAX) {
@@ -74,7 +100,12 @@ export function parseNewInteractionInput<T extends NewInteractionType>(
   }
 
   let error: FieldError | null = null;
-  if (type === "sharedNotes") {
+  if (type === "qa") {
+    if (b.moderation !== undefined) {
+      if (b.moderation !== "open" && b.moderation !== "moderated") error = { error: "api.moderationInvalid" };
+      else config.moderation = b.moderation;
+    }
+  } else if (type === "sharedNotes") {
     error = intField(b, "maxNotesPerParticipant", "api.notesPerParticipantRange", NOTES_MIN, NOTES_MAX, config);
     if (!error && b.moderation !== undefined) {
       if (b.moderation !== "open" && b.moderation !== "moderated") error = { error: "api.moderationInvalid" };

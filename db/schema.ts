@@ -226,7 +226,7 @@ export const interactions = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating"] }).notNull(),
+    type: text("type", { enum: ["poll", "wordcloud", "sharedNotes", "openText", "rating", "qa"] }).notNull(),
     title: text("title").notNull(),
     state: text("state", { enum: ["draft", "live", "paused", "closed"] })
       .notNull()
@@ -236,7 +236,7 @@ export const interactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating')`),
+    check("interactions_type", sql`${t.type} in ('poll', 'wordcloud', 'sharedNotes', 'openText', 'rating', 'qa')`),
     check("interactions_state", sql`${t.state} in ('draft', 'live', 'paused', 'closed')`),
     index("interactions_event_position_idx").on(t.eventId, t.position),
     uniqueIndex("interactions_one_live_per_event")
@@ -289,6 +289,10 @@ export const questions = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
+    /** The `qa` interaction the question belongs to. */
+    interactionId: uuid("interaction_id")
+      .notNull()
+      .references(() => interactions.id, { onDelete: "cascade" }),
     participantId: uuid("participant_id")
       .notNull()
       .references(() => participants.id, { onDelete: "cascade" }),
@@ -304,6 +308,7 @@ export const questions = pgTable(
     check("questions_text_length", sql`char_length(${t.text}) between 1 and 300`),
     check("questions_status", sql`${t.status} in ('pending', 'approved', 'rejected')`),
     index("questions_event_status_idx").on(t.eventId, t.status),
+    index("questions_interaction_idx").on(t.interactionId),
   ],
 );
 

@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { config } from "dotenv";
 import { createDb } from "@/db/client";
 import { subscriptions, users } from "@/db/schema";
+import { ensureQaInteraction } from "@/lib/questions";
 import { createPersonalWorkspace } from "@/lib/workspaces";
 
 config({ path: ".env.local" });
@@ -38,3 +39,6 @@ export async function setPlan(
     .values({ workspaceId, planOverride: plan, planOverrideReason: "test" })
     .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { planOverride: plan, planOverrideReason: "test" } });
 }
+
+/** The event's Q&A interaction (created if missing), for tests that insert questions directly. */
+export const qaFor = (db: ReturnType<typeof createTestDb>["db"], eventId: string) => ensureQaInteraction(db, eventId);

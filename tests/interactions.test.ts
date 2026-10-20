@@ -41,7 +41,7 @@ test("inserts an interaction with defaults", async () => {
 test("rejects unknown type and state", async () => {
   const e = await makeEvent();
   await expect(
-    db.insert(interactions).values({ eventId: e.id, type: "qa" as "poll", title: "t", position: 0 }),
+    db.insert(interactions).values({ eventId: e.id, type: "bogus" as "poll", title: "t", position: 0 }),
   ).rejects.toThrow();
   await expect(
     db

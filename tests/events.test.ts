@@ -2,7 +2,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, interactions, users } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, qaFor, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -180,7 +180,7 @@ test("duplicate copies interactions as drafts with a new join code and no respon
   await db.insert(interactions).values({ eventId: src.id, type: "wordcloud", title: "Cloud", position: 1, state: "closed" });
   const [p] = await db.insert(participants).values({ eventId: src.id }).returning();
   await db.insert(pollVotes).values({ interactionId: live.id, participantId: p.id, optionIds: ["a"] });
-  await db.insert(questions).values({ eventId: src.id, participantId: p.id, text: "Why?", status: "approved" });
+  await db.insert(questions).values({ eventId: src.id, interactionId: await qaFor(db, src.id), participantId: p.id, text: "Why?", status: "approved" });
 
   const res = await duplicate(req("POST", `/api/events/${src.id}/duplicate`), ctx(src.id));
   expect(res.status).toBe(201);
@@ -190,7 +190,7 @@ test("duplicate copies interactions as drafts with a new join code and no respon
   expect(copy.moderationMode).toBe("moderated");
 
   const copied = await db.select().from(interactions).where(eq(interactions.eventId, copy.id)).orderBy(interactions.position);
-  expect(copied.map((i) => [i.title, i.state, i.position])).toEqual([["Q?", "draft", 0], ["Cloud", "draft", 1]]);
+  expect(copied.map((i) => [i.title, i.state, i.position])).toEqual([["Q?", "draft", 0], ["Cloud", "draft", 1], ["Q&A", "draft", 2]]);
   expect(copied[0].config).toEqual({ options: [{ id: "a", label: "A" }] });
   expect(await db.select().from(participants).where(eq(participants.eventId, copy.id))).toHaveLength(0);
   expect(await db.select().from(questions).where(eq(questions.eventId, copy.id))).toHaveLength(0);

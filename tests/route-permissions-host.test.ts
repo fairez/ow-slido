@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, interactions, memberships, participants, questions, users, workspaces } from "@/db/schema";
 import type { Role } from "@/lib/auth/permissions";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, qaFor, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -69,7 +69,7 @@ beforeEach(async () => {
   const [participant] = await db.insert(participants).values({ eventId }).returning();
   const [question] = await db
     .insert(questions)
-    .values({ eventId, participantId: participant.id, text: "Why?", status: "pending" })
+    .values({ eventId, interactionId: await qaFor(db, eventId), participantId: participant.id, text: "Why?", status: "pending" })
     .returning();
   questionId = question.id;
 });

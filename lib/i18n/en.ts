@@ -163,6 +163,7 @@ export const en = {
   "pollMgr.type.sharedNotes": "Shared notes",
   "pollMgr.type.openText": "Open text",
   "pollMgr.type.rating": "Rating",
+  "pollMgr.type.qa": "Q&A",
   "pollMgr.title": "Interactions",
   "pollMgr.emptyTitle": "Nothing to run yet",
   "pollMgr.emptyBody":
@@ -429,6 +430,7 @@ export const en = {
   "api.statusInvalid": "Status must be 'approved' or 'rejected'",
   "api.questionRequired": "Question is required",
   "api.promptRequired": "Prompt is required",
+  "api.titleRequired": "Title is required",
   "api.notesNotOpen": "Notes are not open",
   "api.invalidName": "Invalid name",
   "api.endBeforeStart": "End date cannot be before the start date",

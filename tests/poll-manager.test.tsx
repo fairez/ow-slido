@@ -24,6 +24,14 @@ describe("PollManager", () => {
     expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
   });
 
+  it("labels a Q&A interaction and offers no editor for it", () => {
+    const qa: InteractionItem = { id: "q", type: "qa", title: "Q&A", state: "draft", position: 0, config: { prompt: "Ask a question", moderation: "open" } };
+    render(<PollManager eventId="e" initialInteractions={[qa]} />);
+    expect(screen.getByText(/^Q&A$/, { selector: ".row-meta" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Duplicate" })).toBeTruthy();
+  });
+
   it("enforces 2-10 options", () => {
     render(<PollManager eventId="e" initialInteractions={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "New poll" }));

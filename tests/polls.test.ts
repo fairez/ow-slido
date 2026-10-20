@@ -89,7 +89,7 @@ test("validation: question required, 2-10 options, non-empty labels", async () =
   expect((await createPoll({ ...poll, options: ["A"] })).res.status).toBe(400);
   expect((await createPoll({ ...poll, options: Array(11).fill("x") })).res.status).toBe(400);
   expect((await createPoll({ ...poll, options: ["A", " "] })).res.status).toBe(400);
-  expect((await createPoll({ ...poll, type: "qa" })).res.status).toBe(400);
+  expect((await createPoll({ ...poll, type: "bogus" })).res.status).toBe(400);
   expect((await createPoll({ ...poll, options: Array(10).fill("x") })).res.status).toBe(201);
 });
 

@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { participants, questionVotes, questions } from "@/db/schema";
-import { createTestDb, truncateAll } from "./helpers/db";
+import { createTestDb, qaFor, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -48,7 +48,7 @@ afterAll(() => pool.end());
 
 async function addQuestion(text: string, status: "pending" | "approved" | "rejected", extra: Partial<typeof questions.$inferInsert> = {}) {
   const [p] = await db.insert(participants).values({ eventId }).returning();
-  const [row] = await db.insert(questions).values({ eventId, participantId: p.id, text, status, ...extra }).returning();
+  const [row] = await db.insert(questions).values({ eventId, interactionId: await qaFor(db, eventId), participantId: p.id, text, status, ...extra }).returning();
   return { row, participantId: p.id };
 }
 

@@ -1,7 +1,8 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
-import { and, desc, eq, sql } from "drizzle-orm";
-import { events, participants, questionVotes, questions } from "@/db/schema";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { events, interactions, participants, questionVotes, questions } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { QA_DEFAULT_PROMPT, QA_DEFAULT_TITLE } from "@/lib/interaction-config";
 import { isProfane } from "@/lib/profanity";
 import { publish } from "@/lib/realtime/publisher";
 import { AUTHOR_NAME_MAX_LENGTH, QUESTION_MAX_LENGTH, type PublicQuestion } from "@/lib/question-types";
@@ -19,6 +20,42 @@ export const toPublicQuestion = (row: Row, upvotes = 0, upvoted = false): Public
   upvotes,
   upvoted,
 });
+
+/**
+ * The event's Q&A interaction (the first by position), created paused when the event has none. The event-level
+ * Q&A routes still address questions by event, so they file each question under this one until they take an
+ * interaction id themselves.
+ */
+export async function ensureQaInteraction(db: ReturnType<typeof getDb>, eventId: string): Promise<string> {
+  const find = (conn: Pick<typeof db, "select">) =>
+    conn
+      .select({ id: interactions.id })
+      .from(interactions)
+      .where(and(eq(interactions.eventId, eventId), eq(interactions.type, "qa")))
+      .orderBy(asc(interactions.position), asc(interactions.createdAt))
+      .limit(1);
+  const [existing] = await find(db);
+  if (existing) return existing.id;
+  return db.transaction(async (tx) => {
+    // Two first questions arriving together must not each create a Q&A.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"qa:" + eventId}))`);
+    const [again] = await find(tx);
+    if (again) return again.id;
+    const [event] = await tx.select({ moderationMode: events.moderationMode }).from(events).where(eq(events.id, eventId));
+    const [created] = await tx
+      .insert(interactions)
+      .values({
+        eventId,
+        type: "qa",
+        title: QA_DEFAULT_TITLE,
+        state: "paused",
+        position: sql`(select coalesce(max(position) + 1, 0) from interactions where event_id = ${eventId})`,
+        config: { prompt: QA_DEFAULT_PROMPT, moderation: event?.moderationMode ?? "open" },
+      })
+      .returning({ id: interactions.id });
+    return created.id;
+  });
+}
 
 type SubmitResult =
   | { ok: true; status: "pending" | "approved"; question: PublicQuestion }
@@ -61,9 +98,10 @@ export async function submitQuestion(
   if (!participant) return { ok: false, status: 404, error: "api.eventNotFound" };
 
   const status = event.moderationMode === "moderated" ? "pending" : "approved";
+  const interactionId = await ensureQaInteraction(db, eventId);
   const [row] = await db
     .insert(questions)
-    .values({ eventId, participantId, text, authorName, status })
+    .values({ eventId, interactionId, participantId, text, authorName, status })
     .returning();
   const question = toPublicQuestion(row);
 

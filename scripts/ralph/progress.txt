@@ -298,3 +298,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - Over-limit events are recomputed per month, so they unlock when a new month starts; same loophole family as events per month.
   - Browser check at 360/1280 (dashboard with 5 events on Free, event page light and dark, members with plan-suspended members): no overflow, no console errors. Screenshot users and workspaces deleted from the dev DB; dev/test DBs migrated to 0030. Full suite: 842 tests green.
 ---
+## 2026-10-20 - US-027
+- `qa` is an interaction type: schema enum and check, config `{prompt (max 200, default "Ask a question"), moderation}` in lib/interaction-config.ts (`NEW_INTERACTION_TYPES` now includes it, so create, PATCH and duplicate need no new branches; title defaults to "Q&A", optional `title` field; duplicate copies config only). Event duplicate now also copies Q&A interactions as drafts (never questions).
+- Migration 0031: adds `questions.interaction_id`, creates one `qa` interaction per event that has questions or no interaction (state `live` only when the event had no live interaction, else `paused`; position after the existing ones; moderation copied from the event), attaches every question, then NOT NULL + FK cascade + index. Reverse SQL is `db/migrations-down/0031_qa_interactions.down.sql` (Drizzle ignores it).
+- `ensureQaInteraction(db, eventId)` (lib/questions.ts): the event-level Q&A routes still address questions by event, so `submitQuestion` files each question under the event's first Q&A, creating a paused one under an advisory lock if none exists. US-028 replaces this with an interaction id in the route.
+- Host list: `pollMgr.type.qa` label; the Edit button is hidden for Q&A until the builder exists (US-030).
+- Files: db/schema.ts, db/migrations/0031_*, db/migrations-down/, lib/{interaction-config,questions}.ts, components/poll-manager.tsx, lib/i18n/{en,id}.ts, tests/{qa-interaction,poll-manager,events,export,present-questions-api,route-permissions-host}.test.*, tests/helpers/db.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests that insert `questions` directly need `interactionId: await qaFor(db, eventId)` (tests/helpers/db.ts).
+  - tests/qa-interaction.test.ts has a migration rehearsal in a scratch schema (`mig_rehearsal_qa`) with before/after counts per event and the down SQL; copy its shape for later data migrations.
+  - `live` and presenter state return null for a live `qa` interaction (they only handle other types), so a migrated live Q&A does not change what participants or the presenter see yet; the Q&A tab still works from the event-level routes.
+  - A live Q&A holds the one-live slot: starting a poll pauses it (and broadcasts that state change). US-029/030 decide how Q&A and the other types coexist.
+  - Dev and test DBs migrated to 0031. No browser check: the only UI change is the type label on the host list (unit-tested); the Q&A UI stories (US-029/030) should screenshot.
+---

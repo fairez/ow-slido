@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { events, interactions, noteAnalyses, openTextResponses, participants, pollVotes, ratingResponses, questions, questionVotes, sharedNotes, sharedNoteVotes, users, wordcloudEntries } from "@/db/schema";
-import { createTestDb, truncateAll, workspaceFor } from "./helpers/db";
+import { createTestDb, qaFor, truncateAll, workspaceFor } from "./helpers/db";
 
 const { db, pool } = createTestDb();
 
@@ -100,12 +100,13 @@ beforeEach(async () => {
     { interactionId: cloud.id, participantId: participantIds[1], normalizedWord: "hope" },
     { interactionId: cloud.id, participantId: participantIds[2], normalizedWord: "badword", hidden: true },
   ]);
+  const qaId = await qaFor(db, eventId);
   const qs = await db
     .insert(questions)
     .values([
-      { eventId, participantId: participantIds[0], text: "Named question", authorName: "Alice", status: "approved" },
-      { eventId, participantId: participantIds[1], text: "=SUM(A1)", status: "approved" },
-      { eventId, participantId: participantIds[2], text: "Pending one", status: "pending" },
+      { eventId, interactionId: qaId, participantId: participantIds[0], text: "Named question", authorName: "Alice", status: "approved" },
+      { eventId, interactionId: qaId, participantId: participantIds[1], text: "=SUM(A1)", status: "approved" },
+      { eventId, interactionId: qaId, participantId: participantIds[2], text: "Pending one", status: "pending" },
     ])
     .returning();
   await db.insert(questionVotes).values([

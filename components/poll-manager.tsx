@@ -19,7 +19,7 @@ import type { MessageKey } from "@/lib/i18n";
 
 export type InteractionItem = {
   id: string;
-  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
+  type: "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating" | "qa";
   title: string;
   state: "draft" | "live" | "paused" | "closed";
   position: number;
@@ -39,6 +39,7 @@ export type InteractionItem = {
 
 type Kind = "poll" | "wordcloud" | "sharedNotes" | "openText" | "rating";
 const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
+  qa: "pollMgr.type.qa",
   poll: "pollMgr.type.poll",
   wordcloud: "pollMgr.type.wordcloud",
   sharedNotes: "pollMgr.type.sharedNotes",
@@ -79,7 +80,7 @@ type PollManagerProps = {
 
 export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock }: PollManagerProps) {
   const t = useT();
-  const typeLabel = (kind: Kind) => t(TYPE_LABELS[kind]);
+  const typeLabel = (kind: InteractionItem["type"]) => t(TYPE_LABELS[kind]);
   const base = `/api/events/${eventId}/interactions`;
   // Only needed for live analysis status; stays disconnected when AI is off.
   const { socket } = useEventSocket(eventId, "host", aiEnabled);
@@ -182,7 +183,8 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     if (response) setItems(next);
   }
 
-  function edit(item: InteractionItem) {
+  // Q&A has no builder here yet, so the Edit button is not shown for it.
+  function edit(item: InteractionItem & { type: Kind }) {
     setError(null);
     setDraft({
       kind: item.type,
@@ -265,7 +267,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               ))}
               {item.state === "draft" && (
                 <div className="row-actions row-actions-quiet">
-                  {!lock && <Button variant="quiet" onClick={() => edit(item)}>{t("pollMgr.edit")}</Button>}
+                  {!lock && item.type !== "qa" && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
                   {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
                   <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>
                   {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
