@@ -3275,3 +3275,73 @@ button.quiz-option[aria-disabled="true"] {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+.ops-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ops-manage {
+  margin: 0;
+}
+
+.ops-manage a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.ops-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.ops-panel h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.ops-panel .row-list {
+  padding: 0;
+}
+
+.ops-notice {
+  margin: 0;
+  min-height: 1.5em;
+  color: var(--ink-muted);
+}
+
+.ops-ai-facts {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.ops-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.ops-member-who {
+  display: grid;
+  min-width: 0;
+}
+
+.ops-member-email {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.suspended-page {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 40rem;
+}

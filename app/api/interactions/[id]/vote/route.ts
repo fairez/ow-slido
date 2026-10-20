@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { castVote } from "@/lib/votes";
@@ -30,6 +31,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .from(interactions)
     .where(eq(interactions.id, id));
   if (!interaction) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, interaction.eventId);
   const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;

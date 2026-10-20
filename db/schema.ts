@@ -97,6 +97,9 @@ export const workspaces = pgTable("workspaces", {
   require2fa: boolean("require_2fa").notNull().default(false),
   /** Events are deleted this many days after they end. Null keeps everything. */
   retentionDays: integer("retention_days"),
+  /** Set by the platform operator: every member request and the events' audience screens are refused while set. */
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  suspendedReason: text("suspended_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check("workspaces_retention_days", sql`${t.retentionDays} is null or ${t.retentionDays} in (30, 90, 365)`)]);
 

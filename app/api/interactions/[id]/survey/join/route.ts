@@ -7,6 +7,7 @@ import { isUuid } from "@/lib/events";
 import { ensureParticipant } from "@/lib/participants";
 import { participantSetCookie } from "@/lib/participant-token";
 import { hasSubmitted } from "@/lib/survey-page";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { JOIN_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 const WINDOW_SECONDS = 60;
@@ -36,6 +37,8 @@ export async function POST(request: Request, { params }: Context) {
         .where(eq(interactions.id, id))
     : [];
   if (!row || row.type !== "survey") return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+  const unavailable = await eventUnavailableResponse(request, row.event.id);
+  if (unavailable) return unavailable;
   if (row.state !== "live") return Response.json({ error: serverT(request, "api.surveyNotOpen") }, { status: 409 });
 
   const ensured = await ensureParticipant(request, row.event);

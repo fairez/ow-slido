@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { apiMessage, serverT } from "@/lib/i18n/server";
 import { deleteQuestion, listHostQuestions, moderateQuestion } from "@/lib/moderation";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { findOwnedEvent } from "@/lib/polls";
 import {
@@ -63,6 +64,9 @@ export async function postQuestion(request: Request, eventId: string, interactio
   const ip = await rateLimit(`question:ip:${clientIp(request)}`, QUESTION_IP_LIMIT, WINDOW_SECONDS);
   if (!ip.allowed) return tooMany(request, ip.retryAfterSeconds);
 
+  const unavailable = await eventUnavailableResponse(request, eventId);
+  if (unavailable) return unavailable;
+
   const participantId = participantFor(request, eventId);
   if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
 
@@ -88,6 +92,8 @@ export async function postQuestion(request: Request, eventId: string, interactio
 
 /** Approved questions for the event's participants and its host. `interactionId` is null when the event has no Q&A. */
 export async function getQuestions(request: Request, eventId: string, interactionId: string | null): Promise<Response> {
+  const unavailable = await eventUnavailableResponse(request, eventId);
+  if (unavailable) return unavailable;
   const participantId = participantFor(request, eventId);
   if (!participantId) {
     const member = await getSessionMember(request);
@@ -101,6 +107,8 @@ export async function getQuestions(request: Request, eventId: string, interactio
 
 /** What the participant Q&A tab shows right now: the live (else latest) Q&A and the earlier closed ones. */
 export async function getParticipantQaView(request: Request, eventId: string): Promise<Response> {
+  const unavailable = await eventUnavailableResponse(request, eventId);
+  if (unavailable) return unavailable;
   const participantId = participantFor(request, eventId);
   if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
   return Response.json(await getParticipantQa(eventId, participantId));
@@ -168,6 +176,9 @@ export async function postUpvote(request: Request, questionId: string, interacti
   if (!question || (interactionId && question.interactionId !== interactionId)) {
     return notFound(request, "api.questionNotFound");
   }
+
+  const unavailable = await eventUnavailableResponse(request, question.eventId);
+  if (unavailable) return unavailable;
 
   const participantId = participantFor(request, question.eventId);
   if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });

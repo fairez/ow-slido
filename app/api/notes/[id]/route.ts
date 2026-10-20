@@ -1,5 +1,6 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { isUuid } from "@/lib/events";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { deleteNote, editNote, findNoteEventId, type NoteResult } from "@/lib/shared-notes";
@@ -24,6 +25,10 @@ async function authorize(request: Request, { params }: Context) {
 
   const eventId = isUuid(id) ? await findNoteEventId(id) : null;
   if (!eventId) return Response.json({ error: serverT(request, "api.noteNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, eventId);
   const participantId = token ? verifyParticipantToken(token, eventId) : null;

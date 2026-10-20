@@ -6,6 +6,7 @@ import { can } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { listResponses, listResponsesForHost, submitResponse } from "@/lib/open-text";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, AUDIENCE_READ_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -40,6 +41,10 @@ export async function POST(request: Request, { params }: Context) {
   const interaction = await findOpenTextInteraction(id);
   if (!interaction) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
 
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+
+  if (unavailable) return unavailable;
+
   const token = readParticipantToken(request, interaction.eventId);
   const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;
   if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
@@ -64,6 +69,10 @@ export async function GET(request: Request, { params }: Context) {
 
   const interaction = await findOpenTextInteraction(id);
   if (!interaction) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, interaction.eventId);
   const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;

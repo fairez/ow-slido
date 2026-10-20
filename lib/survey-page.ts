@@ -5,11 +5,14 @@ import { isUuid } from "@/lib/events";
 import type { SurveyQuestion } from "@/lib/interaction-config";
 import { verifyParticipantToken } from "@/lib/participant-token";
 import { questionsOf } from "@/lib/survey";
+import { eventUnavailable } from "@/lib/workspace-suspension";
 
 /** What the `/survey/<id>` page needs. Questions only travel while the survey is live. */
 export type SurveyPageData =
   | { status: "open"; id: string; title: string; eventName: string; questions: SurveyQuestion[]; submitted: boolean }
   | { status: "notOpen" | "closed"; id: string; title: string; eventName: string };
+
+export type SurveyPageResult = SurveyPageData | { status: "unavailable" };
 
 export async function hasSubmitted(interactionId: string, participantId: string): Promise<boolean> {
   const [row] = await getDb()
@@ -23,7 +26,7 @@ export async function hasSubmitted(interactionId: string, participantId: string)
 export async function getSurveyPage(
   id: string,
   participantToken: (eventId: string) => string | undefined,
-): Promise<SurveyPageData | null> {
+): Promise<SurveyPageResult | null> {
   if (!isUuid(id)) return null;
   const [row] = await getDb()
     .select({
@@ -38,6 +41,7 @@ export async function getSurveyPage(
     .innerJoin(events, eq(events.id, interactions.eventId))
     .where(eq(interactions.id, id));
   if (!row || row.type !== "survey") return null;
+  if (await eventUnavailable(row.eventId)) return { status: "unavailable" };
   const base = { id, title: row.title, eventName: row.eventName };
   if (row.state === "closed") return { status: "closed", ...base };
   if (row.state !== "live") return { status: "notOpen", ...base };

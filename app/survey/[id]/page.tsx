@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { EventUnavailable } from "@/components/event-unavailable";
 import { SurveyForm } from "@/components/survey-form";
 import { participantCookieName } from "@/lib/participant-token";
 import { getSurveyPage } from "@/lib/survey-page";
@@ -12,6 +13,13 @@ export default async function SurveyPage({ params }: { params: Promise<{ id: str
   const jar = await cookies();
   const survey = await getSurveyPage(id, (eventId) => jar.get(participantCookieName(eventId))?.value);
   if (!survey) notFound();
+  if (survey.status === "unavailable") {
+    return (
+      <main id="main" className="participant">
+        <EventUnavailable />
+      </main>
+    );
+  }
   return (
     <main id="main" className="participant">
       <SurveyForm survey={survey} />

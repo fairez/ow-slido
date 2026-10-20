@@ -1,6 +1,7 @@
 import { aiStatus, complete, type AiSchema } from "@/lib/ai";
 import { aiErrorResponse } from "@/lib/ai/http";
-import { requireMember } from "@/lib/auth/require-admin";
+import { getSessionUser, requireMember } from "@/lib/auth/require-admin";
+import { isOperator } from "@/lib/operator";
 
 const pingSchema: AiSchema<{ ok: boolean }> = {
   name: "ping",
@@ -16,8 +17,11 @@ const pingSchema: AiSchema<{ ok: boolean }> = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireMember(request, "insights.manage");
-  if (!auth.ok) return auth.response;
+  // The operator console runs this check too; an operator needs no workspace role for it.
+  if (!isOperator(await getSessionUser(request))) {
+    const auth = await requireMember(request, "insights.manage");
+    if (!auth.ok) return auth.response;
+  }
   try {
     await complete([{ role: "user", content: 'Return {"ok": true}.' }], pingSchema, { kind: "test" });
     return Response.json({ ok: true, ...aiStatus() });

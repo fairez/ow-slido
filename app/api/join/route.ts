@@ -5,6 +5,7 @@ import { isSecureRequest } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { ensureParticipant } from "@/lib/participants";
 import { participantSetCookie } from "@/lib/participant-token";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { JOIN_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 const JOIN_WINDOW_SECONDS = 60;
@@ -29,6 +30,8 @@ export async function POST(request: Request) {
   const db = getDb();
   const [event] = await db.select().from(events).where(eq(events.joinCode, code));
   if (!event) return notFound(request);
+  const unavailable = await eventUnavailableResponse(request, event.id);
+  if (unavailable) return unavailable;
 
   const ensured = await ensureParticipant(request, event);
   // Participants get the message only: the upgrade hint is for the host.

@@ -9,6 +9,7 @@ import { twoFactorSetupRequired } from "@/lib/auth/two-factor-policy";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
+import { eventUnavailable, workspaceSuspended } from "@/lib/workspace-suspension";
 import { participantCookieName, verifyParticipantToken } from "@/lib/participant-token";
 import { participantConnected, participantDisconnected, presenceCount } from "./presence";
 import { eventRoom, hostRoom, memberRoom, participantRoom, setMemberRevoker, setPublisher, type Publisher } from "./publisher";
@@ -38,6 +39,7 @@ async function authorize(
     if (!user || user.mustChangePassword) return null;
     const membership = resolveActiveMembership(user.memberships, cookies.get(WORKSPACE_COOKIE));
     if (!membership) return null;
+    if (await workspaceSuspended(membership.workspaceId, db)) return null;
     if (await twoFactorSetupRequired(membership.workspaceId, user.id, db)) return null;
     if (role === "moderator" && !can(membership.role, "moderate")) return null;
     const [event] = await db
@@ -47,6 +49,7 @@ async function authorize(
     return event ? { role, userId: user.id, workspaceId: membership.workspaceId } : null;
   }
 
+  if (await eventUnavailable(eventId, db)) return null;
   const token = cookies.get(participantCookieName(eventId));
   const participantId = token ? verifyParticipantToken(token, eventId) : null;
   if (!participantId || !isUuid(participantId)) return null;

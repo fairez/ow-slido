@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge, EmptyState } from "@/components/ui/card";
@@ -18,6 +19,7 @@ export type OpsWorkspaceRow = {
   eventsThisMonth: number;
   aiCallsThisMonth: number;
   ownerEmail: string | null;
+  suspendedAt: string | null;
   createdAt: string;
 };
 
@@ -108,7 +110,10 @@ export function OpsWorkspaces({ initial }: { initial: OpsPageData }) {
             <li key={w.id} className="ops-row">
               <div className="ops-row-head">
                 <h2>{w.name}</h2>
-                <Badge tone={w.plan === "free" ? "neutral" : "accent"}>{t(`plan.name.${w.plan}`)}</Badge>
+                <span className="ops-badges">
+                  {w.suspendedAt && <Badge tone="accent">{t("ops.suspendedBadge")}</Badge>}
+                  <Badge tone={w.plan === "free" ? "neutral" : "accent"}>{t(`plan.name.${w.plan}`)}</Badge>
+                </span>
               </div>
               <p className="row-meta ops-owner">{w.ownerEmail ? `${t("ops.owner")}: ${w.ownerEmail}` : t("ops.noOwner")}</p>
               <dl className="ops-facts">
@@ -133,6 +138,11 @@ export function OpsWorkspaces({ initial }: { initial: OpsPageData }) {
                   <dd>{numbers.format(w.aiCallsThisMonth)}</dd>
                 </div>
               </dl>
+              <p className="ops-manage">
+                <Link href={`/ops/workspaces/${w.id}`} aria-label={t("ops.manageFor", { name: w.name })}>
+                  {t("ops.manage")}
+                </Link>
+              </p>
             </li>
           ))}
         </ul>

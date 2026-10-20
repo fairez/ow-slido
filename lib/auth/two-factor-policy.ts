@@ -4,6 +4,7 @@ import { workspaces } from "@/db/schema";
 import { getTwoFactorStatus } from "@/lib/auth/two-factor";
 import { getDb } from "@/lib/db";
 import { getEntitlements } from "@/lib/plans";
+import { redirectIfSuspended } from "@/lib/workspace-suspension";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -23,7 +24,11 @@ export function twoFactorRequiredResponse(message: string): Response {
   return Response.json({ error: message, reason: "two_factor_required" }, { status: 403 });
 }
 
-/** For server pages: sends a member the workspace holds back to the security page. Call after the membership is known. */
+/**
+ * For server pages: sends a member the workspace holds back to the security page, or to the notice page while the
+ * workspace is suspended. Call after the membership is known (a new workspace page must).
+ */
 export async function redirectIfTwoFactorMissing(workspaceId: string, userId: string): Promise<void> {
+  await redirectIfSuspended(workspaceId);
   if (await twoFactorSetupRequired(workspaceId, userId)) redirect("/account/security");
 }

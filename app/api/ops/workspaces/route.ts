@@ -11,5 +11,5 @@ export async function GET(request: Request) {
     return Response.json({ error: serverT(request, "ops.badFilter"), field: filters.error }, { status: 400 });
   }
   const result = await listOpsWorkspaces(getDb(), filters.value);
-  return Response.json({ ...result, workspaces: result.workspaces.map((w) => ({ ...w, createdAt: w.createdAt.toISOString() })) });
+  return Response.json({ ...result, workspaces: result.workspaces.map((w) => ({ ...w, createdAt: w.createdAt.toISOString(), suspendedAt: w.suspendedAt?.toISOString() ?? null })) });
 }

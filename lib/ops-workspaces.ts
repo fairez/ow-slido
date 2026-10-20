@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, exists, gt, gte, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import type { createDb } from "@/db/client";
-import { aiCalls, events, invitations, memberships, subscriptions, users, workspaces } from "@/db/schema";
+import { aiCalls, events, invitations, memberships, subscriptions, userTotp, users, workspaces } from "@/db/schema";
 import { escapeLike } from "@/lib/audit-query";
 import { resolveEntitlements, utcMonthBounds, type PlanId, type SubscriptionRow } from "@/lib/plans";
 
@@ -23,6 +23,8 @@ export type OpsWorkspace = {
   aiCallsThisMonth: number;
   /** Email of the longest-standing owner; null when the workspace has none. */
   ownerEmail: string | null;
+  /** Set while the operator has the workspace suspended. */
+  suspendedAt: Date | null;
   createdAt: Date;
 };
 
@@ -130,11 +132,75 @@ export async function listOpsWorkspaces(db: Db, filters: OpsFilters = {}, now: D
         eventsThisMonth: eventCounts.get(workspace.id) ?? 0,
         aiCallsThisMonth: aiCounts.get(workspace.id) ?? 0,
         ownerEmail: owners.get(workspace.id) ?? null,
+        suspendedAt: workspace.suspendedAt,
         createdAt: workspace.createdAt,
       };
     }),
     total,
     page,
     pageSize: OPS_PAGE_SIZE,
+  };
+}
+
+export type OpsMember = {
+  userId: string;
+  email: string;
+  role: "owner" | "admin" | "editor" | "moderator" | "viewer";
+  status: "active" | "suspended";
+  twoFactor: boolean;
+};
+
+export type OpsWorkspaceDetail = {
+  id: string;
+  name: string;
+  plan: PlanId;
+  /** Where the effective plan comes from; `override` while a manual plan is in force. */
+  source: "override" | "subscription" | "free";
+  suspendedAt: Date | null;
+  suspendedReason: string | null;
+  /** The stored override, even when it has already ended (`overrideActive` tells). */
+  override: { plan: PlanId; until: Date | null; reason: string | null; active: boolean } | null;
+  members: OpsMember[];
+};
+
+/** One workspace with what the operator may act on: suspension, plan override and its members' 2FA state. */
+export async function getOpsWorkspaceDetail(db: Db, id: string, now: Date = new Date()): Promise<OpsWorkspaceDetail | null> {
+  const [row] = await db
+    .select({ workspace: workspaces, subscription: subscriptions })
+    .from(workspaces)
+    .leftJoin(subscriptions, eq(subscriptions.workspaceId, workspaces.id))
+    .where(eq(workspaces.id, id));
+  if (!row) return null;
+  const { workspace, subscription } = row;
+  const entitlements = resolveEntitlements(subscription, now);
+  const memberRows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      role: memberships.role,
+      status: memberships.status,
+      confirmedAt: userTotp.confirmedAt,
+    })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(userTotp, eq(userTotp.userId, users.id))
+    .where(eq(memberships.workspaceId, id))
+    .orderBy(asc(memberships.createdAt), asc(users.email));
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    plan: entitlements.plan,
+    source: entitlements.source,
+    suspendedAt: workspace.suspendedAt,
+    suspendedReason: workspace.suspendedReason,
+    override: subscription?.planOverride
+      ? {
+          plan: subscription.planOverride,
+          until: subscription.planOverrideUntil,
+          reason: subscription.planOverrideReason,
+          active: entitlements.source === "override",
+        }
+      : null,
+    members: memberRows.map((m) => ({ userId: m.userId, email: m.email, role: m.role, status: m.status, twoFactor: Boolean(m.confirmedAt) })),
   };
 }

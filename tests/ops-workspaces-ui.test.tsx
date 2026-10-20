@@ -27,6 +27,7 @@ const row = (
   eventsThisMonth: 4,
   aiCallsThisMonth: 12,
   ownerEmail: `owner${n}@example.com`,
+  suspendedAt: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   ...over,
 });

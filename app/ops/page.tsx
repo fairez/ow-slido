@@ -1,12 +1,14 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsAiPanel } from "@/components/ops-ai-panel";
 import { OpsWorkspaces } from "@/components/ops-workspaces";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { getT } from "@/lib/i18n/server";
 import { isOperator } from "@/lib/operator";
+import { getOpsAiStatus } from "@/lib/ops-ai";
 import { listOpsWorkspaces } from "@/lib/ops-workspaces";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +18,8 @@ export default async function OpsPage() {
   if (!isOperator(user)) notFound();
 
   const t = await getT();
-  const page = await listOpsWorkspaces(getDb());
+  const db = getDb();
+  const [page, ai] = await Promise.all([listOpsWorkspaces(db), getOpsAiStatus(db)]);
 
   return (
     <main id="main" className="page">
@@ -29,7 +32,22 @@ export default async function OpsPage() {
           <p className="row-meta">{t("ops.lead")}</p>
         </div>
       </header>
-      <OpsWorkspaces initial={{ ...page, workspaces: page.workspaces.map((w) => ({ ...w, createdAt: w.createdAt.toISOString() })) }} />
+      <div className="stack">
+        <OpsAiPanel initial={ai} />
+        <p>
+          <Link href="/ops/activity">{t("ops.activityLink")}</Link>
+        </p>
+        <OpsWorkspaces
+          initial={{
+            ...page,
+            workspaces: page.workspaces.map((w) => ({
+              ...w,
+              createdAt: w.createdAt.toISOString(),
+              suspendedAt: w.suspendedAt ? w.suspendedAt.toISOString() : null,
+            })),
+          }}
+        />
+      </div>
     </main>
   );
 }

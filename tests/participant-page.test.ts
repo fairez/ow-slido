@@ -21,6 +21,8 @@ vi.mock("@/lib/db", () => ({
   }),
 }));
 
+vi.mock("@/lib/workspace-suspension", () => ({ eventUnavailable: async () => false }));
+
 beforeEach(() => {
   redirect.mockClear();
 });

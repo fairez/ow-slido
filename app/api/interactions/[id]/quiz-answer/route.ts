@@ -4,6 +4,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { submitQuizAnswer } from "@/lib/quiz";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -36,6 +37,10 @@ export async function POST(request: Request, { params }: Context) {
 
   const interaction = await findQuizInteraction(id);
   if (!interaction) return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, interaction.eventId);
   const participantId = token ? verifyParticipantToken(token, interaction.eventId) : null;

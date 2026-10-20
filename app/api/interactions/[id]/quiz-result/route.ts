@@ -4,6 +4,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { getQuizOutcome } from "@/lib/quiz";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 
 type Context = { params: Promise<{ id: string }> };
@@ -19,6 +20,10 @@ export async function GET(request: Request, { params }: Context) {
   if (!row || row.type !== "quiz") {
     return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
   }
+
+  const unavailable = await eventUnavailableResponse(request, row.eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, row.eventId);
   const participantId = token ? verifyParticipantToken(token, row.eventId) : null;

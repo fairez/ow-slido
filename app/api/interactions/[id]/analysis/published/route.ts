@@ -4,6 +4,7 @@ import { interactions } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { getPublishedAnalysis } from "@/lib/note-analysis";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_READ_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -22,6 +23,10 @@ export async function GET(request: Request, { params }: Context) {
     ? await getDb().select({ eventId: interactions.eventId, type: interactions.type, state: interactions.state }).from(interactions).where(eq(interactions.id, id))
     : [];
   if (!row || row.type !== "sharedNotes" || row.state === "draft") return Response.json({ error: serverT(request, "api.interactionNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, row.eventId);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, row.eventId);
   const participantId = token ? verifyParticipantToken(token, row.eventId) : null;

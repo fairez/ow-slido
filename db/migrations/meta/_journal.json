@@ -330,6 +330,13 @@
       "when": 1792532075209,
       "tag": "0046_odd_omega_red",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792534088555,
+      "tag": "0047_normal_wallow",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { events } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { setNickname } from "@/lib/nickname";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -28,6 +29,10 @@ export async function PUT(request: Request, { params }: Context) {
   if (!isUuid(id)) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
   const [event] = await getDb().select({ id: events.id }).from(events).where(eq(events.id, id));
   if (!event) return Response.json({ error: serverT(request, "api.eventNotFound") }, { status: 404 });
+
+  const unavailable = await eventUnavailableResponse(request, id);
+
+  if (unavailable) return unavailable;
 
   const token = readParticipantToken(request, id);
   const participantId = token ? verifyParticipantToken(token, id) : null;

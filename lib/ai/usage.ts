@@ -24,17 +24,22 @@ export class AiPausedError extends Error {
   }
 }
 
+/** Every `ai_calls` row of the UTC day, of all workspaces and deleted events. */
+export async function countAiCallsToday(db: Db = getDb(), now: Date = new Date()): Promise<number> {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(aiCalls)
+    .where(and(gte(aiCalls.createdAt, startOfUtcDay(now)), lt(aiCalls.createdAt, startOfNextUtcDay(now))));
+  return count;
+}
+
 /**
  * Stops every AI start once the platform-wide daily cap is used up, whatever the workspace's own
  * limits say. Counts all `ai_calls` of the UTC day, including those of deleted events.
  */
 export async function assertAiNotPaused(db: Db = getDb(), now: Date = new Date()) {
   const { globalDailyCap } = getAiConfig();
-  const [{ count: today }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(aiCalls)
-    .where(and(gte(aiCalls.createdAt, startOfUtcDay(now)), lt(aiCalls.createdAt, startOfNextUtcDay(now))));
-  if (today >= globalDailyCap) throw new AiPausedError();
+  if ((await countAiCallsToday(db, now)) >= globalDailyCap) throw new AiPausedError();
 }
 
 /** Counts one call against the caps and records it, or throws if a cap is already reached. */

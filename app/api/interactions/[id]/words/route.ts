@@ -6,6 +6,7 @@ import { can } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
 import { isUuid } from "@/lib/events";
 import { findOwnedEvent } from "@/lib/polls";
+import { eventUnavailableResponse } from "@/lib/workspace-suspension";
 import { readParticipantToken, verifyParticipantToken } from "@/lib/participant-token";
 import { AUDIENCE_IP_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { getWordcloudResults, submitWord } from "@/lib/wordclouds";
@@ -46,6 +47,8 @@ export async function POST(request: Request, { params }: Context) {
 
   const interaction = await findWordcloud(id);
   if (!interaction) return notFound(request);
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+  if (unavailable) return unavailable;
 
   const participantId = participantFor(request, interaction.eventId);
   if (!participantId) return Response.json({ error: serverT(request, "api.joinFirst") }, { status: 401 });
@@ -66,6 +69,8 @@ export async function GET(request: Request, { params }: Context) {
   const { id } = await params;
   const interaction = await findWordcloud(id);
   if (!interaction) return notFound(request);
+  const unavailable = await eventUnavailableResponse(request, interaction.eventId);
+  if (unavailable) return unavailable;
 
   if (!participantFor(request, interaction.eventId)) {
     const member = await getSessionMember(request);
