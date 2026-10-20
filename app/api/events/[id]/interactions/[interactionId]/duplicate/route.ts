@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { publishContentChanged } from "@/lib/content-library";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import {
@@ -53,5 +54,6 @@ export async function POST(request: Request, { params }: Context) {
       config,
     })
     .returning();
+  publishContentChanged(event.id);
   return Response.json({ interaction }, { status: 201 });
 }

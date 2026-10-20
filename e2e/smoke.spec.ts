@@ -22,6 +22,7 @@ test("host runs a poll and a participant's vote reaches the presenter page", asy
   expect(code).toMatch(/^\d{6}$/);
 
   await page.getByRole("link", { name: "Manage" }).click();
+  await page.getByRole("button", { name: "Add content" }).click();
   await page.getByRole("button", { name: "New poll" }).click();
   await page.getByRole("textbox", { name: "Question" }).fill("Best language?");
   await page.getByRole("textbox", { name: "Option 1" }).fill("TypeScript");

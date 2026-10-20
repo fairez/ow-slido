@@ -518,7 +518,7 @@
       ],
       "id": "US-032",
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M3"
     },
     {

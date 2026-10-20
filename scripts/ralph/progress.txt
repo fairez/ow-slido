@@ -361,3 +361,16 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `npm run build` rewrites `next-env.d.ts` and `tsconfig.json`; `git checkout` them before committing.
   - No UI change, no browser check.
 ---
+## 2026-10-20 - US-032
+- Event page list is now the content library: type icon plus type name, state, response count per row; drag handle and ↑/↓ buttons on every row (before: draft rows only); duplicate on every row; inline Rename for drafts (PATCH with `question` for polls, `title` for Q&A, `prompt` otherwise); "Add content" menu listing every type, with plan-locked types as `PlanHint` links. State words come from `pollMgr.state.*` keys; counts use `pollMgr.responses.one/other`.
+- `lib/content-library.ts`: `responseCounts(eventId)` (one SQL union over votes, words, open text, ratings, notes and questions, rejected excluded) and `publishContentChanged`. `GET /api/events/[id]/interactions` now also returns `counts`. Create, PATCH, duplicate, reorder and delete publish host-only `content:changed`; `PollManager` (prop `liveUpdates`, set by the page) refetches on it, `state-changed` and response messages through `useCoalesced`.
+- Files: lib/content-library.ts, components/{poll-manager,add-content-menu,type-icon}.tsx, app/dashboard/events/[id]/page.tsx, app/api/events/[id]/interactions/**, app/globals.css, lib/i18n/{en,id}.ts, tests/{content-library,content-list-live,poll-manager,plan-hints,rating-ui,open-text-ui,open-text-api,rating-api,wordclouds,no-inline-strings}, e2e/{smoke,notes-ai}.spec.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Delete stays draft-only and rename only works on drafts: the existing rule (started content keeps its question and results) was kept; the story's "works for every type" is read as every type, not every state.
+  - Anything that clicked "New poll" etc. now opens "Add content" first (unit tests and e2e updated).
+  - Tests that collect published messages in `beforeEach` after creating an interaction through the POST route see a `content:changed`; reset the array after setup.
+  - Dev server (`npm run dev`, own port) fell into a full-reload loop on a fresh start and made Playwright flaky; a production build (`NEXT_DIST_DIR=.next-shot npx next build`, then `NODE_ENV=production PORT=3200 npx tsx server.ts`) is stable for screenshots. Restarting the server also resets the in-memory sign-up rate limit (429 after many screenshot sign-ups).
+  - Playwright's HTML5 drag works with real mouse moves (down, move in steps, up) dropped on a row's text; dropping on a button did not fire `drop` in its emulation.
+  - Never `pkill -f` a path that is in your own command line (killed the shell again); kill by PID from `ss -ltnp`.
+  - Browser check at 360/1280 (light and dark, menu open): no overflow, no console errors; live add from another session appeared without reload; keyboard and drag reorder persisted. Screenshot users deleted from the dev DB. Full suite 919 tests, e2e 4 specs, typecheck and eslint clean.
+---

@@ -88,6 +88,8 @@ beforeEach(async () => {
   cloudId = json.interaction.id;
   await db.update(interactions).set({ state: "live" }).where(eq(interactions.id, cloudId));
   cookie = await join();
+  // Creating the interaction above published a list change; the tests look at response messages only.
+  published = [];
 });
 afterAll(async () => {
   publisher.setPublisher(null);

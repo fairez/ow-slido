@@ -78,6 +78,7 @@ it("builder creates an open text interaction", async () => {
   const fetchMock = vi.fn(async () => json({ interaction: created }, 201));
   vi.stubGlobal("fetch", fetchMock);
   render(<PollManager eventId="e" initialInteractions={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add content" }));
   fireEvent.click(screen.getByRole("button", { name: "New open text" }));
   fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Why?" } });
   fireEvent.change(screen.getByLabelText("Responses per participant"), { target: { value: "2" } });

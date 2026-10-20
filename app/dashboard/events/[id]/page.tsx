@@ -10,6 +10,7 @@ import { can } from "@/lib/auth/permissions";
 import { getUserFromToken } from "@/lib/auth/require-admin";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { WORKSPACE_COOKIE, resolveActiveMembership } from "@/lib/auth/workspace";
+import { responseCounts } from "@/lib/content-library";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { combineOverLimit, overLimitEvents } from "@/lib/over-limit";
@@ -95,6 +96,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         itemLocks={itemLocks}
         eventLock={eventLock ?? undefined}
         defaultModeration={event.moderationMode}
+        initialCounts={await responseCounts(event.id)}
+        liveUpdates
       />
     </main>
   );

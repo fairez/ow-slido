@@ -49,6 +49,7 @@ describe("PlanHint", () => {
 describe("gated actions in the host screens", () => {
   it("keeps a locked type visible as a link instead of a button", () => {
     render(<PollManager eventId="e" initialInteractions={[]} lockedTypes={{ rating: { requiredPlan: "pro" } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
     expect(screen.queryByRole("button", { name: "New rating" })).toBeNull();
     expect(screen.getByRole("link", { name: "New rating Pro plan" }).getAttribute("href")).toBe("/dashboard/plan");
     fireEvent.click(screen.getByRole("button", { name: "New poll" }));

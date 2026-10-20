@@ -37,6 +37,7 @@ const MIGRATED = [
   "app/login/page.tsx",
   "app/signup/page.tsx",
   "app/present/[eventId]/page.tsx",
+  "components/add-content-menu.tsx",
   "components/analysis-editor.tsx",
   "components/auth-form.tsx",
   "components/event-manager.tsx",

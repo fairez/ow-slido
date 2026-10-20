@@ -102,6 +102,7 @@ it("host builder creates a rating with the chosen scale", async () => {
   );
   vi.stubGlobal("fetch", fetchMock);
   render(<PollManager eventId="e1" initialInteractions={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add content" }));
   fireEvent.click(screen.getByRole("button", { name: "New rating" }));
   fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Rate it" } });
   fireEvent.click(screen.getByLabelText(/Numbers, 1 to 10/));

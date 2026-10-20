@@ -1,6 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { publishContentChanged, responseCounts } from "@/lib/content-library";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { PlanLimitError, assertTypeAllowed, planLimitResponse } from "@/lib/limits";
@@ -21,7 +22,7 @@ export async function GET(request: Request, { params }: Context) {
     .from(interactions)
     .where(eq(interactions.eventId, event.id))
     .orderBy(asc(interactions.position), asc(interactions.createdAt));
-  return Response.json({ interactions: list });
+  return Response.json({ interactions: list, counts: await responseCounts(event.id) });
 }
 
 export async function POST(request: Request, { params }: Context) {
@@ -75,5 +76,6 @@ export async function POST(request: Request, { params }: Context) {
       config,
     })
     .returning();
+  publishContentChanged(event.id);
   return Response.json({ interaction }, { status: 201 });
 }

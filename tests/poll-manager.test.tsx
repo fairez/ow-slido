@@ -27,7 +27,7 @@ describe("PollManager", () => {
   it("labels a Q&A interaction and offers the same draft actions as other types", () => {
     const qa: InteractionItem = { id: "q", type: "qa", title: "Q&A", state: "draft", position: 0, config: { prompt: "Ask a question", moderation: "open" } };
     render(<PollManager eventId="e" initialInteractions={[qa]} />);
-    expect(screen.getByText(/^Q&A$/, { selector: ".row-meta" })).toBeTruthy();
+    expect(screen.getByText(/^Q&A$/, { selector: ".type-tag" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Duplicate" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
@@ -38,6 +38,7 @@ describe("PollManager", () => {
     const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<PollManager eventId="e" initialInteractions={[]} defaultModeration="moderated" />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
     fireEvent.click(screen.getByRole("button", { name: "New Q&A" }));
     expect((screen.getByLabelText(/Moderated: questions wait/) as HTMLInputElement).checked).toBe(true);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Town hall" } });
@@ -68,6 +69,7 @@ describe("PollManager", () => {
 
   it("enforces 2-10 options", () => {
     render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
     fireEvent.click(screen.getByRole("button", { name: "New poll" }));
     expect((screen.getByRole("button", { name: "Remove option 1" }) as HTMLButtonElement).disabled).toBe(true);
     for (let i = 0; i < 8; i++) fireEvent.click(screen.getByRole("button", { name: "Add option" }));
@@ -79,6 +81,7 @@ describe("PollManager", () => {
     const fetchMock = vi.fn(async () => Response.json({ interaction: poll("n", "Fav?") }, { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
     fireEvent.click(screen.getByRole("button", { name: "New poll" }));
     fireEvent.change(screen.getByLabelText("Question"), { target: { value: "Fav?" } });
     fireEvent.change(screen.getByLabelText("Option 1"), { target: { value: "A" } });
@@ -145,6 +148,7 @@ describe("PollManager", () => {
     const fetchMock = vi.fn(async () => Response.json({ interaction: created }, { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<PollManager eventId="e" initialInteractions={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add content" }));
     fireEvent.click(screen.getByRole("button", { name: "New word cloud" }));
     const entries = screen.getByLabelText("Entries per participant") as HTMLInputElement;
     expect([entries.min, entries.max]).toEqual(["1", "5"]);
@@ -156,5 +160,73 @@ describe("PollManager", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/events/e/interactions");
     expect(JSON.parse(init.body as string)).toEqual({ type: "wordcloud", prompt: "Mood?", maxEntriesPerParticipant: 5 });
+  });
+});
+
+describe("PollManager content list", () => {
+  const closedPoll = { ...poll("c", "Closed Q", "closed"), position: 2 };
+
+  it("shows a type icon with the type name, the state and the response count", () => {
+    const { container } = render(
+      <PollManager eventId="e" initialInteractions={[poll("1", "One"), poll("2", "Two", "live")]} initialCounts={{ "1": 1, "2": 12 }} />,
+    );
+    expect(container.querySelectorAll(".interaction-row svg.type-icon[aria-hidden='true']").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByTestId("count").map((c) => c.textContent)).toEqual(["1 response", "12 responses"]);
+    expect(screen.getAllByText("Poll", { selector: ".type-tag" })).toHaveLength(2);
+  });
+
+  it("offers reorder and duplicate on a started row, rename and delete only on a draft", () => {
+    render(<PollManager eventId="e" initialInteractions={[poll("1", "Draft Q"), closedPoll]} />);
+    expect(screen.getByRole("button", { name: "Move Closed Q up" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Duplicate" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Rename" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
+  });
+
+  it("moves a row down with the button and posts the new order", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[poll("1", "First"), poll("2", "Second", "paused")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Move First down" }));
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Second", "First"]));
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e/interactions/reorder", expect.objectContaining({ body: JSON.stringify({ ids: ["2", "1"] }) }));
+  });
+
+  it("reorders by dragging a row onto another", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(<PollManager eventId="e" initialInteractions={[poll("1", "First"), poll("2", "Second"), poll("3", "Third")]} />);
+    const handles = container.querySelectorAll(".drag-handle");
+    const rows = container.querySelectorAll(".interaction-row");
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "" };
+    fireEvent.dragStart(handles[0], { dataTransfer });
+    fireEvent.dragOver(rows[2], { dataTransfer });
+    fireEvent.drop(rows[2], { dataTransfer });
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Second", "Third", "First"]));
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e/interactions/reorder", expect.objectContaining({ body: JSON.stringify({ ids: ["2", "3", "1"] }) }));
+  });
+
+  it("renames a draft in place through the type's own field", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ interaction: poll("1", "Better name") }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PollManager eventId="e" initialInteractions={[poll("1", "Old name")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Better name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    await waitFor(() => expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Better name"));
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/e/interactions/1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ question: "Better name" }) }));
+  });
+
+  it("lists every type in the Add content menu, with locked ones pointing at the plan", () => {
+    render(<PollManager eventId="e" initialInteractions={[]} lockedTypes={{ rating: { requiredPlan: "pro" } }} />);
+    expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Add content" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent?.trim());
+    expect(items).toEqual(["New poll", "New word cloud", "New shared notes", "New open text", "New rating Pro plan", "New Q&A"]);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "New poll" })).toBeNull();
   });
 });

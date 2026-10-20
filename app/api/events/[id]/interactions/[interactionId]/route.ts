@@ -1,6 +1,7 @@
 import { serverT, apiMessage } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { publishContentChanged } from "@/lib/content-library";
 import { denyUnlessCan, requireMember } from "@/lib/auth/require-admin";
 import type { Action } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
@@ -79,7 +80,9 @@ export async function PATCH(request: Request, context: Context) {
     .set({ ...(title !== undefined && { title }), config })
     .where(and(eq(interactions.id, current.id), eq(interactions.state, current.state)))
     .returning();
-  return interaction ? Response.json({ interaction }) : notDraft(request);
+  if (!interaction) return notDraft(request);
+  publishContentChanged(current.eventId);
+  return Response.json({ interaction });
 }
 
 export async function DELETE(request: Request, context: Context) {
@@ -93,5 +96,7 @@ export async function DELETE(request: Request, context: Context) {
     .delete(interactions)
     .where(and(eq(interactions.id, loaded.interaction.id), eq(interactions.state, "draft")))
     .returning({ id: interactions.id });
-  return deleted.length ? new Response(null, { status: 204 }) : notDraft(request);
+  if (!deleted.length) return notDraft(request);
+  publishContentChanged(loaded.interaction.eventId);
+  return new Response(null, { status: 204 });
 }

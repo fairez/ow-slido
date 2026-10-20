@@ -1,6 +1,7 @@
 import { serverT } from "@/lib/i18n/server";
 import { and, eq } from "drizzle-orm";
 import { interactions } from "@/db/schema";
+import { publishContentChanged } from "@/lib/content-library";
 import { requireMember } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
@@ -49,5 +50,6 @@ export async function POST(request: Request, { params }: Context) {
   if (!ok) {
     return Response.json({ error: serverT(request, "api.idsEvery") }, { status: 400 });
   }
+  publishContentChanged(event.id);
   return Response.json({ ok: true });
 }

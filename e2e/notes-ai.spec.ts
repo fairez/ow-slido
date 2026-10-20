@@ -23,6 +23,7 @@ async function createEvent(page: Page) {
 }
 
 async function addInteraction(page: Page, button: string, prompt: string, save: string) {
+  await page.getByRole("button", { name: "Add content" }).click();
   await page.getByRole("button", { name: button }).click();
   await page.getByLabel("Prompt").fill(prompt);
   await page.getByRole("button", { name: save }).click();
@@ -45,6 +46,7 @@ async function join(browser: import("@playwright/test").Browser, code: string) {
 test("shared notes with moderation and AI analysis, then open text and rating", async ({ browser, page }) => {
   const code = await createEvent(page);
 
+  await page.getByRole("button", { name: "Add content" }).click();
   await page.getByRole("button", { name: "New shared notes" }).click();
   await page.getByLabel("Prompt").fill("What should we improve?");
   await page.getByLabel("Moderated: notes wait for approval").check();

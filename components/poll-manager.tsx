@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { WORDCLOUD_MAX_ENTRIES, WORDCLOUD_MIN_ENTRIES, WORDCLOUD_PROMPT_MAX } from "@/lib/wordcloud-limits";
 import { useEventSocket } from "@/lib/realtime/use-event-socket";
 import { INTERACTION_PROMPT_MAX, NOTES_MAX, NOTES_MIN, OPEN_TEXT_MAX, OPEN_TEXT_MIN, QA_DEFAULT_PROMPT, QA_DEFAULT_TITLE } from "@/lib/interaction-config";
@@ -11,7 +11,10 @@ import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, TextField, Toggle } from "@/components/ui/field";
 import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, POLL_OPTION_MAX, POLL_QUESTION_MAX } from "@/lib/poll-limits";
+import { AddContentMenu } from "@/components/add-content-menu";
 import { PlanHint } from "@/components/plan-hint";
+import { GripIcon, TypeIcon } from "@/components/type-icon";
+import { useCoalesced } from "@/lib/use-coalesced";
 import type { Lock } from "@/lib/plan-hints";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
 import { useT } from "@/lib/i18n/client";
@@ -48,6 +51,34 @@ const TYPE_LABELS: Record<InteractionItem["type"], MessageKey> = {
   rating: "pollMgr.type.rating",
 };
 
+const STATE_LABELS: Record<InteractionItem["state"], MessageKey> = {
+  draft: "pollMgr.state.draft",
+  live: "pollMgr.state.live",
+  paused: "pollMgr.state.paused",
+  closed: "pollMgr.state.closed",
+};
+
+/** Realtime messages after which the list (and its response counts) may be out of date. */
+const REFRESH_EVENTS = [
+  "content:changed",
+  "state-changed",
+  "poll:counts",
+  "wordcloud:words",
+  "rating:results",
+  "response:added",
+  "response:removed",
+  "note:added",
+  "note:removed",
+  "note:pending",
+  "question:added",
+  "question:pending",
+  "question:removed",
+];
+
+/** The field of the PATCH body that carries an interaction's name, which differs by type. */
+const nameBody = (type: InteractionItem["type"], name: string) =>
+  type === "poll" ? { question: name } : type === "qa" ? { title: name } : { prompt: name };
+
 const ADD_BUTTONS: { kind: Kind; label: MessageKey }[] = [
   { kind: "poll", label: "pollMgr.newPoll" },
   { kind: "wordcloud", label: "pollMgr.newWordcloud" },
@@ -80,17 +111,24 @@ type PollManagerProps = {
   eventLock?: Lock;
   /** The event's moderation mode: the starting choice for a new Q&A. */
   defaultModeration?: "open" | "moderated";
+  /** Response count per interaction id, as of the page load. */
+  initialCounts?: Record<string, number>;
+  /** Follow changes made by other members and new responses over the event socket. */
+  liveUpdates?: boolean;
 };
 
-export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock, defaultModeration = "open" }: PollManagerProps) {
+export function PollManager({ eventId, initialInteractions, aiEnabled = false, lockedTypes = {}, aiLock, itemLocks = {}, eventLock, defaultModeration = "open", initialCounts = {}, liveUpdates = false }: PollManagerProps) {
   const t = useT();
   const typeLabel = (kind: InteractionItem["type"]) => t(TYPE_LABELS[kind]);
   // Mid-sentence type names are lower case, except "Q&A".
   const typeInSentence = (kind: InteractionItem["type"]) => (kind === "qa" ? typeLabel(kind) : typeLabel(kind).toLowerCase());
   const base = `/api/events/${eventId}/interactions`;
   // Only needed for live analysis status; stays disconnected when AI is off.
-  const { socket } = useEventSocket(eventId, "host", aiEnabled);
+  const { socket } = useEventSocket(eventId, "host", aiEnabled || liveUpdates);
   const [items, setItems] = useState(initialInteractions);
+  const [counts, setCounts] = useState(initialCounts);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -116,6 +154,29 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch(base);
+      if (!response.ok) return;
+      const body = (await response.json()) as { interactions: InteractionItem[]; counts: Record<string, number> };
+      setItems(body.interactions);
+      setCounts(body.counts);
+    } catch {
+      // The next realtime message or reload tries again.
+    }
+  }, [base]);
+  const refreshSoon = useCoalesced(refresh, 300);
+
+  useEffect(() => {
+    if (!liveUpdates || !socket) return;
+    for (const name of REFRESH_EVENTS) socket.on(name, refreshSoon);
+    socket.on("connect", refreshSoon);
+    return () => {
+      for (const name of REFRESH_EVENTS) socket.off(name, refreshSoon);
+      socket.off("connect", refreshSoon);
+    };
+  }, [liveUpdates, socket, refreshSoon]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -188,13 +249,23 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
     if (response) setItems((list) => list.filter((i) => i.id !== item.id));
   }
 
-  async function move(index: number, delta: -1 | 1) {
+  async function moveTo(from: number, target: number) {
+    if (from === target || target < 0 || target >= items.length) return;
     const next = [...items];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
+    const [moved] = next.splice(from, 1);
+    next.splice(target, 0, moved);
     const response = await call(`${base}/reorder`, json({ ids: next.map((i) => i.id) }));
     if (response) setItems(next);
+  }
+
+  const move = (index: number, delta: -1 | 1) => moveTo(index, index + delta);
+
+  async function rename(item: InteractionItem, name: string) {
+    const response = await call(`${base}/${item.id}`, { ...json(nameBody(item.type, name)), method: "PATCH" });
+    if (!response) return;
+    const { interaction } = (await response.json()) as { interaction: InteractionItem };
+    setItems((list) => list.map((i) => (i.id === interaction.id ? interaction : i)));
+    setRenaming(null);
   }
 
   function edit(item: InteractionItem & { type: Kind }) {
@@ -247,12 +318,60 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
           {items.map((item, index) => {
             const lock = itemLocks[item.id];
             return (
-            <li key={item.id} className="interaction-row" data-state={item.state}>
+            <li
+              key={item.id}
+              className="interaction-row"
+              data-state={item.state}
+              data-dragging={dragFrom === index || undefined}
+              onDragOver={(e) => dragFrom !== null && e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragFrom !== null) void moveTo(dragFrom, index);
+                setDragFrom(null);
+              }}
+            >
               <div className="interaction-head">
+                {!eventLock && (
+                  <span
+                    className="drag-handle"
+                    draggable
+                    aria-hidden="true"
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", item.id);
+                      setDragFrom(index);
+                    }}
+                    onDragEnd={() => setDragFrom(null)}
+                  >
+                    <GripIcon />
+                  </span>
+                )}
                 <div className="event-main">
-                  <h3 className="event-name">{item.title}</h3>
+                  {renaming?.id === item.id ? (
+                    <form
+                      className="inline-form"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void rename(item, renaming.name);
+                      }}
+                    >
+                      <TextField
+                        label={t("pollMgr.renameField")}
+                        value={renaming.name}
+                        onChange={(e) => setRenaming({ id: item.id, name: e.target.value })}
+                        maxLength={item.type === "poll" ? POLL_QUESTION_MAX : INTERACTION_PROMPT_MAX}
+                        required
+                      />
+                      <Button type="submit" variant="primary">{t("pollMgr.renameSave")}</Button>
+                      <Button onClick={() => setRenaming(null)}>{t("pollMgr.cancel")}</Button>
+                    </form>
+                  ) : (
+                    <h3 className="event-name">{item.title}</h3>
+                  )}
                   <div className="row-meta">
-                    {typeLabel(item.type)} <Badge tone={item.state === "live" ? "accent" : "neutral"}><span data-testid="state">{item.state}</span></Badge>
+                    <span className="type-tag"><TypeIcon kind={item.type} /> {typeLabel(item.type)}</span>{" "}
+                    <Badge tone={item.state === "live" ? "accent" : "neutral"}><span data-testid="state">{t(STATE_LABELS[item.state])}</span></Badge>{" "}
+                    <span data-testid="count">{t((counts[item.id] ?? 0) === 1 ? "pollMgr.responses.one" : "pollMgr.responses.other", { count: counts[item.id] ?? 0 })}</span>
                     {lock && <> <Badge>{t("pollMgr.readOnly")}</Badge></>}
                   </div>
                 </div>
@@ -280,15 +399,14 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
               ) : (
                 <NotesAnalysisPanel interactionId={item.id} socket={socket} />
               ))}
-              {item.state === "draft" && (
-                <div className="row-actions row-actions-quiet">
-                  {!lock && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
-                  {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
-                  <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>
-                  {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
-                  {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>}
-                </div>
-              )}
+              <div className="row-actions row-actions-quiet">
+                {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => edit(item as InteractionItem & { type: Kind })}>{t("pollMgr.edit")}</Button>}
+                {item.state === "draft" && !lock && <Button variant="quiet" onClick={() => { setError(null); setRenaming({ id: item.id, name: item.title }); }}>{t("pollMgr.rename")}</Button>}
+                {!lock && <Button variant="quiet" onClick={() => duplicate(item)}>{t("pollMgr.duplicate")}</Button>}
+                {item.state === "draft" && <Button variant="quiet" onClick={() => setDeleting(item)}>{t("pollMgr.delete")}</Button>}
+                {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveUp", { title: item.title })} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>}
+                {!eventLock && <Button variant="quiet" aria-label={t("pollMgr.moveDown", { title: item.title })} disabled={index === items.length - 1} onClick={() => move(index, 1)}>↓</Button>}
+              </div>
             </li>
             );
           })}
@@ -398,17 +516,7 @@ export function PollManager({ eventId, initialInteractions, aiEnabled = false, l
         </Card>
       ) : eventLock ? null : (
         <div className="add-bar">
-          <p className="row-meta">{t("pollMgr.addBar")}</p>
-          <div className="row-actions">
-            {ADD_BUTTONS.map(({ kind, label }) => {
-              const lock = lockedTypes[kind];
-              return lock ? (
-                <PlanHint key={kind} lock={lock}>{t(label)}</PlanHint>
-              ) : (
-                <Button key={kind} onClick={() => setDraft(blank(kind, defaultModeration))}>{t(label)}</Button>
-              );
-            })}
-          </div>
+          <AddContentMenu entries={ADD_BUTTONS} locks={lockedTypes} onPick={(kind) => setDraft(blank(kind, defaultModeration))} />
         </div>
       )}
 
