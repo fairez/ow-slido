@@ -179,7 +179,8 @@ it("asks the server again when a state change arrives, and follows the new live 
   expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe("/api/events/e1/qa");
   expect(screen.getByLabelText("Your question")).toBeTruthy();
   expect(screen.getByText("Fresh")).toBeTruthy();
-  // The new Q&A is the one that live messages apply to.
+  // The new Q&A is the one that live messages apply to. Let the socket effect re-bind to it first.
+  await act(async () => {});
   act(() => void fake.emit("question:added", { interactionId: "qa2", question: q("9", "Added") }));
   expect(screen.getByText("Added")).toBeTruthy();
 });

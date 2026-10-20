@@ -140,6 +140,7 @@ export const en = {
   "dash.joinCode": "Join code",
   "dash.openPresenter": "Open presenter view",
   "dash.exportCsv": "Export CSV",
+  "dash.exportZip": "Export all",
   "eventMgr.invalidDates": "Enter valid start and end dates.",
   "eventMgr.newEvent": "New event",
   "eventMgr.eventName": "Event name",

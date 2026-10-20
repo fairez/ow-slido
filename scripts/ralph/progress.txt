@@ -410,3 +410,15 @@ Run: ralph/phase3-m1-m4 (Phase 3 milestones M1-M4, 51 stories). Previous run arc
   - `responseCount` runs one query per interaction (Promise.all); fine for event-sized lists.
   - No UI change, no browser check. Full suite 960 tests green, typecheck and eslint (source dirs) clean.
 ---
+
+## 2026-10-20 - US-036
+- `GET /api/events/[id]/export.zip` (permission `export`, plan check `csv`, so Free is allowed) returns one CSV per interaction, named `NN-Title.csv` by list order (position, then created) with a slugged title, built by `buildEventZip` (lib/export.ts) from each type's module via `buildInteractionCsv`. `lib/zip.ts` is a small store-only writer (UTF-8 names, CRC from `node:zlib` `crc32`), so no new dependency. "Export all" link next to "Export CSV" on the event page (`dash.exportZip`, en and id).
+- Files: lib/zip.ts, lib/export.ts, app/api/events/[id]/export.zip/route.ts, app/dashboard/events/[id]/page.tsx, lib/i18n/{en,id}.ts, tests/export-zip.test.ts, CLAUDE.md
+- **Learnings for future iterations:**
+  - Tests read the archive through its central directory and check every CRC; one more test runs the system `unzip -t` (skipped when the binary is missing).
+  - Slugs strip combining marks first (`\p{M}`), so "Ünïcode" becomes "Unicode", not "U-ni-code".
+  - The file number is the index in the sorted list, not `interactions.position`, which can repeat.
+  - Quiz leaderboard files (US-044+) will arrive through the module's `csv`; nothing to change here.
+  - Browser check at 360 and 1280: buttons wrap, no horizontal overflow, download is `Zip-shot-results.zip` and `unzip -l` lists the expected files. Killed my own dev server on :3200 and restored next-env.d.ts/tsconfig.json.
+---
+(US-036 addendum) tests/qa-tab.test.tsx "asks the server again..." was flaky (about 1 run in 3): the test emitted `question:added` before the socket effect re-bound to the new Q&A id. It now awaits `act(async () => {})` first. Full suite: 965 tests, the only failure was that flake.

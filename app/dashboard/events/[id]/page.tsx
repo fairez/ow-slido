@@ -74,6 +74,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <a href={`/api/events/${event.id}/export.csv`} download className="ui-button">
             {t("dash.exportCsv")}
           </a>
+          <a href={`/api/events/${event.id}/export.zip`} download className="ui-button">
+            {t("dash.exportZip")}
+          </a>
           {formatLocks.pdf && <PlanHint lock={formatLocks.pdf}>{t("dash.exportPdf")}</PlanHint>}
           {formatLocks.xlsx && <PlanHint lock={formatLocks.xlsx}>{t("dash.exportXlsx")}</PlanHint>}
         </div>
