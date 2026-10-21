@@ -1,7 +1,7 @@
 import { denyUnlessVerified, requireMember } from "@/lib/auth/require-admin";
 import { auditContext, recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
-import { apiMessage, serverT } from "@/lib/i18n/server";
+import { apiMessage, requestLocale } from "@/lib/i18n/server";
 import { createInvitation, listInvitations, parseInviteInput, sendInvitationEmail } from "@/lib/invitations";
 import { workspaceRateLimited } from "@/lib/workspace-rate-limit";
 import { PlanLimitError, planLimitResponse } from "@/lib/limits";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   const emailSent = await sendInvitationEmail(
     db,
     { workspaceId: auth.workspaceId, email: created.invitation.email, role: created.invitation.role, link },
-    (key, params) => serverT(request, key, params),
+    requestLocale(request),
   );
   return Response.json({ invitation: created.invitation, link, emailSent }, { status: 201 });
 }

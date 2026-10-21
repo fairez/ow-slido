@@ -53,6 +53,10 @@ export async function POST(request: Request, { params }: Context) {
   const order = body && typeof body === "object" ? (body as Record<string, unknown>).order : undefined;
 
   const result = await submitRanking(id, participantId, order);
-  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
+  if (!result.ok) {
+    // The client keys on `reason`, not on the translated text.
+    const reason = result.error === "api.alreadyRanked" ? "alreadyRanked" : undefined;
+    return Response.json({ error: apiMessage(request, result), ...(reason && { reason }) }, { status: result.status });
+  }
   return Response.json({ ok: true }, { status: 201 });
 }

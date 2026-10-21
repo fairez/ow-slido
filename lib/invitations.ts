@@ -6,7 +6,8 @@ import { MIN_PASSWORD_LENGTH, isValidEmail } from "@/lib/auth/credentials";
 import { hashPassword } from "@/lib/auth/password";
 import { hashToken, issueTokenRecord } from "@/lib/auth/tokens";
 import { assertSeatAvailable } from "@/lib/seats";
-import type { MessageKey } from "@/lib/i18n/en";
+import { t as translate, type Locale, type MessageKey } from "@/lib/i18n";
+import { emailLocale } from "@/lib/i18n/email-locale";
 
 type Db = ReturnType<typeof createDb>["db"];
 
@@ -127,8 +128,10 @@ export async function revokeInvitation(db: Db, workspaceId: string, id: string) 
 export async function sendInvitationEmail(
   db: Db,
   input: { workspaceId: string; email: string; role: InvitableRole; link: string },
-  t: (key: MessageKey, params?: Record<string, string | number>) => string,
+  fallbackLocale: Locale,
 ): Promise<boolean> {
+  const locale = await emailLocale(db, input.email, fallbackLocale);
+  const t = (key: MessageKey, params?: Record<string, string | number>) => translate(locale, key, params);
   const [workspace] = await db
     .select({ name: workspaces.name })
     .from(workspaces)

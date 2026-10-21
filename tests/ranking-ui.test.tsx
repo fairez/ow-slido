@@ -84,7 +84,7 @@ it("shows the earlier answer in the same state after a reconnect", () => {
 });
 
 it("treats a second submit from another device as sent", async () => {
-  vi.stubGlobal("fetch", vi.fn(async () => json({ error: "You have already submitted a ranking" }, 409)));
+  vi.stubGlobal("fetch", vi.fn(async () => json({ error: "You have already submitted a ranking", reason: "alreadyRanked" }, 409)));
   render(<RankingForm ranking={live()} />);
   fireEvent.click(screen.getByRole("button", { name: "Send ranking" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Send ranking" })).toBeNull());

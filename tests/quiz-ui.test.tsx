@@ -118,7 +118,7 @@ it("does not send once the time is up", () => {
 });
 
 it("treats a time-up answer from the server as closed", async () => {
-  vi.stubGlobal("fetch", vi.fn(async () => json({ error: "Time is up" }, 409)));
+  vi.stubGlobal("fetch", vi.fn(async () => json({ error: "Time is up", reason: "timeUp" }, 409)));
   render(<QuizForm eventId="e1" quiz={live()} />);
   fireEvent.click(screen.getByRole("button", { name: "Java" }));
   await waitFor(() => expect(screen.getByText("Answers are closed. Wait for the host to show the result.")).toBeTruthy());

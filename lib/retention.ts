@@ -3,7 +3,7 @@ import { events, memberships, users, workspaces } from "@/db/schema";
 import { recordAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { getEmailSender } from "@/lib/email";
-import { DEFAULT_LOCALE, t } from "@/lib/i18n";
+import { DEFAULT_LOCALE, t, type Locale } from "@/lib/i18n";
 import { recordJobRun } from "@/lib/jobs";
 import {
   DAY_MS,
@@ -107,7 +107,7 @@ export async function runRetention(db: Db = getDb(), now: Date = new Date()): Pr
     if (pending.length === 0) continue;
 
     const recipients = await db
-      .select({ email: users.email })
+      .select({ email: users.email, locale: users.locale })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .where(
@@ -120,7 +120,7 @@ export async function runRetention(db: Db = getDb(), now: Date = new Date()): Pr
     for (const event of pending) {
       // The later of the period's end and a full notice period from today.
       const deleteOn = deletionDate({ endsAt: event.endsAt, retentionDays: days, noticeSentAt: null, now }) as Date;
-      const sent = await sendNotices(recipients.map((r) => r.email), {
+      const sent = await sendNotices(recipients, {
         event: event.name,
         workspace: workspace.name,
         date: formatDeletionDay(deleteOn),
@@ -138,14 +138,15 @@ export async function runRetention(db: Db = getDb(), now: Date = new Date()): Pr
   return result;
 }
 
-async function sendNotices(to: string[], params: { event: string; workspace: string; date: string }): Promise<number> {
+async function sendNotices(to: { email: string; locale: Locale | null }[], params: { event: string; workspace: string; date: string }): Promise<number> {
   let sent = 0;
-  for (const address of to) {
+  for (const { email, locale } of to) {
     try {
+      // The owner's saved language; owners who never chose one get the default.
       await getEmailSender().send({
-        to: address,
-        subject: t(DEFAULT_LOCALE, "email.retention.subject", params),
-        text: t(DEFAULT_LOCALE, "email.retention.body", params),
+        to: email,
+        subject: t(locale ?? DEFAULT_LOCALE, "email.retention.subject", params),
+        text: t(locale ?? DEFAULT_LOCALE, "email.retention.body", params),
       });
       sent += 1;
     } catch {

@@ -30,7 +30,7 @@ export async function getT() {
   return (key: MessageKey, params?: TParams) => t(locale, key, params);
 }
 
-function requestLocale(request: Request): Locale {
+export function requestLocale(request: Request): Locale {
   const cookie = /(?:^|;\s*)lang=([^;]*)/.exec(request.headers.get("cookie") ?? "")?.[1];
   return resolveLocale(cookie ? decodeURIComponent(cookie) : undefined, request.headers.get("accept-language"));
 }

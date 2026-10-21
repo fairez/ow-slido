@@ -280,3 +280,13 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Browser check: scripts/ralph/screens/us023.mjs [360|1280] (needs `US023_EMAIL` and `OPERATOR_EMAILS` set to the same address on the server; signup is rate limited per IP, so restart the server between widths). Login, sign-up, forgot, members, plan, audit, settings, security, password, delete, ops and ops activity: no overflow, no page errors at 360 or 1280.
   - Full `npm test`: 131 files, 1511 tests passed (before the last wording changes; the affected files were rerun).
 ---
+
+## 2026-10-21 - US-024
+- Translated the 107 `api.*` keys that were still English copies in id.ts (hosts "Anda", participants "kamu"). The verification, reset, invitation and retention emails already had Indonesian text; what changed is which language they use: `emailLocale(db, email, fallback)` (lib/i18n/email-locale.ts) takes the recipient's `users.locale`, else the request's language (`requestLocale`, now exported from lib/i18n/server.ts); the retention job uses each owner/admin's own locale, else `DEFAULT_LOCALE`. `sendInvitationEmail` now takes a fallback `Locale` instead of a translate function.
+- Quiz and ranking forms compared `body.error` with their own `t("api.alreadyAnswered")` etc., which breaks as soon as server and client languages differ. The quiz-answer and ranking routes now add `reason` (`alreadyAnswered`, `timeUp`, `alreadyRanked`) and the forms key on it, as the survey form already did.
+- Files: lib/i18n/id.ts, lib/i18n/email-locale.ts, lib/i18n/server.ts, lib/auth/{verification,password-reset}.ts, lib/invitations.ts, lib/retention.ts, app/api/invitations/route.ts, quiz-answer and ranking routes, components/{quiz,ranking}-form.tsx, tests/i18n-api-email.test.ts, docs/i18n.md, CLAUDE.md.
+- **Learnings for future iterations:**
+  - `tests/i18n-api-email.test.ts` checks the api/email keys (no English copies, placeholders, link/minutes/days kept) and sends each email in both languages through the log adapter, then consumes the token from the link to prove it is intact.
+  - A new email: `email.*` keys in both files, language through `emailLocale`.
+  - Not done: the audit page still shows raw action names; `/api/ai/test` stays English (owner diagnostic).
+---

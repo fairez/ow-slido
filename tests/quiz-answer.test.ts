@@ -157,6 +157,7 @@ test("one answer per participant: the second is 409 and changes nothing", async 
   expect((await post(["a", "b"])).status).toBe(201);
   const again = await post(["c"]);
   expect(again.status).toBe(409);
+  expect((await again.json()).reason).toBe("alreadyAnswered");
   expect((await db.select().from(quizAnswers)).map((r) => r.optionIds)).toEqual([["a", "b"]]);
 });
 
@@ -164,7 +165,9 @@ test("after the deadline the answer is 409 'Time is up' and nothing is stored", 
   await startedAgo(21_000);
   const res = await post(["a", "b"]);
   expect(res.status).toBe(409);
-  expect((await res.json()).error).toBe("Time is up");
+  const body = await res.json();
+  expect(body.error).toBe("Time is up");
+  expect(body.reason).toBe("timeUp");
   expect(await db.select().from(quizAnswers)).toHaveLength(0);
 });
 

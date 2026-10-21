@@ -2,7 +2,9 @@ import { eq } from "drizzle-orm";
 import type { createDb } from "@/db/client";
 import { users } from "@/db/schema";
 import { getEmailSender } from "@/lib/email";
-import { serverT } from "@/lib/i18n/server";
+import { t } from "@/lib/i18n";
+import { emailLocale } from "@/lib/i18n/email-locale";
+import { requestLocale } from "@/lib/i18n/server";
 import { hashPassword } from "./password";
 import { consumeToken, issueToken } from "./tokens";
 
@@ -19,10 +21,11 @@ export async function sendResetEmail(db: Db, request: Request, email: string) {
   if (!user?.active) return;
   const token = await issueToken(db, { userId: user.id, purpose: "reset_password", ttlMs: RESET_TTL_MINUTES * 60_000 });
   const link = `${new URL(request.url).origin}/reset?token=${encodeURIComponent(token)}`;
+  const locale = await emailLocale(db, user.email, requestLocale(request));
   await getEmailSender().send({
     to: user.email,
-    subject: serverT(request, "email.reset.subject"),
-    text: serverT(request, "email.reset.body", { link, minutes: RESET_TTL_MINUTES }),
+    subject: t(locale, "email.reset.subject"),
+    text: t(locale, "email.reset.body", { link, minutes: RESET_TTL_MINUTES }),
   });
 }
 

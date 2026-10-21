@@ -209,7 +209,9 @@ test("rejects an order that is not a permutation of the option ids", async () =>
 test("a second submission from the same participant is a 409 and changes nothing", async () => {
   const first = [optionIds[0], optionIds[1], optionIds[2]];
   expect((await post(first)).status).toBe(201);
-  expect((await post([...first].reverse())).status).toBe(409);
+  const again = await post([...first].reverse());
+  expect(again.status).toBe(409);
+  expect((await again.json()).reason).toBe("alreadyRanked");
   const rows = await db.select().from(rankingResponses);
   expect(rows).toHaveLength(1);
   expect(rows[0].order).toEqual(first);

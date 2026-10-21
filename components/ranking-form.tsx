@@ -106,11 +106,11 @@ export function RankingForm({ ranking }: { ranking: LiveRanking }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ order: items.map((o) => o.id) }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
       if (res.ok) setDone(true);
       else {
         // A second device already sent an answer; the server keeps that one.
-        if (res.status === 409 && body.error === t("api.alreadyRanked")) setDone(true);
+        if (res.status === 409 && body.reason === "alreadyRanked") setDone(true);
         setError(body.error ?? SERVER_ERROR);
       }
     } catch {

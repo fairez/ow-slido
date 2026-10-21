@@ -122,12 +122,12 @@ export function QuizForm({ eventId, quiz, socket = null }: { eventId: string; qu
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ optionIds }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
       if (res.ok) setSent(true);
       else {
         // Another device already answered, or the window closed: the server's answer stands.
-        if (res.status === 409 && body.error === t("api.alreadyAnswered")) setSent(true);
-        else if (res.status === 409 && body.error === t("api.quizTimeUp")) setTimedOut(true);
+        if (res.status === 409 && body.reason === "alreadyAnswered") setSent(true);
+        else if (res.status === 409 && body.reason === "timeUp") setTimedOut(true);
         else setSelected([]);
         setError(body.error ?? SERVER_ERROR);
       }

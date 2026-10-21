@@ -53,6 +53,10 @@ export async function POST(request: Request, { params }: Context) {
   const optionIds = body && typeof body === "object" ? (body as Record<string, unknown>).optionIds : undefined;
 
   const result = await submitQuizAnswer(id, participantId, optionIds);
-  if (!result.ok) return Response.json({ error: apiMessage(request, result) }, { status: result.status });
+  if (!result.ok) {
+    // The client keys on `reason`, not on the translated text.
+    const reason = result.error === "api.alreadyAnswered" ? "alreadyAnswered" : result.error === "api.quizTimeUp" ? "timeUp" : undefined;
+    return Response.json({ error: apiMessage(request, result), ...(reason && { reason }) }, { status: result.status });
+  }
   return Response.json({ ok: true }, { status: 201 });
 }
