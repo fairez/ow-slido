@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AudienceLanguage } from "@/components/audience-language";
+import { LegalLinks } from "@/components/legal-links";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/field";
 import { useT } from "@/lib/i18n/client";
@@ -46,6 +47,7 @@ export function JoinRedirect({ code, eventId, cookiesBlocked = false }: { code: 
           <a href={`/join/${code}`}>{t("join.tryAgain")}</a>
         </p>
         {language}
+        <LegalLinks />
       </>
     );
   }
@@ -64,6 +66,7 @@ export function JoinRedirect({ code, eventId, cookiesBlocked = false }: { code: 
           <Link href="/">{t("join.enterCode")}</Link>
         </p>
         {language}
+        <LegalLinks />
       </>
     );
   }
@@ -88,6 +91,7 @@ export function JoinRedirect({ code, eventId, cookiesBlocked = false }: { code: 
         <p className="join-noscript">{t("join.noscript")}</p>
       </noscript>
       {language}
+      <LegalLinks />
     </>
   );
 }

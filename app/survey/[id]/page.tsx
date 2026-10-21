@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { BrandStyle, brandAttrs } from "@/components/brand-style";
 import { EventUnavailable } from "@/components/event-unavailable";
+import { LegalLinks } from "@/components/legal-links";
 import { SurveyForm } from "@/components/survey-form";
 import { interactionAccent } from "@/lib/branding";
 import { participantCookieName } from "@/lib/participant-token";
@@ -27,6 +28,7 @@ export default async function SurveyPage({ params }: { params: Promise<{ id: str
     <main id="main" className="participant" {...brandAttrs(accent)}>
       <BrandStyle accent={accent} />
       <SurveyForm survey={survey} />
+      <LegalLinks />
     </main>
   );
 }

@@ -3521,6 +3521,77 @@ button.quiz-option[aria-disabled="true"] {
   color: var(--ink);
 }
 
+/* Terms and privacy: one reading column; the placeholder banner is a full box, not a side stripe. */
+.legal-page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-7);
+}
+
+.legal-page h1 {
+  margin: 0;
+  font-size: var(--text-3xl);
+}
+
+.legal-lead {
+  margin: var(--space-3) 0 var(--space-5);
+  color: var(--ink-muted);
+}
+
+.legal-banner {
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.legal-banner p {
+  margin: 0;
+}
+
+.legal-banner-title {
+  font-weight: 600;
+}
+
+.legal-section {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border);
+}
+
+.legal-section h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.legal-section p,
+.legal-section ul {
+  margin: 0 0 var(--space-2);
+}
+
+.legal-section ul {
+  padding-left: var(--space-4);
+}
+
+.legal-section li + li {
+  margin-top: var(--space-2);
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.legal-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--ink-muted);
+}
+
 /* Public pricing: tiers are rows, not three columns, so a comparison reads left to right along one limit. */
 .pricing-page {
   max-width: 60rem;

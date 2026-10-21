@@ -320,3 +320,16 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Intl gives IDR zero decimals, so the divisor stays 100 like the plan page; amounts are minor units by convention here.
   - Footer: US-028 should add Terms and Privacy to `.site-footer nav`. Screens: scripts/ralph/screens/us027-*.png (en/id, light/dark, 360/1280), script us027.mjs; no overflow, no controls under 44px, no page errors.
 ---
+
+## 2026-10-21 - US-028
+- `/terms` and `/privacy` in English and Indonesian (`legal.*` keys; section lists in `lib/legal.ts`, shared `LegalPage`). Both carry a boxed banner "Placeholder text, supplied by the project owner" (`data-legal-placeholder`). Privacy states what is stored, that approved note text goes to a third-party AI service only when a host starts an analysis (names never sent), the deletion routes, and retention; the retention periods and the 7-day notice are filled from `RETENTION_OPTIONS`/`RETENTION_NOTICE_DAYS`, so the text follows the setting.
+- Links: Terms and Privacy in the `AppShell` footer (so sign-up and the home join form have them), and `LegalLinks` on `/join/<code>` (all three states), the participant page and the survey page, which have no footer.
+- Files: lib/legal.ts, components/legal-page.tsx, components/legal-links.tsx, app/terms/page.tsx, app/privacy/page.tsx, app/globals.css, components/ui/app-shell.tsx, components/join-redirect.tsx, app/e/[eventId]/page.tsx, app/survey/[id]/page.tsx, lib/i18n en/id, docs/legal/README.md, tests/legal.test.tsx, tests/no-inline-strings.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - `tests/legal.test.tsx` fails when the banner is gone and `docs/legal/REVIEWED` does not exist (checked by removing the attribute: 5 tests fail). Steps to retire the placeholder are in docs/legal/README.md.
+  - `LegalLinks` first went on sign-up and home too, which showed four legal links per page next to the footer; removed. Only add it where the footer is hidden (`x-audience-path` pages).
+  - Terms and Privacy follow the host language order, not the event's `lang_<eventId>` cookie, so a participant who switched language on the join page may see the other language there.
+  - `pkill -f "tsx server.ts"` killed my own shell again (pattern in the command line); kill by pid from `ss -ltnp`.
+  - Browser check: scripts/ralph/screens/us028.mjs (terms, privacy, signup, home, join; en/id, light/dark, 360/1280): no overflow, no controls under 44px, no page errors. Server on :3200 was stopped.
+  - Full `npm test`: 134 files, 1566 tests passed. Typecheck and eslint (lib tests db app components) clean.
+---

@@ -57,6 +57,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
         <footer className="site-footer">
           <nav aria-label={t("shell.footerLabel")}>
             <Link href="/pricing">{t("shell.pricing")}</Link>
+            <Link href="/terms">{t("legal.terms.nav")}</Link>
+            <Link href="/privacy">{t("legal.privacy.nav")}</Link>
           </nav>
         </footer>
       )}
