@@ -333,3 +333,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Browser check: scripts/ralph/screens/us028.mjs (terms, privacy, signup, home, join; en/id, light/dark, 360/1280): no overflow, no controls under 44px, no page errors. Server on :3200 was stopped.
   - Full `npm test`: 134 files, 1566 tests passed. Typecheck and eslint (lib tests db app components) clean.
 ---
+
+## 2026-10-21 - US-029
+- `e2e/phase3.spec.ts` (7 tests, mock billing, log email, mock AI): sign-up confirmed through the outbox link (the link works once); owner invites a viewer (role list has no Owner), the viewer accepts from the emailed link and gets 403 on `/api/members` and event creation; Pro upgrade through the mock checkout, then the subscription ends and the ranking shows "Read-only" with an Unlock link and refuses start (403); 2FA enrol on the security page, login stops at "Enter your code", wrong code refused, TOTP accepted; operator suspends a workspace from `/ops`, the member lands on `/account/suspended` and the API answers `workspace_suspended`, then reactivation; Indonesian event (`lang="id"`, "Kirim", the thank-you text, switch to English); Team export shows `event.exported` in the audit log.
+- Files: e2e/phase3.spec.ts, e2e/fixtures.ts, e2e/outbox.ts, e2e/verify-email.ts (helpers), playwright.config.ts (env), lib/email/log.ts (`EMAIL_OUTBOX_FILE`), tests/email-outbox-file.test.ts, billing/smoke/interactions/notes-ai/presenter-qa specs (import from fixtures), .env.example, CLAUDE.md.
+- **Learnings for future iterations:**
+  - The e2e suite was already red at the start: sign-up is limited to 5 per IP per hour and every test signed up from the same address, so the 6th and 7th specs timed out; `billing.spec.ts` also matched ISO dates while the plan page now prints "Oct 21, 2027". Fixed with `e2e/fixtures.ts` (a unique `x-real-ip` per test) and new date regexes. Specs must import `test`/`expect` from `./fixtures`.
+  - The server's outbox is in memory, so the log adapter now also appends JSON lines to `EMAIL_OUTBOX_FILE` when set; tests read it with `mailLink`. Use a unique email per test.
+  - The verify banner is in the layout and is rendered before the `/verify` page uses the token, so a client-side "Go to dashboard" click right after verifying still shows "Confirm your email" until a reload. Not fixed (outside this story); the test loads `/dashboard` fresh.
+  - The operator account for the suspend test is deleted and re-created each run (`forgetUser`), because the e2e database persists.
+  - `npm test` flaked twice (a 5 s timeout in two-factor-routes, a focus assertion in two-factor-ui) while tsc/eslint/vitest ran at the same time; both pass alone. Do not run other heavy commands during the full suite.
+  - Full `npm test`: 134 files, 1566 tests (2 flaky under load, green on rerun), plus 2 new tests. `npm run test:e2e`: 14 passed (1.2 min after the build). Lint (eslint lib tests db app components e2e) and typecheck clean. No UI change, so no browser screenshots.
+---

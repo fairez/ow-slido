@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { verifyEmail } from "./verify-email";
 
 test("owner upgrades through the mock checkout, then cancels", async ({ page }) => {
@@ -21,14 +21,14 @@ test("owner upgrades through the mock checkout, then cancels", async ({ page }) 
 
   await page.waitForURL("**/dashboard/plan?checkout=success");
   await expect(page.getByRole("status").filter({ hasText: "Your workspace is on Pro." })).toBeVisible();
-  await expect(page.getByText(/^Renews \d{4}-\d{2}-\d{2}\.$/)).toBeVisible();
+  await expect(page.getByText(/^Renews [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Manage billing" })).toBeVisible();
 
   await page.getByRole("button", { name: "Cancel subscription" }).click();
   const dialog = page.getByRole("dialog", { name: "Cancel Pro?" });
-  await expect(dialog.getByText(/Pro stays available until \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  await expect(dialog.getByText(/Pro stays available until [A-Z][a-z]{2} \d{1,2}, \d{4}/)).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel subscription" }).click();
 
-  await expect(page.getByText(/^Canceled\. Pro stays until \d{4}-\d{2}-\d{2}\.$/).first()).toBeVisible();
+  await expect(page.getByText(/^Canceled\. Pro stays until [A-Z][a-z]{2} \d{1,2}, \d{4}\.$/).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel subscription" })).toHaveCount(0);
 });

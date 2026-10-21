@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { defineConfig } from "@playwright/test";
+import { OUTBOX_FILE } from "./e2e/outbox";
 
 config({ path: ".env.local" });
 
@@ -33,6 +34,13 @@ export default defineConfig({
       // Billing never leaves the machine: checkout completes through a local route.
       BILLING_PROVIDER: "mock",
       BILLING_WEBHOOK_SECRET: "e2e-webhook-secret",
+      // Mail stays in the log adapter; each message is also appended to a file the tests read.
+      EMAIL_PROVIDER: "log",
+      EMAIL_OUTBOX_FILE: OUTBOX_FILE,
+      // Throwaway key so 2FA can be turned on; it protects nothing outside the test database.
+      TWOFA_ENCRYPTION_KEY: "e".repeat(64),
+      // The one address the suspend flow treats as a platform operator (see e2e/phase3.spec.ts).
+      OPERATOR_EMAILS: "e2e-operator@example.com",
     },
   },
 });

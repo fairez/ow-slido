@@ -103,6 +103,7 @@
 
 ## E2E
 - `npm run test:e2e` (Playwright, `e2e/`) boots its own server on :3100 against the test DB with `NEXT_DIST_DIR=.next-e2e`. If Playwright's expected Chromium isn't installed, set `PW_CHROMIUM_PATH` to an existing chrome-headless-shell binary (no browser downloads here).
+- Import `test`/`expect` from `e2e/fixtures.ts`, not `@playwright/test`: it gives every test a made-up `x-real-ip`, because sign-up is limited to 5 per IP per hour and all browsers share one address (the seventh sign-up of a run used to fail). The server runs with `EMAIL_PROVIDER=log`, and the log adapter appends each message as a JSON line to `EMAIL_OUTBOX_FILE` (set by playwright.config.ts to `OUTBOX_FILE` in `e2e/outbox.ts`); `mailLink(email, "verify" | "invite" | "reset")` returns the newest link for an address, so use unique emails. `TWOFA_ENCRYPTION_KEY` and `OPERATOR_EMAILS=e2e-operator@example.com` are set for the run; `e2e/phase3.spec.ts` covers verify, invite, upgrade/lock, 2FA, suspension, Indonesian join and audit. 2FA tests compute codes with `totp` from `lib/auth/totp`. Plan and account state that has no UI (an ended subscription, a verified email) is set straight in the test DB by helpers in `e2e/verify-email.ts`.
 
 ## AI analysis (Shared Notes)
 - Provider-agnostic server client for OpenAI and OpenRouter. Env: `AI_PROVIDER` (`openai` | `openrouter` | `mock`), `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_EVENT_CALL_CAP`, `AI_DAILY_CALL_CAP`. The key belongs to the platform owner and lives only in `.env.local`.
