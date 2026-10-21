@@ -391,7 +391,7 @@
       ],
       "id": "US-025",
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Milestone M8"
     },
     {

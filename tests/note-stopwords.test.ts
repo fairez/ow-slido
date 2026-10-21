@@ -52,3 +52,68 @@ test("the frequency fallback ignores Indonesian connectors", () => {
   expect(words).toContain("wifi");
   expect(out.find((k) => k.word === "wifi")?.weight).toBe(2);
 });
+
+const INDONESIAN_SAMPLE = [
+  { text: "Wifi sering terputus dan kopi kurang, tetapi materi bermanfaat" },
+  { text: "Jeda terlalu sedikit dan wifi lambat karena banyak yang memakai" },
+];
+const ENGLISH_SAMPLE = [
+  { text: "The wifi kept dropping and the coffee was cold, but the talks were useful" },
+  { text: "There was too little time between sessions and the wifi is slow because of the crowd" },
+];
+
+test("an Indonesian event takes the Indonesian list: connectors go, content words stay", () => {
+  const words = fallbackKeywords(INDONESIAN_SAMPLE, "id").map((k) => k.word);
+  for (const w of ["dan", "tetapi", "karena", "yang"]) expect(words, w).not.toContain(w);
+  for (const w of ["wifi", "kopi", "materi", "bermanfaat", "jeda", "terputus"]) expect(words, w).toContain(w);
+  expect(fallbackKeywords(INDONESIAN_SAMPLE, "id").find((k) => k.word === "wifi")?.weight).toBe(2);
+});
+
+test("an English event takes the English list: connectors go, content words stay", () => {
+  const words = fallbackKeywords(ENGLISH_SAMPLE, "en").map((k) => k.word);
+  for (const w of ["the", "and", "was", "but", "because", "between"]) expect(words, w).not.toContain(w);
+  for (const w of ["wifi", "coffee", "cold", "talks", "useful", "sessions", "crowd"]) expect(words, w).toContain(w);
+});
+
+test("a list only applies to its own language until the text is mixed", () => {
+  // One Indonesian word in an English note is a loan or a name, not a mixed text.
+  expect(isStopWord("dan", "en")).toBe(false);
+  expect(isStopWord("the", "id")).toBe(false);
+  expect(isStopWord("dan", "id")).toBe(true);
+  expect(isStopWord("the", "en")).toBe(true);
+  expect(fallbackKeywords([{ text: "Pak Dan gave the best talk about wifi" }], "en").map((k) => k.word)).toContain("dan");
+  expect(trimStopWords("yang bermanfaat", "en")).toBe("yang bermanfaat");
+  expect(trimStopWords("yang bermanfaat", "id")).toBe("bermanfaat");
+});
+
+test("mixed text uses both lists, whichever language the event has", () => {
+  const mixed = [{ text: "Wifi lambat dan the coffee was cold, tetapi materi bermanfaat" }];
+  for (const locale of ["id", "en"] as const) {
+    const words = fallbackKeywords(mixed, locale).map((k) => k.word);
+    for (const w of ["dan", "the", "was", "tetapi"]) expect(words, `${locale} ${w}`).not.toContain(w);
+    for (const w of ["wifi", "lambat", "coffee", "cold", "materi", "bermanfaat"]) expect(words, `${locale} ${w}`).toContain(w);
+  }
+  expect(trimStopWords("the wifi and dan", "id")).toBe("wifi");
+});
+
+test("without a language both lists apply, as before", () => {
+  const words = fallbackKeywords([...INDONESIAN_SAMPLE, ...ENGLISH_SAMPLE]).map((k) => k.word);
+  for (const w of ["dan", "the", "and", "karena"]) expect(words, w).not.toContain(w);
+  expect(isStopWord("dan")).toBe(true);
+  expect(isStopWord("the")).toBe(true);
+});
+
+test("AI keywords are cleaned with the event's list", () => {
+  const items = [
+    { word: "the wifi", weight: 3 },
+    { word: "yang wifi", weight: 2 },
+  ];
+  expect(normalizeKeywords(items, "en")).toEqual([
+    { word: "wifi", weight: 3 },
+    { word: "yang wifi", weight: 2 },
+  ]);
+  expect(normalizeKeywords(items, "id")).toEqual([
+    { word: "the wifi", weight: 3 },
+    { word: "wifi", weight: 2 },
+  ]);
+});

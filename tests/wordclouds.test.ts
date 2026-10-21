@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { interactions, participants, wordcloudEntries } from "@/db/schema";
+import { events, interactions, participants, wordcloudEntries } from "@/db/schema";
 import { createTestDb, truncateAll } from "./helpers/db";
 
 const { db, pool } = createTestDb();
@@ -158,7 +158,8 @@ test("rejects empty and over-long words", async () => {
   expect((await send("a".repeat(25))).status).toBe(201);
 });
 
-test("a bare Indonesian connector is rejected and does not use up an entry; phrases with real words stay", async () => {
+test("in an Indonesian event a bare Indonesian connector is rejected and does not use up an entry; phrases with real words stay", async () => {
+  await db.update(events).set({ audienceLocale: "id" }).where(eq(events.id, eventId));
   for (const w of ["dan", "Yang", " di ", "untuk"]) {
     const res = await send(w);
     expect(res.status).toBe(400);
@@ -170,11 +171,21 @@ test("a bare Indonesian connector is rejected and does not use up an entry; phra
   expect((await results()).json.words.map((w: { word: string }) => w.word).sort()).toEqual(["dan jeda", "wifi"]);
 });
 
+test("in an English event English connectors are rejected and Indonesian ones are ordinary words", async () => {
+  for (const w of ["and", "The", " of "]) {
+    const res = await send(w);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/too common/);
+  }
+  expect(await db.select().from(wordcloudEntries)).toHaveLength(0);
+  expect((await send("dan")).status).toBe(201);
+});
+
 test("enforces the per-participant entry limit", async () => {
-  const first = await send("one");
+  const first = await send("mango");
   expect(await first.json()).toEqual({ ok: true, remaining: 1 });
-  expect((await send("two")).status).toBe(201);
-  const third = await send("three");
+  expect((await send("durian")).status).toBe(201);
+  const third = await send("rambutan");
   expect(third.status).toBe(409);
   expect(await db.select().from(wordcloudEntries)).toHaveLength(2);
 });

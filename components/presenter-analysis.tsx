@@ -5,8 +5,9 @@ import type { Socket } from "socket.io-client";
 import { useEffect, useMemo, useState } from "react";
 import { WordCloud } from "@/components/word-cloud";
 import { fallbackKeywords, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
+import type { StopWordLocale } from "@/lib/note-stopwords";
 import type { PublicNote } from "@/lib/shared-notes";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
 
 export type AnalysisView = "cloud" | "categories" | "top" | "summary";
 
@@ -39,7 +40,7 @@ export function parseCategories(raw: unknown): Category[] {
   );
 }
 
-export function parseKeywords(raw: unknown): AnalysisKeyword[] {
+export function parseKeywords(raw: unknown, locale?: StopWordLocale): AnalysisKeyword[] {
   if (!Array.isArray(raw)) return [];
   return normalizeKeywords(
     raw.flatMap((k) =>
@@ -47,6 +48,7 @@ export function parseKeywords(raw: unknown): AnalysisKeyword[] {
         ? [{ word: k.word, weight: k.weight }]
         : [],
     ),
+    locale,
   );
 }
 
@@ -183,6 +185,8 @@ export function PresenterAnalysis({
   socket?: Socket | null;
 }) {
   const t = useT();
+  // The presenter screen follows the event's audience language, which is also the stop-word list to use.
+  const locale = useLocale();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [failed, setFailed] = useState(false);
   // Refetch when the approved notes change so the "outdated" state follows the board.
@@ -230,13 +234,13 @@ export function PresenterAnalysis({
   }, [interactionId, signature, view, socket]);
 
   const categories = parseCategories(analysis?.categories);
-  const aiKeywords = parseKeywords(analysis?.keywords);
+  const aiKeywords = parseKeywords(analysis?.keywords, locale);
   const outdated = analysis?.outdated ?? false;
   const noAnalysis = t("presAnalysis.none");
 
   if (view === "cloud") {
     const fromAi = aiKeywords.length > 0;
-    const words = (fromAi ? aiKeywords : fallbackKeywords(notes)).map((k) => ({
+    const words = (fromAi ? aiKeywords : fallbackKeywords(notes, locale)).map((k) => ({
       word: k.word,
       count: k.weight,
     }));

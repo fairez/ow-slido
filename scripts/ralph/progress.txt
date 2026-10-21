@@ -290,3 +290,12 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - A new email: `email.*` keys in both files, language through `emailLocale`.
   - Not done: the audit page still shows raw action names; `/api/ai/test` stays English (owner diagnostic).
 ---
+
+## 2026-10-21 - US-025
+- Word-cloud stop words follow the event's audience language. `stopWordLists(text, locale?)` (lib/note-stopwords.ts) returns the event language's list, plus the other one when the text has 2+ different words exclusive to it (mixed text); no locale keeps the old "both lists" behaviour. `fallbackKeywords`/`normalizeKeywords` take a locale; `analyzeNotes` looks up the event's `audience_locale` for the keyword fallback and the AI keywords; `PresenterAnalysis` passes `useLocale()` (the presenter UI already follows the event); `submitWord` rejects a bare stop word of the event's language (before: Indonesian only, in every event).
+- Files: lib/note-stopwords.ts, lib/note-keywords.ts, lib/note-analysis-ai.ts, lib/wordclouds.ts, components/presenter-analysis.tsx, tests/note-stopwords.test.ts, tests/wordclouds.test.ts, CLAUDE.md, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - The English list holds filler such as "one", "want", "need", "like", so an English event now refuses those as single-word cloud entries (the test that used "one" was changed). Splitting connectors from filler would fix it if hosts complain.
+  - Stored analyses (`storedKeywords` in lib/note-analysis.ts) and the host-side analysis editor still clean with both lists (no locale): the data was already cleaned with the event's list when written.
+  - Full `npm test`: 132 files, 1533 tests passed (658 s). Lint and typecheck clean. No UI change, so no browser check.
+---

@@ -1,8 +1,9 @@
 import type { MessageKey, TParams } from "@/lib/i18n";
 import { and, eq, sql } from "drizzle-orm";
-import { interactions, participants, wordcloudEntries } from "@/db/schema";
+import { events, interactions, participants, wordcloudEntries } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import { isIndonesianStopWord } from "@/lib/note-stopwords";
+import { isStopWord } from "@/lib/note-stopwords";
+import { parseLocale } from "@/lib/i18n";
 import { isProfane } from "@/lib/profanity";
 import { publish } from "@/lib/realtime/publisher";
 import {
@@ -112,8 +113,13 @@ export async function submitWord(
       if (word.length > WORDCLOUD_WORD_MAX) {
         return { ok: false, status: 400, error: "api.wordMax", params: { max: WORDCLOUD_WORD_MAX } };
       }
-      // A bare connector ("dan", "yang", "di") would only clutter the cloud; it does not use up an entry.
-      if (isIndonesianStopWord(word)) {
+      // A bare connector ("dan", "yang", "and", "the") would only clutter the cloud; it does not use up an entry.
+      // The list is the one of the event's audience language.
+      const [{ audienceLocale }] = await tx
+        .select({ audienceLocale: events.audienceLocale })
+        .from(events)
+        .where(eq(events.id, row.eventId));
+      if (isStopWord(word, parseLocale(audienceLocale) ?? undefined)) {
         return { ok: false, status: 400, error: "api.wordTooCommon" };
       }
 

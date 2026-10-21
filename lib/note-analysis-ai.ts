@@ -3,7 +3,12 @@ import type { AiProvider } from "@/lib/ai/types";
 import { getAiConfig } from "@/lib/ai/config";
 import { providerHint } from "@/lib/ai/hints";
 import { setAnalysisRunner, type AnalysisNote, type AnalysisOutput, type AnalysisRunner } from "@/lib/note-analysis";
+import type { StopWordLocale } from "@/lib/note-stopwords";
 import { anchorCategoryNames } from "@/lib/note-category-names";
+import { getDb } from "@/lib/db";
+import { parseLocale } from "@/lib/i18n";
+import { eq } from "drizzle-orm";
+import { events } from "@/db/schema";
 import { fallbackKeywords, KEYWORDS_MAX, normalizeKeywords, type AnalysisKeyword } from "@/lib/note-keywords";
 
 export const ANALYSIS_PROMPT_VERSION = "notes-v3";
@@ -228,7 +233,13 @@ const FALLBACK_NOTICES: Record<string, string> = {
   provider: "The AI service could not be reached, so this shows keywords only.",
 };
 
-function fallback(notes: AnalysisNote[], code: string, reason?: string): AnalysisOutput {
+/** The stop-word language of an event: its audience language, or none (both lists) when it cannot be read. */
+async function eventStopLocale(eventId: string) {
+  const [row] = await getDb().select({ audienceLocale: events.audienceLocale }).from(events).where(eq(events.id, eventId));
+  return parseLocale(row?.audienceLocale) ?? undefined;
+}
+
+function fallback(notes: AnalysisNote[], code: string, locale?: StopWordLocale, reason?: string): AnalysisOutput {
   // Only our own short cause goes to the log: no key, no request or reply text, no notes.
   console.warn(`[ai] analysis fell back to keywords: ${code}${reason ? ` (${reason})` : ""}`);
   const hint = code === "provider" ? providerHint(reason) : "";
@@ -236,7 +247,7 @@ function fallback(notes: AnalysisNote[], code: string, reason?: string): Analysi
     notice: [FALLBACK_NOTICES[code], hint].filter(Boolean).join(" "),
     summary: "",
     categories: [] as AnalysisCategory[],
-    keywords: fallbackKeywords(notes),
+    keywords: fallbackKeywords(notes, locale),
     model: FALLBACK_MODEL,
     promptVersion: ANALYSIS_PROMPT_VERSION,
   };
@@ -273,6 +284,7 @@ export async function analyzeNotes(
   options: AnalyzeOptions = {},
 ): Promise<AnalysisOutput> {
   const { notes } = input;
+  const locale = await eventStopLocale(input.eventId);
   const size = options.batchSize ?? ANALYSIS_BATCH_SIZE;
   try {
     const refs = notes.map((n, i) => ({ ref: `n${i + 1}`, id: n.id, text: n.text }));
@@ -310,12 +322,12 @@ export async function analyzeNotes(
     return {
       summary,
       categories,
-      keywords: normalizeKeywords(results.flatMap((r) => r.keywords)),
+      keywords: normalizeKeywords(results.flatMap((r) => r.keywords), locale),
       model: options.provider?.model ?? getAiConfig().model,
       promptVersion: ANALYSIS_PROMPT_VERSION,
     };
   } catch (err) {
-    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes, err.code, err.reason);
+    if (err instanceof AiError && FALLBACK_CODES.has(err.code)) return fallback(notes, err.code, locale, err.reason);
     if (err instanceof AiError) throw new Error("The AI returned a reply that could not be used. Your previous analysis is unchanged.");
     throw err;
   }
