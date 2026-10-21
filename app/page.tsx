@@ -12,6 +12,9 @@ export default async function Home() {
       <p className="entry-alt">
         {t("home.hostPrompt")} <Link href="/signup">{t("home.createAccount")}</Link> {t("home.or")} <Link href="/login">{t("home.logIn")}</Link>.
       </p>
+      <p className="entry-alt">
+        <Link href="/pricing">{t("home.pricing")}</Link>
+      </p>
     </main>
   );
 }

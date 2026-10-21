@@ -6,6 +6,9 @@ import ts from "typescript";
 const MIGRATED = [
   "components/password-forms.tsx",
   "components/plan-hint.tsx",
+  "components/pricing-plans.tsx",
+  "app/pricing/page.tsx",
+  "components/ui/app-shell.tsx",
   "components/plan-overview.tsx",
   "components/plan-billing.tsx",
   "app/dashboard/plan/page.tsx",

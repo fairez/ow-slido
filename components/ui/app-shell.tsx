@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VerifyBanner } from "@/components/verify-banner";
@@ -26,6 +26,8 @@ async function loadWorkspaces() {
 export async function AppShell({ children }: { children: ReactNode }) {
   const t = await getT();
   const workspaces = await loadWorkspaces();
+  // Join, participant, survey and presenter pages (see proxy.ts) show the event, not the product's links.
+  const audiencePage = (await headers()).has("x-audience-path");
   return (
     <>
       <a className="skip-link" href="#main">
@@ -51,6 +53,13 @@ export async function AppShell({ children }: { children: ReactNode }) {
       </header>
       {workspaces?.unverifiedEmail ? <VerifyBanner email={workspaces.unverifiedEmail} /> : null}
       {children}
+      {audiencePage ? null : (
+        <footer className="site-footer">
+          <nav aria-label={t("shell.footerLabel")}>
+            <Link href="/pricing">{t("shell.pricing")}</Link>
+          </nav>
+        </footer>
+      )}
     </>
   );
 }

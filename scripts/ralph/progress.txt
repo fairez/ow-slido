@@ -310,3 +310,13 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Left as is: row actions on the event page wrap to a second line at 360 (nothing cut off); native date inputs show mm/dd/yyyy because Chromium's UI locale decides; the presenter's floating controls sit over content in a full-page 360 screenshot (fixed to the viewport by design).
   - Full `npm test`: 132 files, 1533 tests passed (676 s). Typecheck and eslint (lib tests db app components) clean.
 ---
+
+## 2026-10-21 - US-027
+- Public `/pricing`: three tiers as stacked rows (name, price, sign-up link, then a limits list), a monthly/yearly toggle (`PricingPlans`), a note on how paid plans are chosen. Content comes from `buildPricing` (lib/pricing.ts), which reads only `PLANS` and `PLAN_PRICES`; money is integer minor units through `Intl.NumberFormat` (whole amounts without decimals). Linked from the home page and a new footer (`AppShell`, hidden on join/participant/survey/presenter pages). English and Indonesian (`pricing.*`, `shell.pricing`, `shell.footerLabel`, `home.pricing`).
+- Files: app/pricing/page.tsx, components/pricing-plans.tsx, lib/pricing.ts, components/ui/app-shell.tsx, app/page.tsx, app/globals.css, lib/i18n en/id, tests/pricing.test.tsx, tests/home.test.tsx, tests/no-inline-strings.test.ts, CLAUDE.md.
+- **Learnings for future iterations:**
+  - Image storage and PDF/Excel exist in `PLANS` but are not built (M5/M6), so the public page omits them; the plan page still lists them (not changed here).
+  - No highlighted tier and no three-column grid on purpose (antislop: "Most Popular" tell). Paid sign-up links go to `/signup`; signup has no plan parameter, so the label says "Sign up, then upgrade to X".
+  - Intl gives IDR zero decimals, so the divisor stays 100 like the plan page; amounts are minor units by convention here.
+  - Footer: US-028 should add Terms and Privacy to `.site-footer nav`. Screens: scripts/ralph/screens/us027-*.png (en/id, light/dark, 360/1280), script us027.mjs; no overflow, no controls under 44px, no page errors.
+---

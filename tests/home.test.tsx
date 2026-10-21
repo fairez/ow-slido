@@ -46,3 +46,8 @@ it("routes to the participant view on success", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Join event" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/e/e1?j=1"));
 });
+
+it("links to the public pricing page", async () => {
+  render(await Home());
+  expect(screen.getByRole("link", { name: "See plans and prices" }).getAttribute("href")).toBe("/pricing");
+});
