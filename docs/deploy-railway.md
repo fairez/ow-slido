@@ -22,9 +22,24 @@ Aplikasi ini satu service Node (Next.js + Socket.IO dalam satu proses) ditambah 
 | `AI_PROVIDER` | `openai` atau `openrouter`. Kosongkan untuk mematikan fitur AI. **Jangan** isi `mock` di produksi. | Untuk AI |
 | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Key sesuai provider. Hanya di Railway Variables, jangan di repo. | Untuk AI |
 | `AI_MODEL` | Contoh `gpt-4o-mini`. Kosong memakai default provider. | Tidak |
-| `AI_EVENT_CALL_CAP`, `AI_DAILY_CALL_CAP` | Batas panggilan AI per event (default 20) dan per hari (default 200). Ini batas biaya Anda. | Tidak |
+| `AI_EVENT_CALL_CAP`, `AI_DAILY_CALL_CAP` | Batas panggilan AI per event (default 20) dan total per hari UTC untuk seluruh platform (default 200). Ini batas biaya Anda. | Tidak |
+| `AI_GLOBAL_DAILY_CAP` | Batas keras panggilan AI per hari UTC untuk semua workspace (default 1000; `0` mematikan AI). Setelah tercapai, setiap analisis dijawab 503 `ai_paused`. Selama `AI_DAILY_CALL_CAP` lebih kecil, batas itu yang tercapai lebih dulu. | Disarankan |
+| `EMAIL_PROVIDER` | `smtp` untuk mengirim email sungguhan. Kosong atau `log` hanya menyimpan email di memori: tautan verifikasi, undangan, dan reset password tidak pernah sampai ke siapa pun. | Ya |
+| `EMAIL_FROM` | Alamat pengirim, contoh `OW Slido <no-reply@domain-anda>`. | Dengan `smtp` |
+| `SMTP_HOST`, `SMTP_PORT` | Server SMTP. Port default 587; 465 memakai TLS. | `SMTP_HOST` wajib dengan `smtp` |
+| `SMTP_USER`, `SMTP_PASSWORD` | Login SMTP, hanya jika server memintanya. | Tergantung server |
+| `BILLING_PROVIDER` | `stripe` untuk pembayaran sungguhan, `mock` untuk demo. Tanpa nilai di produksi, rute billing menjawab 503 dan tidak ada paket yang bisa dibeli. | Ya |
+| `BILLING_WEBHOOK_SECRET` | Hanya untuk `mock` di produksi: menandatangani event-nya. Acak panjang. | Dengan `mock` |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Key API Stripe dan signing secret endpoint webhook. Langkah lengkap di `docs/billing.md`. | Dengan `stripe` |
+| `STRIPE_PRICE_PRO_MONTH`, `STRIPE_PRICE_PRO_YEAR`, `STRIPE_PRICE_TEAM_MONTH`, `STRIPE_PRICE_TEAM_YEAR` | Id harga Stripe untuk tiap paket dan periode. | Dengan `stripe` |
+| `TWOFA_ENCRYPTION_KEY` | Kunci 32 byte (64 karakter hex atau base64, `openssl rand -hex 32`) untuk mengenkripsi rahasia 2FA. Tanpa ini tidak ada yang bisa mengaktifkan 2FA. Mengganti nilainya membatalkan semua rahasia dan kode pemulihan 2FA. | Ya |
+| `OPERATOR_EMAILS` | Email operator platform, dipisah koma, yang boleh membuka `/ops`. Akunnya juga harus sudah terverifikasi emailnya. Tanpa nilai tidak ada operator. | Untuk operator |
+| `JOB_RETRY_BACKOFF_MS` | Jeda (ms) sebelum percobaan ulang 1, 2, dan 3 untuk job latar belakang yang gagal. Default `1000,5000,20000`. | Tidak |
+| `QUIZ_GRACE_MS` | Berapa ms jawaban kuis boleh terlambat setelah batas waktu dan tetap dihitung. Default 300. | Tidak |
 
-Jangan isi `TEST_DATABASE_URL`, `ALLOWED_DEV_ORIGINS`, atau `PORT` (Railway mengisi `PORT` sendiri).
+Jangan isi `TEST_DATABASE_URL`, `ALLOWED_DEV_ORIGINS`, `EMAIL_OUTBOX_FILE`, atau `PORT` (Railway mengisi `PORT` sendiri). Isi nilai rahasia hanya di Railway Variables, bukan di repo atau dokumen ini.
+
+Untuk Stripe, daftarkan endpoint webhook di `https://<domain>/api/billing/webhook` (event dan langkahnya ada di `docs/billing.md`). Daftar yang harus beres sebelum dipakai publik ada di `docs/launch-checklist.md`.
 
 ## Yang perlu diketahui
 
@@ -42,6 +57,7 @@ Jangan isi `TEST_DATABASE_URL`, `ALLOWED_DEV_ORIGINS`, atau `PORT` (Railway meng
 2. Daftar, buat event, mulai satu poll, lalu buka halaman join dari ponsel (data seluler, bukan Wi-Fi yang sama) dan kirim satu suara. Hasilnya harus muncul di halaman presenter.
 3. Jika AI dipakai: jalankan Analyze notes sekali pada event uji, dan cek tagihan provider.
 4. Set `ALLOW_SIGNUP=false`, redeploy, dan pastikan `/signup` menolak pendaftaran baru.
+5. Jika `EMAIL_PROVIDER=smtp`: daftar dengan email uji dan pastikan email verifikasi sampai.
 
 ## Jika migrasi tidak jalan
 

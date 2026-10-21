@@ -9,16 +9,36 @@ Stack: Next.js (App Router) + TypeScript, PostgreSQL (Drizzle ORM), Socket.IO vi
 1. `npm install`
 2. Create `.env.local` (gitignored) from `.env.example`:
 
-   | Variable | Purpose |
-   | --- | --- |
-   | `DATABASE_URL` | Postgres URL for the dev/prod database |
-   | `TEST_DATABASE_URL` | Postgres URL for the test database (unit and e2e tests) |
-   | `SESSION_SECRET` | Signs host login sessions |
-   | `PARTICIPANT_TOKEN_SECRET` | Signs participant tokens |
-| `AI_PROVIDER` | Optional. `openai`, `openrouter` or `mock`. Unset hides all AI features |
-| `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Key for the chosen provider |
-| `AI_MODEL` | Optional model override |
-| `AI_EVENT_CALL_CAP` / `AI_DAILY_CALL_CAP` | Optional limits on AI calls per event and per day |
+   | Variable | Purpose | Production |
+   | --- | --- | --- |
+   | `DATABASE_URL` | Postgres URL for the dev/production database | Yes |
+   | `TEST_DATABASE_URL` | Postgres URL for the test database (unit and e2e tests) | Never |
+   | `SESSION_SECRET` | Signs host login sessions; changing it logs everyone out | Yes |
+   | `PARTICIPANT_TOKEN_SECRET` | Signs participant tokens (a different value from `SESSION_SECRET`) | Yes |
+   | `ALLOW_SIGNUP` | `false` closes public sign-up | Strongly recommended |
+   | `ALLOWED_DEV_ORIGINS` | Extra hosts allowed to load `next dev` assets | Never |
+   | `AI_PROVIDER` | `openai`, `openrouter` or `mock`; unset hides all AI features | For AI (never `mock`) |
+   | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Key for the chosen provider | For AI |
+   | `AI_MODEL` | Model override; empty uses the provider default | No |
+   | `AI_EVENT_CALL_CAP` / `AI_DAILY_CALL_CAP` | AI calls per event (default 20) and in total per UTC day (default 200) | No |
+   | `AI_GLOBAL_DAILY_CAP` | Hard stop for AI calls per UTC day across all workspaces (default 1000, `0` pauses AI) | Set it to your budget |
+   | `EMAIL_PROVIDER` | `smtp` sends mail; empty or `log` keeps it in memory only | Yes, for real mail |
+   | `EMAIL_FROM` | Sender address when `EMAIL_PROVIDER=smtp` | With smtp |
+   | `SMTP_HOST` / `SMTP_PORT` | SMTP server and port (port defaults to 587; 465 uses TLS) | With smtp |
+   | `SMTP_USER` / `SMTP_PASSWORD` | SMTP login, only if the server asks for one | If the server needs it |
+   | `EMAIL_OUTBOX_FILE` | Log adapter only: also writes each message to this file (the e2e run uses it) | Never |
+   | `BILLING_PROVIDER` | `stripe` or `mock`; unset in production means no plan can be bought | Yes |
+   | `BILLING_WEBHOOK_SECRET` | Signs the mock provider's events | Only with `mock` in production |
+   | `STRIPE_SECRET_KEY` | Stripe API key | With stripe |
+   | `STRIPE_WEBHOOK_SECRET` | Signing secret of the Stripe webhook endpoint | With stripe |
+   | `STRIPE_PRICE_PRO_MONTH` / `_PRO_YEAR` / `STRIPE_PRICE_TEAM_MONTH` / `_TEAM_YEAR` | Stripe price id of each plan and interval | With stripe |
+   | `TWOFA_ENCRYPTION_KEY` | 32-byte key (64 hex or base64) that encrypts 2FA secrets; without it nobody can enable 2FA | Yes |
+   | `OPERATOR_EMAILS` | Comma-separated emails that may open `/ops` (must also be verified) | For an operator |
+   | `JOB_RETRY_BACKOFF_MS` | Delays before the 3 retries of a failed background job (default `1000,5000,20000`) | No |
+   | `QUIZ_GRACE_MS` | Milliseconds a quiz answer may arrive after the deadline (default 300) | No |
+   | `PORT` | Server port (default 3000; Railway sets it) | No |
+
+   `.env.example` lists the same variables with a comment on each. What to set before going live is in [docs/launch-checklist.md](docs/launch-checklist.md).
 
    With `npm run dev`, values in `.env.local` replace variables inherited from your shell (the server logs which ones it replaced). With `npm start` the real environment wins, so hosting settings are not overridden.
 

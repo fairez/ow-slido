@@ -345,3 +345,13 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - `npm test` flaked twice (a 5 s timeout in two-factor-routes, a focus assertion in two-factor-ui) while tsc/eslint/vitest ran at the same time; both pass alone. Do not run other heavy commands during the full suite.
   - Full `npm test`: 134 files, 1566 tests (2 flaky under load, green on rerun), plus 2 new tests. `npm run test:e2e`: 14 passed (1.2 min after the build). Lint (eslint lib tests db app components e2e) and typecheck clean. No UI change, so no browser screenshots.
 ---
+
+## 2026-10-21 - US-030
+- Every env var the app reads is now documented in `.env.example` (comment per variable: meaning, default, production need), the README table (new "Production" column; its old rows were mis-indented), and `docs/deploy-railway.md` (Indonesian; added AI_GLOBAL_DAILY_CAP, email, billing, Stripe, TWOFA_ENCRYPTION_KEY, OPERATOR_EMAILS, JOB_RETRY_BACKOFF_MS, QUIZ_GRACE_MS, webhook URL). New `docs/launch-checklist.md`: core settings, Stripe test then live mode and webhook URL, SMTP, legal text and `docs/legal/REVIEWED`, operators, 2FA key, AI caps, retention default, final pass, plus "Not built" (images, PDF/Excel, AI Insights, workspace logo) and known gaps.
+- Files: .env.example, README.md, docs/deploy-railway.md, docs/launch-checklist.md, CLAUDE.md, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - Found by reading the code, not the old docs: `AI_DAILY_CALL_CAP` counts all of today's calls across the platform (effective limit is min(daily, global)), not per workspace. `QUIZ_GRACE_MS` and `PORT` were undocumented. A new workspace has no retention set (events kept until deleted).
+  - `ALLOW_SIGNUP=false` blocks only `/api/auth/signup`; invitation accept still works. With a public pricing page, closing sign-up also stops customers, so the checklist makes it a decision.
+  - Grep for env use with `process.env.X`, `env.X` (smtp takes an env object) and the Stripe name table in lib/billing/stripe.ts; the AI keys are chosen by name in lib/ai/config.ts.
+  - Docs only: typecheck and eslint clean, a scan for key-shaped strings found none; full test suite not rerun (no code changed).
+---
