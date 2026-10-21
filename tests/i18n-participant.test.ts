@@ -24,10 +24,27 @@ const PARTICIPANT_PREFIXES = [
   "notes.",
   "wordcloud.",
   "surveyForm.",
+  // Presenter and results screens (US-021): the big screen is read by the audience.
+  "presenter.",
+  "presNotes.",
+  "presAnalysis.",
+  "presQuiz.",
+  "presSurvey.",
+  "presQa.",
+  "presRanking.",
+  "presOpenText.",
+  "presRating.",
+  "podium.",
+  "analysis.",
 ];
 
 // Names and brand strings that read the same in both languages.
-const SAME_IN_BOTH = new Set(["shell.brand", "language.name.en", "language.name.id"]);
+const SAME_IN_BOTH = new Set([
+  "shell.brand",
+  "language.name.en",
+  "language.name.id",
+  "presRanking.rank",
+]);
 
 const keys = (Object.keys(en) as (keyof typeof en)[]).filter((k) =>
   PARTICIPANT_PREFIXES.some((p) => k.startsWith(p)),

@@ -246,3 +246,12 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Poll create body uses `question`, word cloud needs `maxEntriesPerParticipant`; Q&A, quiz and survey bodies as in e2e/interactions.spec.ts. Browser script: scripts/ralph/screens/us020.mjs [360|1280] (production build on .next-shot, test DB, server on :3200 killed by pid from `ss -ltnp`). No overflow at 360 or 1280, no page errors.
   - Full `npm test`: 129 files, 1501 tests passed (635 s).
 ---
+
+## 2026-10-21 - US-021
+- Indonesian copy for the presenter and results screens: `presenter.*` (join card, controls, poll and word cloud totals), `presNotes.*`, `presAnalysis.*`, `analysis.*` (published analysis), `presQa.*`, `presOpenText.*`, `presRating.*`. Ranking, quiz, podium and survey results already had Indonesian text from earlier stories.
+- Files: lib/i18n/id.ts, tests/i18n-participant.test.ts (presenter prefixes added to the equality, placeholder, kamu/Anda and host checks; `presRanking.rank` is in `SAME_IN_BOTH`), docs/i18n.md, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - `notesAnalysis.*` and `analysisEditor.*` are host screens (event page), left for US-022; they are not in the test prefixes.
+  - A closed interaction shows on the presenter only in a page that was open when it closed (`getPresenterState` reloads only live ones), so closed-state screenshots need the host page open before `/close`. Reloading shows "Tidak ada interaksi yang berjalan".
+  - Podium steps animate in over about 2 s (first place last): wait before the screenshot or the card looks dark on dark.
+  - Browser script: scripts/ralph/screens/us021.mjs [360|1280] (production build on .next-shot, test DB, server on :3200 killed by pid from `ss -ltnp`). Light and dark per view via `emulateMedia`; no overflow at 360 or 1280, no page errors. The survey results screen showed 0 responses because the scripted participant did not answer the required question.
