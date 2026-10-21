@@ -255,3 +255,16 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - A closed interaction shows on the presenter only in a page that was open when it closed (`getPresenterState` reloads only live ones), so closed-state screenshots need the host page open before `/close`. Reloading shows "Tidak ada interaksi yang berjalan".
   - Podium steps animate in over about 2 s (first place last): wait before the screenshot or the card looks dark on dark.
   - Browser script: scripts/ralph/screens/us021.mjs [360|1280] (production build on .next-shot, test DB, server on :3200 killed by pid from `ss -ltnp`). Light and dark per view via `emulateMedia`; no overflow at 360 or 1280, no page errors. The survey results screen showed 0 responses because the scripted participant did not answer the required question.
+
+## 2026-10-21 - US-022
+- Indonesian copy for the host side: `dash.*`, `eventMgr.*`, `pollMgr.*` (type names, builders, library), `moderation.*`, `moderatePage.*`, `openTextHost.*`, `notesAnalysis.*`, `analysisEditor.*`. Templates, survey builder, settings, retention, participant data and branding were already Indonesian. Fixed a hydration mismatch (React #418) on the dashboard: event times used `toLocaleString()` with no locale, so a browser in id-ID disagreed with the server; `EventManager` now formats with the UI locale and the audit log's `useSyncExternalStore` zone trick ("UTC" while hydrating, then the browser zone).
+- Files: lib/i18n/id.ts, components/event-manager.tsx, tests/i18n-host.test.ts (new), docs/i18n.md, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - Host register is "Anda". `tests/i18n-host.test.ts` holds `HOST_PREFIXES` and `SAME_IN_BOTH`; US-023 adds `members.`, `plan.`, `account.`, `security.`, `ops.`, `auth.`, `role.`, `audit.`, `logout.`, `workspace.` there once translated (tier names `plan.name.*`, role names Admin/Editor/Moderator and `audit.timeUtc` stay as they are, so list them in `SAME_IN_BOTH`). The "Log out" button, auth screens and nav chrome are still English.
+  - Type labels are lower-cased in sentences (`typeInSentence`), so "Buat polling" / "Simpan polling" read well; `pollMgr.newType` became "Buat {type}" because "{type} baru" would start lower-case.
+  - Any `toLocaleString()`/`toLocaleDateString()` without a locale in a client component breaks hydration when the browser language differs from the server's; check for others in US-023/US-026 (grep `toLocale`).
+  - US-026: the Add content menu items "Catatan bersama baru" and "Pertanyaan kuis baru" wrap to two lines at 1280 in the menu; the row action buttons (Ubah, Ubah nama, Duplikat, Simpan sebagai templat, Hapus) wrap onto a second line with the move arrows.
+  - Q&A created with the event keeps the stored title "Q&A" (data, not UI copy); the type label beside it reads "Tanya jawab".
+  - Browser check: scripts/ralph/screens/us022.mjs [360|1280] (production build on .next-shot, test DB, server :3200 killed by pid from `ss -ltnp`; run it only when no `npm test` is using the test DB). Dashboard, event page, add-content menu and moderation page: no overflow, no page errors at 360 or 1280.
+  - Full `npm test`: 130 files, 1507 tests passed (before the event-manager change; tests/event-manager passes after it).
+---

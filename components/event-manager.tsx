@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { LiveParticipantCount } from "@/components/live-participant-count";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, EmptyState } from "@/components/ui/card";
@@ -15,6 +15,9 @@ import { useLocale, useT } from "@/lib/i18n/client";
 import { LOCALES, type Locale } from "@/lib/i18n/locale";
 import type { Lock } from "@/lib/plan-hints";
 import { deletionDate, deletionIsNear, formatDeletionDay } from "@/lib/retention-schedule";
+
+const noSubscription = () => () => {};
+const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 export type EventSummary = {
   id: string;
@@ -56,6 +59,10 @@ export function EventManager({
 }) {
   const t = useT();
   const hostLocale = useLocale();
+  // The UI language and "UTC" render on the server and during hydration, then the browser's zone takes over.
+  const timeZone = useSyncExternalStore(noSubscription, browserZone, () => "UTC");
+  const when = (iso: string) =>
+    new Intl.DateTimeFormat(hostLocale, { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(iso));
   const [now] = useState(() => new Date());
   const [events, setEvents] = useState([...initialEvents].sort(byStart));
   const [created, setCreated] = useState<EventSummary | null>(null);
@@ -228,7 +235,7 @@ export function EventManager({
                   )}
                   <DeletionBadge event={e} retentionDays={retentionDays} now={now} />
                   <p className="row-meta">
-                    {new Date(e.startsAt).toLocaleString()} {t("eventMgr.to")} {new Date(e.endsAt).toLocaleString()}
+                    {when(e.startsAt)} {t("eventMgr.to")} {when(e.endsAt)}
                   </p>
                   <div className="row-meta">
                     {t("dash.joinCode")} <Badge>{e.joinCode}</Badge>
