@@ -903,6 +903,7 @@ export const en = {
   "members.title": "Members",
   "members.lead": "Invite people, choose what each person can do, and remove access when it is no longer needed.",
   "members.nav": "Members",
+  "members.you": "You",
   "members.invite": "Invite someone",
   "members.listTitle": "People with access",
   "members.lastLogin": "Last login {date}",

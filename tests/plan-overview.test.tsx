@@ -162,10 +162,10 @@ describe("PlanOverview", () => {
     view(resolveEntitlements(row({}), NOW), true, usage, { billing: SUBSCRIBED });
     fireEvent.click(screen.getByRole("button", { name: "Cancel subscription" }));
     const dialog = screen.getByRole("dialog", { name: "Cancel Pro?" });
-    expect(within(dialog).getByText(/Pro stays available until 2026-11-01, then the workspace returns to Free/)).toBeTruthy();
+    expect(within(dialog).getByText(/Pro stays available until Nov 1, 2026, then the workspace returns to Free/)).toBeTruthy();
     expect(calls).toHaveLength(0);
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel subscription" }));
-    expect((await screen.findByRole("status")).textContent).toBe("Canceled. Pro stays until 2026-11-01.");
+    expect((await screen.findByRole("status")).textContent).toBe("Canceled. Pro stays until Nov 1, 2026.");
     expect(calls).toEqual([{ url: "/api/billing/cancel", body: {} }]);
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -190,7 +190,7 @@ describe("PlanOverview", () => {
     const pastDue = resolveEntitlements(row({ status: "past_due", currentPeriodEnd: new Date("2026-10-18T00:00:00Z") }), NOW);
     view(pastDue, true, usage, { billing: SUBSCRIBED });
     const banner = screen.getByRole("heading", { name: "The last payment failed" }).closest("section") as HTMLElement;
-    expect(within(banner).getByText(/Pro stays on until 2026-10-25/)).toBeTruthy();
+    expect(within(banner).getByText(/Pro stays on until Oct 25, 2026/)).toBeTruthy();
     expect(within(banner).getByRole("button", { name: "Manage billing" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Manage billing" })).toHaveLength(1);
     cleanup();
@@ -231,11 +231,25 @@ describe("PlanOverview", () => {
     expect(tiers.map((h) => h.textContent)).toEqual(["Free", "Pro", "Team"]);
     const pro = tiers[1].closest("li") as HTMLElement;
     expect(within(pro).getByText("Current plan")).toBeTruthy();
-    expect(screen.getByText("Renews 2026-11-01.")).toBeTruthy();
+    expect(screen.getByText("Renews Nov 1, 2026.")).toBeTruthy();
   });
 
   it("explains a cancellation with the date", () => {
     view(resolveEntitlements(row({ status: "canceled" }), NOW));
-    expect(screen.getByText(/Canceled\. Pro stays until 2026-11-01/)).toBeTruthy();
+    expect(screen.getByText(/Canceled\. Pro stays until Nov 1, 2026/)).toBeTruthy();
+  });
+
+  it("writes dates in Indonesian when the host language is Indonesian", () => {
+    render(
+      <PlanOverview
+        entitlements={resolveEntitlements(row({ status: "canceled" }), NOW)}
+        usage={usage}
+        canManageBilling
+        billing={READY}
+        locale="id"
+        t={(key, params) => t("id", key, params)}
+      />,
+    );
+    expect(screen.getByText(/Dibatalkan\. Paket Pro berlaku sampai 1 Nov 2026/)).toBeTruthy();
   });
 });

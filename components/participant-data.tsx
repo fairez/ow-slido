@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError } from "@/components/ui/field";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
+import { formatMoment } from "@/lib/format-date";
 
 type Row = { id: string; name: string | null; joinedAt: string; contributions: number };
 type Loaded = { participants: Row[]; total: number };
@@ -18,6 +19,7 @@ async function errorFrom(response: Response) {
 /** Mounted only while the dialog is open, so every opening starts with a fresh list. */
 function Body({ eventId, onClose }: { eventId: string; onClose: () => void }) {
   const t = useT();
+  const locale = useLocale();
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Row | null>(null);
@@ -101,7 +103,7 @@ function Body({ eventId, onClose }: { eventId: string; onClose: () => void }) {
                 <div className="event-main">
                   <h3 className="event-name">{name}</h3>
                   <p className="row-meta">
-                    {t("participantData.joined", { time: new Date(row.joinedAt).toLocaleString() })} ·{" "}
+                    {t("participantData.joined", { time: formatMoment(row.joinedAt, locale) })} ·{" "}
                     {t(row.contributions === 1 ? "participantData.contributions.one" : "participantData.contributions.other", { count: row.contributions })}
                   </p>
                 </div>

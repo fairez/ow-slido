@@ -7,7 +7,8 @@ import { Badge, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { InlineError, Select, TextField, Toggle } from "@/components/ui/field";
 import { ROLES, type Role } from "@/lib/auth/permissions";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
+import { formatDay } from "@/lib/format-date";
 import type { MessageKey } from "@/lib/i18n";
 import type { Lock } from "@/lib/plan-hints";
 import type { PlanId } from "@/lib/plans";
@@ -26,7 +27,6 @@ export type MemberRow = {
 export type InvitationRow = { id: string; email: string; role: string; status: string; expiresAt: string };
 
 const INVITABLE: Role[] = ["admin", "editor", "moderator", "viewer"];
-const day = (iso: string) => iso.slice(0, 10);
 
 type Call = { ok: true; data: Record<string, unknown> } | { ok: false; error: string };
 
@@ -48,6 +48,7 @@ export function MembersManager({
   twoFactorPolicy?: { required: boolean; lock?: Lock };
 }) {
   const t = useT();
+  const locale = useLocale();
   const roleLabel = (role: string) => t(`role.${role}` as MessageKey);
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
@@ -229,11 +230,11 @@ export function MembersManager({
                     <p className="row-meta">{t("members.suspendedSeatLimit")}</p>
                   )}
                   <p className="row-meta">
-                    {m.lastLoginAt ? t("members.lastLogin", { date: day(m.lastLoginAt) }) : t("members.neverLoggedIn")}
+                    {m.lastLoginAt ? t("members.lastLogin", { date: formatDay(m.lastLoginAt, locale) }) : t("members.neverLoggedIn")}
                   </p>
                 </div>
                 <div className="member-tags">
-                  {isSelf && <Badge tone="accent">{t("common.you")}</Badge>}
+                  {isSelf && <Badge tone="accent">{t("members.you")}</Badge>}
                   {m.status === "suspended" && <Badge>{t("members.status.suspended")}</Badge>}
                   {!canManage && <Badge>{roleLabel(m.role)}</Badge>}
                   <Badge tone={m.twoFactor ? "accent" : "neutral"}>{t(m.twoFactor ? "members.twoFactor.on" : "members.twoFactor.off")}</Badge>
@@ -306,7 +307,7 @@ export function MembersManager({
                 <div className="member-main">
                   <p className="member-email">{i.email}</p>
                   <p className="row-meta">
-                    {roleLabel(i.role)} · {t("members.expires", { date: day(i.expiresAt) })}
+                    {roleLabel(i.role)} · {t("members.expires", { date: formatDay(i.expiresAt, locale) })}
                   </p>
                 </div>
                 <div className="member-actions">

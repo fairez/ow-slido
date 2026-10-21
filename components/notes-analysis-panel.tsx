@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/field";
 import type { AnalysisEdit } from "@/lib/analysis-edit";
 import { NETWORK_ERROR, SERVER_ERROR } from "@/lib/copy";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
+import { formatMoment } from "@/lib/format-date";
 
 type Analysis = {
   id: string;
@@ -27,13 +28,10 @@ type Analysis = {
 
 type State = { analysis: Analysis | null; lastDone: Analysis | null; approvedNoteCount: number; noticeAccepted: boolean; notes: { id: string; text: string }[] };
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
 /** Host controls for the AI analysis of one shared-notes interaction. Rendered only when AI is configured. */
 export function NotesAnalysisPanel({ interactionId, socket = null }: { interactionId: string; socket?: Socket | null }) {
   const t = useT();
+  const locale = useLocale();
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -175,7 +173,7 @@ export function NotesAnalysisPanel({ interactionId, socket = null }: { interacti
       {shown && shown.finishedAt && (
         <p className="analysis-muted">
           {t(shown.noteCount === 1 ? "notesAnalysis.last.one" : "notesAnalysis.last.other", {
-            time: formatTime(shown.finishedAt),
+            time: formatMoment(shown.finishedAt, locale),
             n: shown.noteCount,
             edited: shown.edited ? t("notesAnalysis.editedByYou") : "",
           })}

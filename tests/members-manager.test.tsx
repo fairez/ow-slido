@@ -55,7 +55,7 @@ afterEach(() => {
 describe("MembersManager", () => {
   it("lists members with status, last login and only pending invitations", () => {
     ui();
-    expect(screen.getByText("Last login 2026-10-01")).toBeTruthy();
+    expect(screen.getByText("Last login Oct 1, 2026")).toBeTruthy();
     expect(screen.getAllByText("Has not logged in yet")).toHaveLength(2);
     expect(screen.getByText("Suspended")).toBeTruthy();
     expect(screen.getByText("You")).toBeTruthy();

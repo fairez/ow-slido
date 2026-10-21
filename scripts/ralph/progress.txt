@@ -268,3 +268,15 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Browser check: scripts/ralph/screens/us022.mjs [360|1280] (production build on .next-shot, test DB, server :3200 killed by pid from `ss -ltnp`; run it only when no `npm test` is using the test DB). Dashboard, event page, add-content menu and moderation page: no overflow, no page errors at 360 or 1280.
   - Full `npm test`: 130 files, 1507 tests passed (before the event-manager change; tests/event-manager passes after it).
 ---
+
+## 2026-10-21 - US-023
+- Indonesian copy for the account side. Most of `members.*`, `plan.*`, `security.*`, `ops.*`, `audit.*` was already translated; this story did the rest: login and sign-up (`auth.*`), "Keluar", `ops.reset*` ("Atur ulang 2FA"), and wording: "ruang kerja" everywhere for workspace, "acara" for event on the plan page, a new `members.you` ("Anda") so the host's own badge no longer says "Kamu". Dates now go through `lib/format-date.ts` (`formatDay`, `formatMoment`) with the UI locale: plan page, members (last login, invite expiry), retention badge and notice, participant data, notes analysis. Amounts already used `Intl.NumberFormat` with the plan currency.
+- Files: lib/i18n/id.ts, en.ts (`members.you`), lib/format-date.ts, components/{plan-overview,members-manager,event-manager,participant-data,notes-analysis-panel}.tsx, app/dashboard/events/[id]/page.tsx, tests/i18n-host.test.ts (account prefixes added to the equality, placeholder and Anda checks), tests/format-date.test.ts, plan-overview/members-manager/retention-ui tests (localized dates), docs/i18n.md.
+- **Learnings for future iterations:**
+  - `tests/i18n-host.test.ts` now covers `members. plan. account. security. ops. auth. role. audit. logout. workspace. verify. forgot. reset. invite. suspended.`; `SAME_IN_BOTH` lists tier names, role names Admin/Editor/Moderator, `auth.email`, `ops.nav`, `ops.status`, `ops.ai.model`, `workspace.option`, `audit.timeUtc`.
+  - A sed over id.ts for "workspace" also hits keys (`"workspace.switch"`) and `{workspace}` placeholders; only replace after a space or quote that is inside a value, and re-check keys with `git diff`.
+  - The PRD example "Rp format when the currency is IDR" works through `PLAN_PRICES[plan].currency`; every plan is USD today, so the Rp path is covered by tests/format-date.test.ts only.
+  - Not done, left for US-026: the audit "Semua tindakan" select is clipped at 1280 px; native date inputs show mm/dd/yyyy because Chromium takes the browser UI locale, not the page language. Operator pages are in Indonesian but `ops.*` team labels such as "Kursi" read as seats.
+  - Browser check: scripts/ralph/screens/us023.mjs [360|1280] (needs `US023_EMAIL` and `OPERATOR_EMAILS` set to the same address on the server; signup is rate limited per IP, so restart the server between widths). Login, sign-up, forgot, members, plan, audit, settings, security, password, delete, ops and ops activity: no overflow, no page errors at 360 or 1280.
+  - Full `npm test`: 131 files, 1511 tests passed (before the last wording changes; the affected files were rerun).
+---

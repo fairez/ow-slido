@@ -14,7 +14,8 @@ import { apiError, type ApiError } from "@/lib/api-error";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { LOCALES, type Locale } from "@/lib/i18n/locale";
 import type { Lock } from "@/lib/plan-hints";
-import { deletionDate, deletionIsNear, formatDeletionDay } from "@/lib/retention-schedule";
+import { deletionDate, deletionIsNear } from "@/lib/retention-schedule";
+import { formatDay } from "@/lib/format-date";
 
 const noSubscription = () => () => {};
 const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -280,6 +281,7 @@ export function EventManager({
 
 function DeletionBadge({ event, retentionDays, now }: { event: EventSummary; retentionDays: number | null; now: Date }) {
   const t = useT();
+  const locale = useLocale();
   const date = deletionDate({
     endsAt: new Date(event.endsAt),
     retentionDays,
@@ -289,7 +291,7 @@ function DeletionBadge({ event, retentionDays, now }: { event: EventSummary; ret
   if (!date) return null;
   return (
     <div className="row-meta">
-      <Badge tone={deletionIsNear(date, now) ? "accent" : "neutral"}>{t("retention.badge", { date: formatDeletionDay(date) })}</Badge>
+      <Badge tone={deletionIsNear(date, now) ? "accent" : "neutral"}>{t("retention.badge", { date: formatDay(date, locale) })}</Badge>
     </div>
   );
 }

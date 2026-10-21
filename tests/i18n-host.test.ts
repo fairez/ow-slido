@@ -20,10 +20,42 @@ const HOST_PREFIXES = [
   "participantData.",
   "branding.",
   "typedConfirm.",
+  // Account, members, plan, billing, audit, operator and sign-in screens (US-023).
+  "members.",
+  "plan.",
+  "account.",
+  "security.",
+  "ops.",
+  "auth.",
+  "role.",
+  "audit.",
+  "logout.",
+  "workspace.",
+  "verify.",
+  "forgot.",
+  "reset.",
+  "invite.",
+  "suspended.",
 ];
 
 // Same text in both languages: counts and tier names are not translated.
-const SAME_IN_BOTH = new Set(["templates.itemCount.one", "moderation.modeLabel"]);
+const SAME_IN_BOTH = new Set([
+  "templates.itemCount.one",
+  "moderation.modeLabel",
+  "plan.name.free",
+  "plan.name.pro",
+  "plan.name.team",
+  "role.admin",
+  "role.editor",
+  "role.moderator",
+  "audit.timeUtc",
+  "auth.email",
+  "members.inviteEmail",
+  "workspace.option",
+  "ops.nav",
+  "ops.status",
+  "ops.ai.model",
+]);
 
 const keys = (Object.keys(en) as (keyof typeof en)[]).filter((k) =>
   HOST_PREFIXES.some((p) => k.startsWith(p)),
@@ -33,7 +65,7 @@ const placeholders = (s: string) => (s.match(/\{[a-zA-Z]+\}/g) ?? []).sort();
 
 describe("Indonesian host copy", () => {
   it("covers the host keys", () => {
-    expect(keys.length).toBeGreaterThan(300);
+    expect(keys.length).toBeGreaterThan(550);
   });
 
   it("is not a copy of the English text", () => {

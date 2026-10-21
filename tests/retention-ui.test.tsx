@@ -50,7 +50,7 @@ describe("EventManager deletion badge", () => {
 
   it("shows the delete date on each event once retention is set", () => {
     render(<EventManager initialEvents={[ev("a", "2031-01-01T00:00:00.000Z")]} retentionDays={30} />);
-    expect(screen.getByText("Deletes 2031-01-31")).toBeTruthy();
+    expect(screen.getByText("Deletes Jan 31, 2031")).toBeTruthy();
   });
 
   it("shows nothing when events are kept", () => {

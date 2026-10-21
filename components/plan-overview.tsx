@@ -1,5 +1,6 @@
 import { CancelPlan, PlanTiers, PortalButton, type TierView } from "@/components/plan-billing";
 import type { BillingControls } from "@/lib/billing/status";
+import { formatDay } from "@/lib/format-date";
 import type { MessageKey, TParams } from "@/lib/i18n";
 import { PLAN_IDS, PLAN_PRICES, PLANS, cheapestPlan, type Entitlements, type PlanId } from "@/lib/plans";
 import type { WorkspaceUsage } from "@/lib/usage";
@@ -8,7 +9,6 @@ type Translate = (key: MessageKey, params?: TParams) => string;
 type Format = (n: number) => string;
 
 const NAME_KEYS: Record<PlanId, MessageKey> = { free: "plan.name.free", pro: "plan.name.pro", team: "plan.name.team" };
-const day = (date: Date) => date.toISOString().slice(0, 10);
 
 function size(mb: number) {
   return mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`;
@@ -132,7 +132,7 @@ function prices(plan: PlanId, locale: string, t: Translate): TierView["prices"] 
   return { month: t("plan.tier.month", { price: money(p.month) }), year: t("plan.tier.year", { price: money(p.year) }) };
 }
 
-function statusNote(e: Entitlements, t: Translate): string | null {
+function statusNote(e: Entitlements, t: Translate, day: (date: Date) => string): string | null {
   const plan = t(NAME_KEYS[e.plan]);
   if (e.source === "override") return t("plan.source.override");
   if (e.graceEndsAt) return null;
@@ -163,7 +163,8 @@ export function PlanOverview({
   t: Translate;
 }) {
   const num: Format = (n) => new Intl.NumberFormat(locale).format(n);
-  const note = statusNote(entitlements, t);
+  const day = (date: Date) => formatDay(date, locale);
+  const note = statusNote(entitlements, t, day);
   const planName = t(NAME_KEYS[entitlements.plan]);
   const paidPlan = entitlements.plan !== "free";
   const tiers: TierView[] = PLAN_IDS.map((plan) => ({
