@@ -1,4 +1,4 @@
-import { PLANS, cheapestPlan, type GatedInteractionType, type PlanId, type PlanLimits, type ReportFormat } from "@/lib/plans";
+import { PLANS, cheapestPlan, type GatedInteractionType, type PlanId, type PlanLimits } from "@/lib/plans";
 
 /** A gated action the current plan does not include. `requiredPlan` is null when no tier would allow it. */
 export type Lock = { requiredPlan: PlanId | null };
@@ -8,14 +8,6 @@ export function lockedTypes(limits: PlanLimits): Partial<Record<GatedInteraction
   const locks: Partial<Record<GatedInteractionType, Lock>> = {};
   for (const type of PLANS.team.allowedTypes) {
     if (!limits.allowedTypes.includes(type)) locks[type] = { requiredPlan: cheapestPlan((p) => PLANS[p].allowedTypes.includes(type)) };
-  }
-  return locks;
-}
-
-export function lockedFormats(limits: PlanLimits): Partial<Record<ReportFormat, Lock>> {
-  const locks: Partial<Record<ReportFormat, Lock>> = {};
-  for (const format of PLANS.team.reportFormats) {
-    if (!limits.reportFormats.includes(format)) locks[format] = { requiredPlan: cheapestPlan((p) => PLANS[p].reportFormats.includes(format)) };
   }
   return locks;
 }

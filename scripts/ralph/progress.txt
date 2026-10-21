@@ -355,3 +355,16 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Grep for env use with `process.env.X`, `env.X` (smtp takes an env object) and the Stripe name table in lib/billing/stripe.ts; the AI keys are chosen by name in lib/ai/config.ts.
   - Docs only: typecheck and eslint clean, a scan for key-shaped strings found none; full test suite not rerun (no code changed).
 ---
+
+## 2026-10-21 - US-031
+- Final audit (mode `after`): `docs/antislop-audit/audit-002.md` (13 findings, 2 HIGH, 4 MEDIUM, 7 LOW) and `audit-002-report.md`. Fixed: the plan page and the event page offered image storage and PDF/XLSX (not built; removed with `lockedFormats` and six i18n keys); the theme toggle and four other buttons whose `aria-label` did not contain their visible text (axe `label-content-name-mismatch`); native radios/checkboxes in browser blue (`accent-color: var(--accent)`); no current-page marker in the header (`NavLink`, `aria-current`); focus lost after saving the first quiz nickname; two left-stripe notices; one 19px link; DESIGN.md now explains the six quiz colours.
+- Real-browser axe (WCAG 2 A/AA, 2.1/2.2 AA, best-practice, colour contrast) over ~75 pages and states, en and id, light and dark, 360 and 1280: only label-in-name violations, all fixed; no contrast, landmark, heading or form-label violation. Layout probe at 360: no overflow, no clipped text, no control under 44px. Keyboard walkthrough of invite, quiz, ranking and 2FA login passes; reduced motion removes every animation and transition over 1 ms.
+- Files: app/globals.css, components/{theme-toggle,quiz-form,plan-overview,qa-tab,shared-notes-panel,ui/app-shell,ui/nav-link}.tsx, app/dashboard/events/[id]/page.tsx, app/ops/page.tsx, lib/{plan-hints,i18n/en,i18n/id}.ts, DESIGN.md, CLAUDE.md, tests (nav-link new; theme-toggle, quiz-ui, plan-overview, plan-hints, qa-tab, shared-notes-panel, templates-ui), docs/antislop-audit/audit-002*.md, scripts/ralph/screens/us031-{axe,keyboard,motion}.mjs (gitignored).
+- **Learnings for future iterations:**
+  - axe's label-in-name rule compares the visible text with the accessible name token by token: "(1)" does not match a visible "1", "Upvote: x. Upvotes: 1" does. A label in another word than the visible one ("opsi" vs "pilihan") fails too, so check Indonesian separately.
+  - Never filter rule ids out of the axe output; the first run hid three of the four label mismatches behind a `grep -v`.
+  - `pkill -f <pattern>` and `pgrep -f <pattern> | xargs kill` match your own shell when the pattern is in the command; list pids with `ps -eo pid,args` and kill by number.
+  - The audit scripts need the `.next-shot` build on :3200 against the test DB and must not overlap `npm test` (shared test DB). `next build` rewrites tsconfig.json and next-env.d.ts: `git checkout` them. A rebuild while the server runs breaks it; stop it first.
+  - `tests/quiz-ui.test.tsx` "returns focus to the button" is timing-sensitive (failed once under load); its focus assertion now uses `waitFor`.
+  - Full `npm test`, `typecheck`, `eslint lib tests db app components e2e`, `npm run build` and `npm run test:e2e` (14 passed) green at the end. `npm run lint` over `.` still reports errors only in gitignored scratch scripts under scripts/ralph/screens/.
+---

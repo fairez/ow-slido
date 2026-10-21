@@ -293,7 +293,7 @@ export function QaTab({ eventId, initial }: { eventId: string; initial: Particip
                   ) : (
                     <Button
                       aria-pressed={q.upvoted}
-                      aria-label={t("common.upvote", { text: q.text })}
+                      aria-label={t("common.upvote", { text: q.text, n: q.upvotes })}
                       onClick={() => void toggleUpvote(q.id)}
                       variant={q.upvoted ? "primary" : "secondary"}
                     >

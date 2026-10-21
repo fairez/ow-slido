@@ -83,7 +83,7 @@ it("toggles an upvote and shows the new count", async () => {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, upvoted: true, upvotes: 4 }), { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
   render(<QaTab eventId="e1" initial={view([q("1", "Why?", { upvotes: 3 })])} />);
-  const button = screen.getByRole("button", { name: "Upvote: Why?" });
+  const button = screen.getByRole("button", { name: /^Upvote: Why\?/ });
   expect(button.getAttribute("aria-pressed")).toBe("false");
   fireEvent.click(button);
   await waitFor(() => expect(button.textContent).toContain("4"));
@@ -137,7 +137,7 @@ it("posts to the shown Q&A and ignores messages meant for another one", async ()
   });
   expect(screen.queryByText("Elsewhere")).toBeNull();
   expect(screen.getByText("Existing")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Upvote: Existing" }).textContent).toContain("0");
+  expect(screen.getByRole("button", { name: /^Upvote: Existing/ }).textContent).toContain("0");
 });
 
 it("shows a paused Q&A read-only with a note", () => {

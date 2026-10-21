@@ -45,10 +45,10 @@ afterEach(() => {
 it("lists notes with upvote buttons, and edit/delete on your own", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json({ notes: [note("a", "Their note", { upvotes: 2 }), note("b", "My note", { mine: true })] })));
   renderPanel(config());
-  expect(await screen.findByRole("button", { name: "Upvote: Their note" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: /^Upvote: Their\ note/ })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Edit your note: My note" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Delete your note: My note" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Upvote: My note" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Upvote: My\ note/ })).toBeNull();
 });
 
 it("shows the character counter, remaining count and the name field only when enabled", async () => {
@@ -112,7 +112,7 @@ it("toggles an upvote with the server's count", async () => {
     ),
   );
   renderPanel(config());
-  const button = await screen.findByRole("button", { name: "Upvote: Their note" });
+  const button = await screen.findByRole("button", { name: /^Upvote: Their\ note/ });
   fireEvent.click(button);
   await waitFor(() => expect(button.textContent).toContain("3"));
   expect(button.getAttribute("aria-pressed")).toBe("true");
@@ -146,7 +146,7 @@ it("updates live: added, votes, removed", async () => {
   act(() => {
     fake.emit("note:votes", { interactionId: "n1", noteId: "z", upvotes: 4 });
   });
-  expect(screen.getByRole("button", { name: "Upvote: Live one" }).textContent).toContain("4");
+  expect(screen.getByRole("button", { name: /^Upvote: Live\ one/ }).textContent).toContain("4");
   act(() => {
     fake.emit("note:removed", { interactionId: "n1", noteId: "z" });
   });
@@ -156,7 +156,7 @@ it("updates live: added, votes, removed", async () => {
 it("hides the form and own edit actions when closed, but keeps upvoting", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json({ notes: [note("a", "Their note"), note("b", "My note", { mine: true })] })));
   renderPanel(config({ state: "closed" }));
-  expect(await screen.findByRole("button", { name: "Upvote: Their note" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: /^Upvote: Their\ note/ })).toBeTruthy();
   expect(screen.queryByLabelText("Your note")).toBeNull();
   expect(screen.queryByRole("button", { name: /Edit your note/ })).toBeNull();
   expect(screen.getByText(/Notes are closed/)).toBeTruthy();

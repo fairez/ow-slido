@@ -16,7 +16,7 @@ import { responseCounts } from "@/lib/content-library";
 import { isAiConfigured } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { combineOverLimit, overLimitEvents } from "@/lib/over-limit";
-import { aiLock, lockedFormats, lockedTypes } from "@/lib/plan-hints";
+import { aiLock, lockedTypes } from "@/lib/plan-hints";
 import { getEntitlements, type PlanId } from "@/lib/plans";
 import { findOwnedEvent } from "@/lib/polls";
 import { getLocale, getT } from "@/lib/i18n/server";
@@ -43,7 +43,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const canEditEvent = can(membership.role, "event.edit");
   const canManageWorkspace = can(membership.role, "members.manage");
   const { limits } = await getEntitlements(membership.workspaceId);
-  const formatLocks = lockedFormats(limits);
 
   const [workspace] = await getDb()
     .select({ retentionDays: workspaces.retentionDays })
@@ -102,8 +101,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <a href={`/api/events/${event.id}/export.zip`} download className="ui-button">
             {t("dash.exportZip")}
           </a>
-          {formatLocks.pdf && <PlanHint lock={formatLocks.pdf}>{t("dash.exportPdf")}</PlanHint>}
-          {formatLocks.xlsx && <PlanHint lock={formatLocks.xlsx}>{t("dash.exportXlsx")}</PlanHint>}
         </div>
       </header>
       {deleteOn && deletionSoon && (

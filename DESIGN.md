@@ -24,6 +24,7 @@ One neutral base, one ink, one accent. The accent marks the single most importan
 | `--accent-ink` (text on accent) | #FFFDF8 | #1C1815 |
 
 Status colours (error, success) are derived from the same warm family and must pass 4.5:1 on their background. Verify every new pair with `docs/antislop/skills/antislop-human/contrast-check.py`.
+Quiz answers are the one place with more than one hue: `--quiz-1` to `--quiz-6` (and `--quiz-ink` for the text on them) give each answer its own colour so a room can say "the green one". Every option also has its own shape and a printed label, so colour is never the only cue, and the pairs are checked at 4.5:1 in both themes (axe colour-contrast on the quiz screens, `docs/antislop-audit/audit-002.md`). They are not used anywhere else.
 Charts: bars in ink tints, the leading bar in the accent; values and labels always printed, so colour is never the only cue.
 
 ## Typography

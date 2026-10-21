@@ -63,6 +63,16 @@ export function QuizForm({ eventId, quiz, socket = null }: { eventId: string; qu
     return () => window.clearInterval(id);
   }, [counting, offset]);
 
+  // The first-time form disappears when the name is saved; focus moves to "Playing as X" instead of the page top.
+  const playerName = useRef<HTMLSpanElement>(null);
+  const focusPlayer = useRef(false);
+  useEffect(() => {
+    if (focusPlayer.current && nickname !== null) {
+      playerName.current?.focus();
+      focusPlayer.current = false;
+    }
+  }, [nickname]);
+
   // Back from renaming, focus returns to the button that opened it.
   const wasRenaming = useRef(false);
   useEffect(() => {
@@ -178,7 +188,14 @@ export function QuizForm({ eventId, quiz, socket = null }: { eventId: string; qu
       {needsName && (
         <>
           {counting && !timeUp && <p className="field-meta">{t("quiz.nicknameTimerNote")}</p>}
-          <NicknameForm eventId={eventId} initial={null} onSaved={setNickname} />
+          <NicknameForm
+            eventId={eventId}
+            initial={null}
+            onSaved={(next) => {
+              focusPlayer.current = true;
+              setNickname(next);
+            }}
+          />
         </>
       )}
       {!needsName && !closed && nickname !== null && (
@@ -195,7 +212,9 @@ export function QuizForm({ eventId, quiz, socket = null }: { eventId: string; qu
           />
         ) : (
           <p className="quiz-player">
-            <span>{t("quiz.playingAs", { name: nickname })}</span>
+            <span ref={playerName} tabIndex={-1}>
+              {t("quiz.playingAs", { name: nickname })}
+            </span>
             {!nameLocked && (
               <Button ref={renameButton} type="button" variant="quiet" onClick={() => setRenaming(true)}>
                 {t("quiz.nicknameChange")}

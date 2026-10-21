@@ -83,8 +83,15 @@ describe("PlanOverview", () => {
   it("says what is not included instead of drawing an empty bar, and names the tier that has it", () => {
     view();
     expect(screen.queryByRole("progressbar", { name: "AI calls this month" })).toBeNull();
-    expect(screen.queryByRole("progressbar", { name: "Image storage" })).toBeNull();
-    expect(screen.getAllByText("Not included in your plan. Starts with Pro.")).toHaveLength(2);
+    expect(screen.getAllByText("Not included in your plan. Starts with Pro.")).toHaveLength(1);
+  });
+
+  it("leaves out image storage and PDF/Excel reports, which are not built", () => {
+    view();
+    expect(screen.queryByText("Image storage")).toBeNull();
+    expect(screen.queryByText(/image storage/i)).toBeNull();
+    expect(screen.queryByText(/Reports as/)).toBeNull();
+    expect(screen.queryByText(/PDF|XLSX/)).toBeNull();
   });
 
   it("marks a used-up limit in words as well as colour", () => {
@@ -98,7 +105,6 @@ describe("PlanOverview", () => {
     view(resolveEntitlements(row({}), NOW), true, { ...usage, eventsThisMonth: 12 });
     expect(screen.getByText("12, no limit")).toBeTruthy();
     expect(screen.getByText("0 of 300")).toBeTruthy();
-    expect(screen.getByText("0 MB of 1 GB")).toBeTruthy();
   });
 
   it("shows the monthly price first and the yearly price after the toggle", () => {

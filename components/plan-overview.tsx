@@ -10,10 +10,6 @@ type Format = (n: number) => string;
 
 const NAME_KEYS: Record<PlanId, MessageKey> = { free: "plan.name.free", pro: "plan.name.pro", team: "plan.name.team" };
 
-function size(mb: number) {
-  return mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`;
-}
-
 type Meter = {
   key: string;
   label: MessageKey;
@@ -53,14 +49,6 @@ function meters(entitlements: Entitlements, usage: WorkspaceUsage, t: Translate,
       limit: limits.aiCallsPerMonth,
       figures: of,
       startsAt: cheapestPlan((p) => PLANS[p].aiCallsPerMonth > 0),
-    },
-    {
-      key: "storage",
-      label: "plan.usage.storage",
-      used: usage.storageMb,
-      limit: limits.imageStorageMb,
-      figures: (used, limit) => t("plan.usage.of", { used: size(used), limit: size(limit) }),
-      startsAt: cheapestPlan((p) => PLANS[p].imageStorageMb > 0),
     },
   ];
 }
@@ -119,8 +107,6 @@ function facts(plan: PlanId, t: Translate, num: Format): string[] {
     l.eventsPerMonth === null ? t("plan.fact.eventsUnlimited") : t("plan.fact.events", { n: num(l.eventsPerMonth) }),
     t("plan.fact.participants", { n: num(l.participantsPerEvent) }),
     l.aiCallsPerMonth > 0 ? t("plan.fact.ai", { event: num(l.aiCallsPerEvent), month: num(l.aiCallsPerMonth) }) : t("plan.fact.noAi"),
-    l.imageStorageMb > 0 ? t("plan.fact.storage", { size: size(l.imageStorageMb) }) : t("plan.fact.noStorage"),
-    t("plan.fact.reports", { formats: l.reportFormats.map((f) => f.toUpperCase()).join(", ") }),
   ];
 }
 

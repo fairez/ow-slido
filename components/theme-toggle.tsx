@@ -26,9 +26,8 @@ export function ThemeToggle() {
       className="theme-toggle"
       onClick={toggle}
       aria-pressed={theme === "dark"}
-      aria-label={t("theme.label")}
     >
-      {theme === "dark" ? t("theme.dark") : t("theme.light")}
+      {t("theme.label")}
     </button>
   );
 }

@@ -229,6 +229,8 @@ it("saves the nickname, then shows the options and the chosen name", async () =>
   expect(url).toBe("/api/events/e1/nickname");
   expect(init.method).toBe("PUT");
   expect(screen.getByText("Playing as Rina")).toBeTruthy();
+  // The form is gone; focus must not fall back to the page top.
+  expect(document.activeElement).toBe(screen.getByText("Playing as Rina"));
 });
 
 it("shows the server's message when the nickname is taken and keeps the form", async () => {
@@ -261,7 +263,7 @@ it("lets the participant change the nickname before answering, and returns focus
   fireEvent.change(input, { target: { value: "Dewi" } });
   fireEvent.click(screen.getByRole("button", { name: "Save nickname" }));
   await waitFor(() => expect(screen.getByText("Playing as Dewi")).toBeTruthy());
-  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change nickname" }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change nickname" })));
 });
 
 it("keeps the old name when the change is cancelled", () => {

@@ -35,7 +35,7 @@ export default async function OpsPage() {
       <div className="stack">
         <OpsAiPanel initial={ai} />
         <p>
-          <Link href="/ops/activity">{t("ops.activityLink")}</Link>
+          <Link href="/ops/activity" className="back-link">{t("ops.activityLink")}</Link>
         </p>
         <OpsWorkspaces
           initial={{

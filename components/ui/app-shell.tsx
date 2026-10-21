@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VerifyBanner } from "@/components/verify-banner";
+import { NavLink } from "@/components/ui/nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { can } from "@/lib/auth/permissions";
@@ -38,15 +39,15 @@ export async function AppShell({ children }: { children: ReactNode }) {
           {t("shell.brand")}
         </Link>
         <nav aria-label={t("shell.navLabel")} className="site-nav">
-          <Link href="/dashboard">{t("shell.events")}</Link>
-          {workspaces ? <Link href="/dashboard/templates">{t("templates.nav")}</Link> : null}
-          {workspaces?.canManageMembers ? <Link href="/dashboard/members">{t("members.nav")}</Link> : null}
-          {workspaces ? <Link href="/dashboard/settings">{t("settings.nav")}</Link> : null}
-          {workspaces?.canViewAudit ? <Link href="/dashboard/audit">{t("audit.nav")}</Link> : null}
-          {workspaces ? <Link href="/dashboard/plan">{t("plan.nav")}</Link> : null}
-          {workspaces?.operator ? <Link href="/ops">{t("ops.nav")}</Link> : null}
-          {workspaces ? <Link href="/account/security">{t("security.nav")}</Link> : null}
-          <Link href="/">{t("shell.join")}</Link>
+          <NavLink href="/dashboard" alsoUnder={["/dashboard/events"]}>{t("shell.events")}</NavLink>
+          {workspaces ? <NavLink href="/dashboard/templates">{t("templates.nav")}</NavLink> : null}
+          {workspaces?.canManageMembers ? <NavLink href="/dashboard/members">{t("members.nav")}</NavLink> : null}
+          {workspaces ? <NavLink href="/dashboard/settings">{t("settings.nav")}</NavLink> : null}
+          {workspaces?.canViewAudit ? <NavLink href="/dashboard/audit">{t("audit.nav")}</NavLink> : null}
+          {workspaces ? <NavLink href="/dashboard/plan">{t("plan.nav")}</NavLink> : null}
+          {workspaces?.operator ? <NavLink href="/ops">{t("ops.nav")}</NavLink> : null}
+          {workspaces ? <NavLink href="/account/security">{t("security.nav")}</NavLink> : null}
+          <NavLink href="/">{t("shell.join")}</NavLink>
         </nav>
         {workspaces ? <WorkspaceSwitcher workspaces={workspaces.list} activeId={workspaces.activeId} /> : null}
         <ThemeToggle />

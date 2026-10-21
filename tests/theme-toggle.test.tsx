@@ -38,4 +38,13 @@ describe("ThemeToggle", () => {
     render(<ThemeToggle />);
     expect(screen.getByRole("button", { name: "Dark theme" }).getAttribute("aria-pressed")).toBe("true");
   });
+
+  it("keeps its visible text inside its accessible name", () => {
+    render(<ThemeToggle />);
+    const button = screen.getByRole("button", { name: "Dark theme" });
+    expect(button.textContent).toBe("Dark theme");
+    expect(button.hasAttribute("aria-label")).toBe(false);
+    fireEvent.click(button);
+    expect(button.textContent).toBe("Dark theme");
+  });
 });

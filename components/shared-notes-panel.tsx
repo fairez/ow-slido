@@ -365,7 +365,7 @@ export function SharedNotesPanel({ notes: config, socket }: Props) {
                       ) : (
                         <Button
                           aria-pressed={n.iUpvoted}
-                          aria-label={t("common.upvote", { text: n.text })}
+                          aria-label={t("common.upvote", { text: n.text, n: n.upvotes })}
                           onClick={() => void toggleUpvote(n.id)}
                           variant={n.iUpvoted ? "primary" : "secondary"}
                         >

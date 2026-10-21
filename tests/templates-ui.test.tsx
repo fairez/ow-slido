@@ -39,7 +39,7 @@ describe("Save as template", () => {
     const fetchMock = vi.fn(async () => reply({ template: { id: "t1", name: "Colour poll" } }, 201));
     vi.stubGlobal("fetch", fetchMock);
     render(<PollManager eventId="e1" initialInteractions={[poll("p1", "Favourite colour?")]} canManageTemplates eventName="Kickoff" />);
-    fireEvent.click(screen.getByRole("button", { name: "Save Favourite colour? as a template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as template: Favourite colour?" }));
     const dialog = screen.getByRole("dialog");
     expect((within(dialog).getByLabelText("Template name") as HTMLInputElement).value).toBe("Favourite colour?");
     fireEvent.change(within(dialog).getByLabelText("Template name"), { target: { value: "Colour poll" } });
@@ -80,7 +80,7 @@ describe("Save as template", () => {
 
   it("hides the save controls from members who cannot manage templates", () => {
     render(<PollManager eventId="e1" initialInteractions={[poll("p1", "Q")]} eventName="Kickoff" />);
-    expect(screen.queryByRole("button", { name: /Save .* as a template/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Save as template: / })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save event as template" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add from template" })).toBeTruthy();
   });

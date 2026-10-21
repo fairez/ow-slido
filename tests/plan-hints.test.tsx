@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MembersManager } from "@/components/members-manager";
 import { PollManager } from "@/components/poll-manager";
 import { PlanHint } from "@/components/plan-hint";
-import { aiLock, lockedFormats, lockedTypes, seatLock } from "@/lib/plan-hints";
+import { aiLock, lockedTypes, seatLock } from "@/lib/plan-hints";
 import { PLANS } from "@/lib/plans";
 
 afterEach(cleanup);
@@ -16,8 +16,6 @@ describe("plan hint helpers", () => {
       survey: { requiredPlan: "pro" },
     });
     expect(lockedTypes(PLANS.pro)).toEqual({});
-    expect(lockedFormats(PLANS.free)).toEqual({ pdf: { requiredPlan: "pro" }, xlsx: { requiredPlan: "pro" } });
-    expect(lockedFormats(PLANS.team)).toEqual({});
   });
 
   it("locks AI only when the plan has no calls", () => {
@@ -35,8 +33,8 @@ describe("plan hint helpers", () => {
 
 describe("PlanHint", () => {
   it("is a link to the plan page that names the tier", () => {
-    render(<PlanHint lock={{ requiredPlan: "pro" }}>Export PDF</PlanHint>);
-    const link = screen.getByRole("link", { name: "Export PDF Pro plan" });
+    render(<PlanHint lock={{ requiredPlan: "pro" }}>Export CSV</PlanHint>);
+    const link = screen.getByRole("link", { name: "Export CSV Pro plan" });
     expect(link.getAttribute("href")).toBe("/dashboard/plan");
   });
 
