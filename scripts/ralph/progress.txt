@@ -299,3 +299,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Stored analyses (`storedKeywords` in lib/note-analysis.ts) and the host-side analysis editor still clean with both lists (no locale): the data was already cleaned with the event's list when written.
   - Full `npm test`: 132 files, 1533 tests passed (658 s). Lint and typecheck clean. No UI change, so no browser check.
 ---
+
+## 2026-10-21 - US-026
+- Layout pass for Indonesian at 360 and 1280, light and dark, over join, every participant and presenter screen per type, the host dashboard, event page (Add content menu and all nine builders, template dialog and picker), moderation, members, plan, settings, templates, audit, security, password and the public auth pages. Three real findings, all fixed with layout (no copy shortened): the audit filter grid is now `auto-fit minmax(min(100%, 15rem), 1fr)` (the "Semua tindakan" select was clipped in four columns); the security page's "Hapus akun Anda" link is `inline-flex` with `min-height: 44px` (was 19px); the Add content menu is `width: max-content` so "Catatan bersama baru" and "Pertanyaan kuis baru" no longer wrap.
+- Files: app/globals.css, docs/mobile-audit.md (Indonesian section with method, findings and result), scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - `scripts/ralph/screens/us026-id.mjs [360|1280] [nameFilter]` is a reusable audit: it reports document overflow, elements past the viewport, text wider than its box (including select text measured on a canvas) and controls under 44px, per page and scheme. Screens: `us026-id-<page>-<scheme>-<width>.png`. It needs a production build on `.next-shot`, `server.ts` on :3200 with `DATABASE_URL=$TEST_DATABASE_URL`, and no `npm test` running at the same time. It skips `.sr-only` nodes (they report as clipped by design).
+  - A select's own `scrollWidth` never shows clipped option text; compare the selected option's measured width with the select's inner width.
+  - Add content menu items are plain buttons inside `.add-menu-list`, not `role=menuitem`.
+  - Left as is: row actions on the event page wrap to a second line at 360 (nothing cut off); native date inputs show mm/dd/yyyy because Chromium's UI locale decides; the presenter's floating controls sit over content in a full-page 360 screenshot (fixed to the viewport by design).
+  - Full `npm test`: 132 files, 1533 tests passed (676 s). Typecheck and eslint (lib tests db app components) clean.
+---
