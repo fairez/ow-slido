@@ -235,3 +235,14 @@ Images, PDF/Excel reports and AI Insights (M5, M6) are NOT built; do not depend 
   - Browser check: production build on `.next-shot` against the test DB, script scripts/ralph/screens/us019.mjs [360|1280]; it creates an Indonesian event through the form, saves the host language, and shows the join and participant screens switching language (`html lang` printed). Kill the server by pid (found with `ss -ltnp | grep 3200`).
   - Full `npm test`: 128 files, 1496 tests passed.
 ---
+
+## 2026-10-21 - US-020
+- Indonesian copy for the participant side: join page and form, home page, shell chrome and theme on audience pages, tabs, poll/word cloud, open text, rating, Q&A, shared notes, and the error/cookie messages. Ranking, quiz, leaderboard and survey form already had Indonesian text; only wording was aligned (kamu, "host" instead of "penyelenggara").
+- Files: lib/i18n/id.ts, docs/i18n.md (new "Indonesian register" section), tests/i18n-participant.test.ts, scripts/ralph/prd.json.
+- **Learnings for future iterations:**
+  - Register: participants = "kamu", hosts = "Anda". Fixed terms: host, acara, Tanya jawab, Dukung (upvote), poin. `.one`/`.other` plural keys hold the same text in Indonesian.
+  - `tests/i18n-participant.test.ts` holds `PARTICIPANT_PREFIXES` and `SAME_IN_BOTH`. US-021..US-024 can copy the pattern with their own prefix lists; a new participant key must sit under a listed prefix. The test also checks `{placeholders}` match en and bans "Anda" in participant keys.
+  - `api.*` messages are still English. quiz-form, ranking-form compare `body.error` with the client's `t("api.alreadyAnswered")` etc.; the server picks the language from the `lang` cookie / Accept-Language, not the event, so US-024 must make both sides agree (or key on a `reason` field instead).
+  - Poll create body uses `question`, word cloud needs `maxEntriesPerParticipant`; Q&A, quiz and survey bodies as in e2e/interactions.spec.ts. Browser script: scripts/ralph/screens/us020.mjs [360|1280] (production build on .next-shot, test DB, server on :3200 killed by pid from `ss -ltnp`). No overflow at 360 or 1280, no page errors.
+  - Full `npm test`: 129 files, 1501 tests passed (635 s).
+---
